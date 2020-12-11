@@ -21,12 +21,13 @@ void funcA(){
 }
 
 void funcB(){
-    char buf[10];
+    char buf1[100];
+    char buf2[512];
     char *s;
 
-    s = strdup("CiaoCiaoCiao");
+    s = strdup("CiaoCi");
 
-    strcpy(global1, s);
+    strcpy(buf1, s);
     printf("Function executed\n");
 }
 

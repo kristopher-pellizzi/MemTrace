@@ -27,15 +27,21 @@ std::ostream * out = &cerr;
 std::ofstream routines;
 std::ofstream calls;
 std::ofstream memOverlaps;
+std::ofstream stackAddress;
 
 PIN_MUTEX lock;
 
 FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
+// TODO: in a multi process or multi threaded application, we need to define
+// the following couple of definitions in a per-thread fashion
 ADDRINT lastExecutedInstruction;
+ADDRINT lastSp;
+
 map<ADDRINT, vector<MemoryAccess>> accesses;
 map<AccessIndex, vector<MemoryAccess>> fullOverlaps;
+map<THREADID, ADDRINT> threadInfos;
 
 
 /* ===================================================================== */
@@ -64,15 +70,33 @@ INT32 Usage()
 // Analysis routines
 /* ===================================================================== */
 
-VOID memtrace(AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr){
+bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp){
+    if(threadInfos.find(tid) == threadInfos.end())
+        exit(1);
+    if(addr >= currentSp && addr <= threadInfos[tid])
+        stackAddress << "Current sp: 0x" << std::hex << currentSp << "\tStack base: 0x" << threadInfos[tid] << "\tAddr: 0x" << addr << endl;
+    return addr >= currentSp && addr <= threadInfos[tid];
+}
+
+VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr){
     if(ip >= textStart && ip <= textEnd){
+        // Always refer to an address in the .text section of the executable, never follow libraries addresses
         lastExecutedInstruction = ip;
+        // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
+        lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     }
     else{
         if(lastExecutedInstruction == 0){
             return;
         }
     }
+
+    // Only keep track of accesses on the stack
+    //ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+    if(!isStackAddress(tid, addr, lastSp)){
+        return;
+    }
+
     bool isWrite = type == AccessType::WRITE;
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
     fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
@@ -118,7 +142,27 @@ VOID Image(IMG img, VOID* v){
                 *out << ".text: 0x" << std::hex << textStart << " - 0x" << textEnd << endl;
             }
         }
+
+        std::ifstream mapping;
+        std::ofstream savedMapping("mapBefore.log");
+
+        INT pid = PIN_GetPid();
+        std::stringstream mapPath;
+        mapPath << "/proc/" << pid << "/maps";
+        mapping.open(mapPath.str().c_str());
+        std::string cont((std::istreambuf_iterator<char>(mapping)), (std::istreambuf_iterator<char>()));
+        savedMapping << cont << endl;
     }
+}
+
+VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
+    ADDRINT stackBase = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+    *out << "Stack base of thread " << tid << " is 0x" << std::hex << stackBase << endl;
+    threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
+}
+
+VOID OnThreadEnd(THREADID tid, CONTEXT* ctxt, INT32 code, VOID* v){
+
 }
 
 VOID Routine(RTN rtn, VOID* v){
@@ -146,11 +190,11 @@ VOID Instruction(INS ins, VOID* v){
 
     for(UINT32 memop = 0; memop < memoperands; memop++){
         if(INS_MemoryOperandIsWritten(ins, memop) ){
-            INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR) memtrace, IARG_UINT32, AccessType::WRITE, IARG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_MEMORYWRITE_SIZE, IARG_PTR, new std::string(INS_Disassemble(ins)), IARG_END);           
+            INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR) memtrace, IARG_THREAD_ID, IARG_CONTEXT, IARG_UINT32, AccessType::WRITE, IARG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_MEMORYWRITE_SIZE, IARG_PTR, new std::string(INS_Disassemble(ins)), IARG_END);           
         }
 
         if(INS_MemoryOperandIsRead(ins, memop)){
-            INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR) memtrace, IARG_UINT32, AccessType::READ, IARG_INST_PTR, IARG_MEMORYREAD_EA, IARG_MEMORYREAD_SIZE, IARG_PTR, new std::string(INS_Disassemble(ins)), IARG_END);
+            INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR) memtrace, IARG_THREAD_ID, IARG_CONTEXT, IARG_UINT32, AccessType::READ, IARG_INST_PTR, IARG_MEMORYREAD_EA, IARG_MEMORYREAD_SIZE, IARG_PTR, new std::string(INS_Disassemble(ins)), IARG_END);
         }
     }
 }
@@ -170,16 +214,14 @@ VOID Fini(INT32 code, VOID *v)
 
     for(std::map<AccessIndex, vector<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); it++){
         vector<MemoryAccess> v = it->second;
-        if(v.size() > 1){
-            memOverlaps << "===============================================" << endl;
-            memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
-            memOverlaps << "===============================================" << endl << endl;
-            for(vector<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
-                memOverlaps << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << std::hex << " B @ 0x" << v_it->getAddress() << endl;
-            }
-            memOverlaps << "===============================================" << endl;
-            memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
+        memOverlaps << "===============================================" << endl;
+        memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
+        memOverlaps << "===============================================" << endl << endl;
+        for(vector<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
+            memOverlaps << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << std::hex << " B @ 0x" << v_it->getAddress() << endl;
         }
+        memOverlaps << "===============================================" << endl;
+        memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
     }
 
     fclose(trace);
@@ -215,8 +257,10 @@ int main(int argc, char *argv[])
     routines.open("routines.log");
     calls.open("calls.log");
     memOverlaps.open("overlaps.log");
+    stackAddress.open("stackAddress.log");
     
     IMG_AddInstrumentFunction(Image, 0);
+    PIN_AddThreadStartFunction(OnThreadStart, 0);
     RTN_AddInstrumentFunction(Routine, 0);
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
