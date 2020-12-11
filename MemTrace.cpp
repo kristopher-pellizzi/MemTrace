@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "MemoryAccess.h"
+#include "AccessIndex.h"
 
 using std::cerr;
 using std::string;
@@ -27,11 +28,14 @@ std::ofstream routines;
 std::ofstream calls;
 std::ofstream memOverlaps;
 
+PIN_MUTEX lock;
+
 FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT lastExecutedInstruction;
 map<ADDRINT, vector<MemoryAccess>> accesses;
+map<AccessIndex, vector<MemoryAccess>> fullOverlaps;
 
 
 /* ===================================================================== */
@@ -74,6 +78,8 @@ VOID memtrace(AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disa
     fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
 
     MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
+    AccessIndex ai(addr, size);
+
     if(accesses.find(addr) != accesses.end()){
         vector<MemoryAccess> &lst = accesses[addr];
         lst.push_back(ma);
@@ -83,7 +89,20 @@ VOID memtrace(AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disa
         v.push_back(ma);
         accesses[addr] = v;
     }
-    //}
+ 
+    PIN_MutexLock(&lock);
+
+    if(fullOverlaps.find(ai) != fullOverlaps.end()){
+        vector<MemoryAccess> &lst = fullOverlaps[ai];
+        lst.push_back(ma);
+    }
+    else{
+        vector<MemoryAccess> v;
+        v.push_back(ma);
+        fullOverlaps[ai] = v;
+    }
+
+    PIN_MutexUnlock(&lock);
 }
 
 /* ===================================================================== */
@@ -149,14 +168,14 @@ VOID Fini(INT32 code, VOID *v)
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
 
-    for(std::map<ADDRINT, vector<MemoryAccess>>::iterator it = accesses.begin(); it != accesses.end(); it++){
+    for(std::map<AccessIndex, vector<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); it++){
         vector<MemoryAccess> v = it->second;
         if(v.size() > 1){
             memOverlaps << "===============================================" << endl;
-            memOverlaps << "0x" << std::hex << it->first << endl;
+            memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
             memOverlaps << "===============================================" << endl << endl;
             for(vector<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
-                memOverlaps << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << v_it->getSize() << " B @ 0x" << v_it->getAddress() << endl;
+                memOverlaps << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << std::hex << " B @ 0x" << v_it->getAddress() << endl;
             }
             memOverlaps << "===============================================" << endl;
             memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
@@ -183,6 +202,8 @@ int main(int argc, char *argv[])
     {
         return Usage();
     }
+
+    PIN_MutexInit(&lock);
     
     string filename = KnobOutputFile.Value();
 
