@@ -41,6 +41,7 @@ ADDRINT lastSp;
 
 map<ADDRINT, vector<MemoryAccess>> accesses;
 map<AccessIndex, vector<MemoryAccess>> fullOverlaps;
+map<AccessIndex, vector<MemoryAccess>> partialOverlaps;
 map<THREADID, ADDRINT> threadInfos;
 
 
@@ -66,10 +67,6 @@ INT32 Usage()
     return -1;
 }
 
-/* ===================================================================== */
-// Analysis routines
-/* ===================================================================== */
-
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp){
     if(threadInfos.find(tid) == threadInfos.end())
         exit(1);
@@ -77,6 +74,14 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp){
         stackAddress << "Current sp: 0x" << std::hex << currentSp << "\tStack base: 0x" << threadInfos[tid] << "\tAddr: 0x" << addr << endl;
     return addr >= currentSp && addr <= threadInfos[tid];
 }
+
+UINT32 min(UINT32 x, UINT32 y){
+    return x <= y ? x : y;
+}
+
+/* ===================================================================== */
+// Analysis routines
+/* ===================================================================== */
 
 VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr){
     if(ip >= textStart && ip <= textEnd){
@@ -212,7 +217,8 @@ VOID Fini(INT32 code, VOID *v)
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
 
-    for(std::map<AccessIndex, vector<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); it++){
+    for(std::map<AccessIndex, vector<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
+        // Write text file with full overlaps
         vector<MemoryAccess> v = it->second;
         memOverlaps << "===============================================" << endl;
         memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
@@ -222,6 +228,44 @@ VOID Fini(INT32 code, VOID *v)
         }
         memOverlaps << "===============================================" << endl;
         memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
+
+        // Fill the partial overlaps map
+        ADDRINT lastAccessedByte = it->first.getFirst() + it->first.getSecond() - 1;
+        std::map<AccessIndex, vector<MemoryAccess>>::iterator partialOverlapIterator = fullOverlaps.find(it->first);
+        ++partialOverlapIterator;
+        ADDRINT accessedAddress = partialOverlapIterator->first.getFirst();
+        while(partialOverlapIterator != fullOverlaps.end() && accessedAddress <= lastAccessedByte){
+            if(partialOverlaps.find(it->first) != partialOverlaps.end()){
+                vector<MemoryAccess> &vect = partialOverlaps[it->first];
+                vect.insert(vect.end(), partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
+            }
+            else{
+                vector<MemoryAccess> vect;
+                vect.insert(vect.end(), partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
+                partialOverlaps[it->first] = vect;
+            }
+
+            ++partialOverlapIterator;
+            accessedAddress = partialOverlapIterator->first.getFirst();
+        }
+    }
+
+    std::ofstream overlaps("partialOverlaps.log");
+    // Write text file with partial overlaps
+    for(std::map<AccessIndex, vector<MemoryAccess>>::iterator it = partialOverlaps.begin(); it != partialOverlaps.end(); ++it){
+        vector<MemoryAccess> v = it->second;
+        overlaps << "===============================================" << endl;
+        overlaps << "0x" << std::hex << it->first.getFirst() << endl;
+        overlaps << "===============================================" << endl;
+
+        for(vector<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
+            ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
+            overlaps    << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" 
+                        << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
+                        << "bytes [" << std::dec << overlapBeginning << " ~ " << min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1) << "]" << endl;
+        }
+        overlaps << "===============================================" << endl;
+        overlaps << "===============================================" << endl << endl << endl << endl << endl;
     }
 
     fclose(trace);
