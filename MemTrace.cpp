@@ -34,6 +34,7 @@ PIN_MUTEX lock;
 FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
+ADDRINT loadOffset;
 // TODO: in a multi process or multi threaded application, we need to define
 // the following couple of definitions in a per-thread fashion
 ADDRINT lastExecutedInstruction;
@@ -86,7 +87,7 @@ UINT32 min(UINT32 x, UINT32 y){
 VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr){
     if(ip >= textStart && ip <= textEnd){
         // Always refer to an address in the .text section of the executable, never follow libraries addresses
-        lastExecutedInstruction = ip;
+        lastExecutedInstruction = ip - loadOffset;
         // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
         lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     }
@@ -145,9 +146,13 @@ VOID Image(IMG img, VOID* v){
                 textStart = SEC_Address(sec);
                 textEnd = textStart + SEC_Size(sec) - 1;
                 *out << ".text: 0x" << std::hex << textStart << " - 0x" << textEnd << endl;
+                break;
             }
         }
 
+        loadOffset = IMG_LoadOffset(img);
+
+        // Saves content of /proc/<PID>/maps to file (For debugging) purposes
         std::ifstream mapping;
         std::ofstream savedMapping("mapBefore.log");
 
