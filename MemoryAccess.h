@@ -22,13 +22,15 @@ class MemoryAccess{
             instructionDisasm(disasm)
             {};
 
-        ADDRINT getIP();
+        ADDRINT getIP() const;
 
-        ADDRINT getAddress();
+        ADDRINT getAddress() const;
 
-        UINT32 getSize();
+        UINT32 getSize() const;
 
-        AccessType getType();
+        AccessType getType() const;
 
-        std::string getDisasm();
+        std::string getDisasm() const;
+
+        bool operator< (const MemoryAccess &other) const;
 };
