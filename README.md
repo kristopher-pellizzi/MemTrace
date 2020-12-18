@@ -9,4 +9,5 @@ In order to run test.sh, you'll need to compile coreutils utilities inside Tests
 - Run make
 
 At this point, everything should be ready, you can cd .. and run ./test.sh
-***NOTE: ** it may take a while*
+
+***NOTE:** it may take a while*
