@@ -21,5 +21,9 @@ std::string MemoryAccess::getDisasm() const{
 }
 
 bool MemoryAccess::operator<(const MemoryAccess &other) const{
-    return accessAddress < other.accessAddress;
+    return 
+        accessAddress < other.accessAddress ||
+        instructionPointer < other.instructionPointer || 
+        accessSize < other.accessSize ||
+        type != other.type;
 }
