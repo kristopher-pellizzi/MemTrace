@@ -10,8 +10,6 @@
 #include <map>
 #include <vector>
 #include <set>
-#include <sys/stat.h>
-#include <fcntl.h> 
 
 #include "MemoryAccess.h"
 #include "AccessIndex.h"
