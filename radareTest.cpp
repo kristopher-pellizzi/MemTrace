@@ -72,14 +72,56 @@ static void getMainReturnAddr(R2Pipe* r2){
 	}
 }
 
-int main() {
-	R2Pipe *r2 = r2pipe_open ("radare2 -q0 ./easy");
+char* build_cmd(const char* prefix, char* arg){
+	size_t len = strlen(prefix) + strlen(arg) + 1;
+	char* cmd = (char*) malloc(sizeof(char) * len);
+	snprintf(cmd, len, "%s%s", prefix, arg);
+	return cmd;
+}
+
+char* append_args(char* cmd, char** args){
+	char** args_index = args;
+	size_t len = strlen(cmd) + 1;
+	while(*args_index != NULL){
+		len += strlen(*args_index) + 1;
+		++args_index;
+	}
+	char* ret = (char*) malloc(sizeof(char) * len);
+	snprintf(ret, len, "%s", cmd);
+	args_index = args;
+	while(*args_index != NULL){
+		strcat(ret, " ");
+		strcat(ret, *args_index);
+		++args_index;
+	}
+	printf("CMD: %s\n", ret);
+	return ret;
+}
+
+int main(int argc, char** argv) {
+	char** args = argv;
+	if(argc < 2){
+		fprintf(stderr, "Specify program to launch\n");
+		return 2;
+	}
+	const char* radare_prefix = "radare2 -q0 ";
+	char* cmd = build_cmd(radare_prefix, argv[1]);
+	printf("CMD RADARE: %s\n", cmd);
+	
+	R2Pipe *r2 = r2pipe_open (cmd);
 	if (r2) {
+		free(cmd);
 		r2cmd (r2, "aaa");
 		storeFuncs (r2);
 		getMainReturnAddr(r2);
 		r2pipe_close (r2);
-		system("/opt/pin/pin -t obj-intel64/MemTrace.so -- ./easy");
+
+		const char* pin_prefix = "/opt/pin/pin -t obj-intel64/MemTrace.so -- ";
+		char* tmp = build_cmd(pin_prefix, argv[1]);
+		cmd = append_args(tmp, &argv[2]);
+		free(tmp);
+
+		system(cmd);
 		system("rm funcs.lst; rm main_ret.addr");
 		return 0;
 	}
