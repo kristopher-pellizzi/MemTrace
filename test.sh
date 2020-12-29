@@ -1929,7 +1929,7 @@ mkdir test_dir
 cd test_dir
 
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
-$EXE_PATH/split -b 512 ../test.iso
+../$EXE_PATH/split -b 512 ../test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -1938,7 +1938,7 @@ mkdir test_dir
 cd test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./radareTest $EXE_PATH/split -b 512 ../test.iso
+../radareTest ../$EXE_PATH/split -b 512 ../test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cd ..
