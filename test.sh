@@ -19,7 +19,7 @@ $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1M
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1M
+./radareTest $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1M
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -46,7 +46,7 @@ $EXE_PATH/b2sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/b2sum ./test.iso
+./radareTest $EXE_PATH/b2sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -72,7 +72,7 @@ $EXE_PATH/base32 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/base32 ./test.iso
+./radareTest $EXE_PATH/base32 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -98,7 +98,7 @@ $EXE_PATH/base64 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/base64 ./test.iso
+./radareTest $EXE_PATH/base64 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -126,7 +126,7 @@ $EXE_PATH/basename $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/basename $path
+./radareTest $EXE_PATH/basename $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -152,7 +152,7 @@ $EXE_PATH/cat ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/cat ./test.iso ./test2.iso
+./radareTest $EXE_PATH/cat ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -178,7 +178,7 @@ $EXE_PATH/chgrp root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/chgrp root ./test.iso
+./radareTest $EXE_PATH/chgrp root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -210,7 +210,7 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/chmod 700 ./test.cpy
+./radareTest $EXE_PATH/chmod 700 ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -238,7 +238,7 @@ $EXE_PATH/chown root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/chown root ./test.iso
+./radareTest $EXE_PATH/chown root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -264,7 +264,7 @@ $EXE_PATH/cksum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/cksum ./test.iso
+./radareTest $EXE_PATH/cksum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -292,7 +292,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.sorted
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sort ./test.iso -o ./test.sorted
+./radareTest $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/sort ./test2.iso -o ./test2.sorted
@@ -321,7 +321,7 @@ $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/comm ./test.sorted ./test2.sorted
+./radareTest $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -349,7 +349,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./toDelete.tmp
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
+./radareTest $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./toDelete.tmp
@@ -379,7 +379,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm xx00 xx01
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/csplit ./test.iso 3
+./radareTest $EXE_PATH/csplit ./test.iso 3
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm xx00 xx01
@@ -406,7 +406,7 @@ $EXE_PATH/cut -b1-10 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/cut -b1-10 ./test.iso
+./radareTest $EXE_PATH/cut -b1-10 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -432,7 +432,7 @@ $EXE_PATH/date
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/date
+./radareTest $EXE_PATH/date
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -458,7 +458,7 @@ $EXE_PATH/df -h
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/df -h
+./radareTest $EXE_PATH/df -h
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -484,7 +484,7 @@ $EXE_PATH/dir
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/dir
+./radareTest $EXE_PATH/dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -510,7 +510,7 @@ $EXE_PATH/dircolors --print-database
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/dircolors --print-database
+./radareTest $EXE_PATH/dircolors --print-database
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -536,7 +536,7 @@ $EXE_PATH/dirname $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/dirname $path
+./radareTest $EXE_PATH/dirname $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -565,7 +565,7 @@ $EXE_PATH/du -h $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/du -h $path
+./radareTest $EXE_PATH/du -h $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -595,7 +595,7 @@ $EXE_PATH/echo $random_data
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/echo $random_data
+./radareTest $EXE_PATH/echo $random_data
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -622,7 +622,7 @@ $EXE_PATH/env
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/env
+./radareTest $EXE_PATH/env
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -650,7 +650,7 @@ $EXE_PATH/expand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/expand ./test.iso
+./radareTest $EXE_PATH/expand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -680,7 +680,7 @@ $EXE_PATH/expr 118462910 \* 123456
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/expr 118462910 \* 123456
+./radareTest $EXE_PATH/expr 118462910 \* 123456
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -708,7 +708,7 @@ $EXE_PATH/factor 123456789123459
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/factor 123456789123459
+./radareTest $EXE_PATH/factor 123456789123459
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -737,7 +737,7 @@ $EXE_PATH/fmt -s -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/fmt -s -w 15 ./test.iso
+./radareTest $EXE_PATH/fmt -s -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -764,7 +764,7 @@ $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/fold -s -b -w 15 ./test.iso
+./radareTest $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -791,7 +791,7 @@ $EXE_PATH/getlimits
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/getlimits
+./radareTest $EXE_PATH/getlimits
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -818,7 +818,7 @@ $EXE_PATH/groups
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/groups
+./radareTest $EXE_PATH/groups
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -847,7 +847,7 @@ $EXE_PATH/head -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/head -c 512 ./test.iso
+./radareTest $EXE_PATH/head -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -876,7 +876,7 @@ $EXE_PATH/hostid
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/hostid
+./radareTest $EXE_PATH/hostid
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -903,7 +903,7 @@ $EXE_PATH/id
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/id
+./radareTest $EXE_PATH/id
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -931,7 +931,7 @@ $EXE_PATH/join ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/join ./test.sorted ./test2.sorted
+./radareTest $EXE_PATH/join ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -960,7 +960,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.link
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/link ./test.iso ./test.link
+./radareTest $EXE_PATH/link ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -991,7 +991,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.link
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/ln -s ./test.iso ./test.link
+./radareTest $EXE_PATH/ln -s ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -1019,7 +1019,7 @@ $EXE_PATH/ls -al ./Tests/coreutils/src
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/ls -al ./Tests/coreutils/src
+./radareTest $EXE_PATH/ls -al ./Tests/coreutils/src
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1046,7 +1046,7 @@ $EXE_PATH/md5sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/md5sum ./test.iso
+./radareTest $EXE_PATH/md5sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1076,7 +1076,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm -r abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
+./radareTest $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm -r abcdefghijklmnopqrstuvwxyz
@@ -1107,7 +1107,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
+./radareTest $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
@@ -1140,7 +1140,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
+./radareTest $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
@@ -1171,7 +1171,7 @@ $EXE_PATH/mktemp
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/mktemp
+./radareTest $EXE_PATH/mktemp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1202,7 +1202,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 $EXE_PATH/mv ./test_dir/test.iso .
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/mv ./test.iso ./test_dir
+./radareTest $EXE_PATH/mv ./test.iso ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/mv ./test_dir/test.iso .
@@ -1234,7 +1234,7 @@ $EXE_PATH/nice -n 19 ls -al
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/nice -n 19 ls -al
+./radareTest $EXE_PATH/nice -n 19 ls -al
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1262,7 +1262,7 @@ $EXE_PATH/nl ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/nl ./test.iso
+./radareTest $EXE_PATH/nl ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1289,7 +1289,7 @@ $EXE_PATH/nproc
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/nproc
+./radareTest $EXE_PATH/nproc
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1316,7 +1316,7 @@ $EXE_PATH/numfmt 123456789 1253 9182746583
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/numfmt 123456789 1253 9182746583
+./radareTest $EXE_PATH/numfmt 123456789 1253 9182746583
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1344,7 +1344,7 @@ $EXE_PATH/od -x ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/od -x ./test.iso
+./radareTest $EXE_PATH/od -x ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1373,7 +1373,7 @@ $EXE_PATH/paste ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/paste ./test.iso ./test2.iso
+./radareTest $EXE_PATH/paste ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1400,7 +1400,7 @@ $EXE_PATH/pinky
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/pinky
+./radareTest $EXE_PATH/pinky
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1428,7 +1428,7 @@ $EXE_PATH/printenv
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/printenv
+./radareTest $EXE_PATH/printenv
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1457,7 +1457,7 @@ $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
+./radareTest $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1483,7 +1483,7 @@ $EXE_PATH/ptx ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/ptx ./test.iso
+./radareTest $EXE_PATH/ptx ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1512,7 +1512,7 @@ $EXE_PATH/pwd
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/pwd
+./radareTest $EXE_PATH/pwd
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1542,7 +1542,7 @@ $EXE_PATH/readlink ./test.link
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/readlink ./test.link
+./radareTest $EXE_PATH/readlink ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -1572,7 +1572,7 @@ $EXE_PATH/realpath ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/realpath ./test.iso
+./radareTest $EXE_PATH/realpath ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1606,7 +1606,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/rm ./test.cpy
+./radareTest $EXE_PATH/rm ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1639,7 +1639,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 mkdir ./test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/rmdir ./test_dir
+./radareTest $EXE_PATH/rmdir ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1668,7 +1668,7 @@ $EXE_PATH/seq 1 1000000
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/seq 1 1000000
+./radareTest $EXE_PATH/seq 1 1000000
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1696,7 +1696,7 @@ $EXE_PATH/sha1sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sha1sum ./test.iso
+./radareTest $EXE_PATH/sha1sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1725,7 +1725,7 @@ $EXE_PATH/sha224sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sha224sum ./test.iso
+./radareTest $EXE_PATH/sha224sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1753,7 +1753,7 @@ $EXE_PATH/sha256sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sha256sum ./test.iso
+./radareTest $EXE_PATH/sha256sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1781,7 +1781,7 @@ $EXE_PATH/sha384sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sha384sum ./test.iso
+./radareTest $EXE_PATH/sha384sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1810,7 +1810,7 @@ $EXE_PATH/sha512sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sha512sum ./test.iso
+./radareTest $EXE_PATH/sha512sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1843,7 +1843,7 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sha224sum ./test.cpy
+./radareTest $EXE_PATH/sha224sum ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1871,7 +1871,7 @@ $EXE_PATH/shuf ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/shuf ./test.iso
+./radareTest $EXE_PATH/shuf ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1900,7 +1900,7 @@ $EXE_PATH/sleep 1
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sleep 1
+./radareTest $EXE_PATH/sleep 1
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1938,7 +1938,7 @@ mkdir test_dir
 cd test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/split -b 512 ../test.iso
+./radareTest $EXE_PATH/split -b 512 ../test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -1970,7 +1970,7 @@ $EXE_PATH/stat ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/stat ./test.iso
+./radareTest $EXE_PATH/stat ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1997,7 +1997,7 @@ $EXE_PATH/stty -a
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/stty -a
+./radareTest $EXE_PATH/stty -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2024,7 +2024,7 @@ $EXE_PATH/sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/sum ./test.iso
+./radareTest $EXE_PATH/sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2052,7 +2052,7 @@ $EXE_PATH/tac ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/tac ./test.iso ./test2.iso
+./radareTest $EXE_PATH/tac ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2080,7 +2080,7 @@ $EXE_PATH/tail -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/tail -c ./test.iso
+./radareTest $EXE_PATH/tail -c ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2109,7 +2109,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/touch ./test.cpy
+./radareTest $EXE_PATH/touch ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2143,7 +2143,7 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/truncate -s 512K ./test.cpy
+./radareTest $EXE_PATH/truncate -s 512K ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2172,7 +2172,7 @@ $EXE_PATH/tty
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/tty
+./radareTest $EXE_PATH/tty
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2200,7 +2200,7 @@ $EXE_PATH/uname -a
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/uname -a
+./radareTest $EXE_PATH/uname -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2227,7 +2227,7 @@ $EXE_PATH/unexpand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/unexpand ./test.iso
+./radareTest $EXE_PATH/unexpand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2254,7 +2254,7 @@ $EXE_PATH/uniq -u ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/uniq -u ./test.iso
+./radareTest $EXE_PATH/uniq -u ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2287,7 +2287,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/unlink ./test.cpy
+./radareTest $EXE_PATH/unlink ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2316,7 +2316,7 @@ $EXE_PATH/uptime
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/uptime
+./radareTest $EXE_PATH/uptime
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2343,7 +2343,7 @@ $EXE_PATH/users
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/users
+./radareTest $EXE_PATH/users
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2372,7 +2372,7 @@ $EXE_PATH/vdir
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/vdir
+./radareTest $EXE_PATH/vdir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2399,7 +2399,7 @@ $EXE_PATH/wc ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/wc ./test.iso
+./radareTest $EXE_PATH/wc ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2426,7 +2426,7 @@ $EXE_PATH/who
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/who
+./radareTest $EXE_PATH/who
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2454,7 +2454,7 @@ $EXE_PATH/whoami
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/MemTrace.so -- $EXE_PATH/whoami
+./radareTest $EXE_PATH/whoami
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
