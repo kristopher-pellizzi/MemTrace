@@ -143,10 +143,14 @@ VOID detectFunctionStart(ADDRINT ip, bool isRet){
 
     if(funcsAddresses.find(effectiveIp) != funcsAddresses.end()){
 
-        // If main has started
-        std::string &funcName = funcs[effectiveIp];
-        if(!funcName.compare("main")){
-            mainCalled = true;
+        // If main has already been detected, it's useless and time-consuming to try and detect it again
+        // This way, we avoid a lookup in a map and a string comparison
+        if(!mainCalled){
+            // Detect if this is 'main' first instruction
+            std::string &funcName = funcs[effectiveIp];
+            if(!funcName.compare("main")){
+                mainCalled = true;
+            }
         }
 
         initializedStack.push_back(initializedMemory);
