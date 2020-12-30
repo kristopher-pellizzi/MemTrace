@@ -57,16 +57,22 @@ static void getMainReturnAddr(R2Pipe* r2){
 
 	if(msg){
 		out = fopen("./main_ret.addr", "w");
-		char* token = strtok(msg, "\n");
+		char* parsedStrings[2];
+		char* token = strtok_r(msg, "\n", parsedStrings);
 		while(token != NULL){
 			if(strstr(token, "ret") != NULL){
-				char* addr = strtok(token, " \t");
-				addr = strtok(NULL, " \t");
-				fprintf(out, "%s\n", addr);
-				fclose(out);
-				return;
+				char* addr = strtok_r(token, " \t", parsedStrings + 1);
+				while(strstr(addr, "0x") == NULL)
+					addr = strtok_r(NULL, " \t", parsedStrings + 1);
+				char* opcode = strtok_r(NULL, " \t", parsedStrings + 1);
+				printf("OPCODE: %s\n", opcode);
+				if(!strcmp(opcode, "c3")){
+					fprintf(out, "%s\n", addr);
+					fclose(out);
+					return;
+				}
 			}
-			token = strtok(NULL, "\n");
+			token = strtok_r(NULL, "\n", parsedStrings);
 		}
 		fclose(out);
 	}
