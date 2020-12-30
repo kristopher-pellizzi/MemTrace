@@ -1457,7 +1457,7 @@ $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./radareTest $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
+./radareTest $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2080,7 +2080,7 @@ $EXE_PATH/tail -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./radareTest $EXE_PATH/tail -c ./test.iso
+./radareTest $EXE_PATH/tail -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
