@@ -52,6 +52,7 @@ set<ADDRINT> funcsAddresses;
 map<ADDRINT, std::string> funcs;
 
 bool mainCalled = false;
+ADDRINT mainStartAddr = 0;
 ADDRINT mainRetAddr = 0;
 
 
@@ -144,7 +145,7 @@ VOID detectFunctionStart(ADDRINT ip, bool isRet){
 
         // If main has started
         std::string &funcName = funcs[effectiveIp];
-        if(!funcName.compare("main")){
+        if(!funcName.compare("main") || !funcName.compare("dbg.main")){
             mainCalled = true;
         }
 
@@ -434,6 +435,8 @@ int main(int argc, char *argv[])
         addr = strtoul(addr_str.c_str(), NULL, 16);
         funcsAddresses.insert(addr);
         funcs[addr] = name;
+        if(!name.compare("main") || !name.compare("dbg.main"))
+            mainStartAddr = addr;
     }
 
     functions.close();
@@ -449,6 +452,7 @@ int main(int argc, char *argv[])
         *out << "Function detected @ 0x" << std::hex << *i << endl;
     }
 
+    *out << "Main start address: 0x" << std::hex << mainStartAddr << endl;
     *out << "Main return address: 0x" << std::hex << mainRetAddr << endl;
     
     IMG_AddInstrumentFunction(Image, 0);
