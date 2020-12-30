@@ -145,7 +145,7 @@ VOID detectFunctionStart(ADDRINT ip, bool isRet){
 
         // If main has started
         std::string &funcName = funcs[effectiveIp];
-        if(!funcName.compare("main") || !funcName.compare("dbg.main")){
+        if(!funcName.compare("main")){
             mainCalled = true;
         }
 
@@ -434,9 +434,11 @@ int main(int argc, char *argv[])
         addr_str = addr_str.substr(2);
         addr = strtoul(addr_str.c_str(), NULL, 16);
         funcsAddresses.insert(addr);
-        funcs[addr] = name;
-        if(!name.compare("main") || !name.compare("dbg.main"))
+        if(!name.compare("main") || !name.compare("dbg.main")){
             mainStartAddr = addr;
+            name.assign("main");
+        }
+        funcs[addr] = name;
     }
 
     functions.close();
