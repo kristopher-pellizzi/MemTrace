@@ -81,9 +81,14 @@ char* build_cmd(const char* prefix, char* arg){
 
 char* append_args(char* cmd, char** args){
 	char** args_index = args;
+	bool requiresQuotes = false;
 	size_t len = strlen(cmd) + 1;
 	while(*args_index != NULL){
 		len += strlen(*args_index) + 1;
+		if(strstr(*args_index, " ") != NULL){
+			len += 2;
+			requiresQuotes = true;
+		}
 		++args_index;
 	}
 	char* ret = (char*) malloc(sizeof(char) * len);
@@ -91,7 +96,14 @@ char* append_args(char* cmd, char** args){
 	args_index = args;
 	while(*args_index != NULL){
 		strcat(ret, " ");
+		if(requiresQuotes){
+			strcat(ret, "\"");
+		}
 		strcat(ret, *args_index);
+		if(requiresQuotes){
+			strcat(ret, "\"");
+		}
+		requiresQuotes = false;
 		++args_index;
 	}
 	printf("CMD: %s\n", ret);
