@@ -90,7 +90,7 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* 
     return addr >= currentSp && addr <= threadInfos[tid];
 }
 
-bool readsInitializedMemory(AccessIndex ai){
+bool readsInitializedMemory(AccessIndex& ai){
     if(initializedMemory.find(ai) != initializedMemory.end())
         return true;
 
@@ -223,6 +223,7 @@ VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT 
 
 VOID Image(IMG img, VOID* v){
     if(IMG_IsMainExecutable(img)){
+        /*
         *out << "Main executable: " << IMG_Name(img) << endl;
         for(SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)){
             if(!SEC_Name(sec).compare(".text")){
@@ -231,11 +232,12 @@ VOID Image(IMG img, VOID* v){
                 *out << ".text: 0x" << std::hex << textStart << " - 0x" << textEnd << endl;
                 break;
             }
-        }
+        }*/
 
         loadOffset = IMG_LoadOffset(img);
 
         // Saves content of /proc/<PID>/maps to file (For debugging) purposes
+        /*
         std::ifstream mapping;
         std::ofstream savedMapping("mapBefore.log");
 
@@ -245,6 +247,7 @@ VOID Image(IMG img, VOID* v){
         mapping.open(mapPath.str().c_str());
         std::string cont((std::istreambuf_iterator<char>(mapping)), (std::istreambuf_iterator<char>()));
         savedMapping << cont << endl;
+        */
     }
 }
 
