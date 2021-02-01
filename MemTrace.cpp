@@ -99,10 +99,10 @@ bool readsInitializedMemory(AccessIndex ai){
 
     ADDRINT targetStart = ai.getFirst();
     ADDRINT targetEnd = targetStart + ai.getSecond() - 1;
-    ADDRINT currentStart = iter->getFirst();
-    ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
 
     while(iter != initializedMemory.end()){
+        ADDRINT currentStart = iter->getFirst();
+        ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
         // If will remain uninitialized bytes at the beginning, between iter start and target start
         if(currentStart > uninitializedBytes.first)
             return false;
@@ -110,7 +110,7 @@ bool readsInitializedMemory(AccessIndex ai){
         if(targetEnd <= currentEnd)
             return true;
 
-        uninitializedBytes.first = currentEnd;
+        uninitializedBytes.first += iter->getSecond();
         ++iter;   
     }
     return false;
