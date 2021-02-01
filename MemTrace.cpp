@@ -26,14 +26,14 @@ using std::set;
 /* ================================================================== */
 
 std::ostream * out = &cerr;
-std::ofstream routines;
-std::ofstream calls;
+//std::ofstream routines;
+//std::ofstream calls;
 std::ofstream memOverlaps;
-std::ofstream stackAddress;
+//std::ofstream stackAddress;
 
 PIN_MUTEX lock;
 
-FILE* trace;
+//FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT loadOffset;
@@ -85,8 +85,10 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* 
         // If it is a push instruction, it surely writes a stack address
         return true;
     }
+    /*
     if(addr >= currentSp && addr <= threadInfos[tid])
         stackAddress << "Current sp: 0x" << std::hex << currentSp << "\tStack base: 0x" << threadInfos[tid] << "\tAddr: 0x" << addr << endl;
+    */
     return addr >= currentSp && addr <= threadInfos[tid];
 }
 
@@ -164,7 +166,6 @@ VOID detectFunctionStart(ADDRINT ip, bool isRet){
 }
 
 VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr){
-
     if(!mainCalled)
         return;
 
@@ -189,7 +190,7 @@ VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT 
     }
 
     bool isWrite = type == AccessType::WRITE;
-    fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
+    // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
 
     MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
@@ -223,7 +224,6 @@ VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT 
 
 VOID Image(IMG img, VOID* v){
     if(IMG_IsMainExecutable(img)){
-        /*
         *out << "Main executable: " << IMG_Name(img) << endl;
         for(SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)){
             if(!SEC_Name(sec).compare(".text")){
@@ -232,7 +232,7 @@ VOID Image(IMG img, VOID* v){
                 *out << ".text: 0x" << std::hex << textStart << " - 0x" << textEnd << endl;
                 break;
             }
-        }*/
+        }
 
         loadOffset = IMG_LoadOffset(img);
 
@@ -261,9 +261,9 @@ VOID OnThreadEnd(THREADID tid, CONTEXT* ctxt, INT32 code, VOID* v){
 
 }
 
-VOID Routine(RTN rtn, VOID* v){
+/*VOID Routine(RTN rtn, VOID* v){
     routines << RTN_Name(rtn) << " @ " << std::hex << RTN_Address(rtn) << endl;
-}
+}*/
 
 VOID Instruction(INS ins, VOID* v){
     std::stringstream call_str;
@@ -272,7 +272,10 @@ VOID Instruction(INS ins, VOID* v){
     ADDRINT ins_addr = INS_Address(ins);
     
     if(ins_addr >= textStart && ins_addr <= textEnd){
+        // This block can be used to check if it is a dynamic call to a register, to be added in the CFG
+
         // Used for debug purposes. It creates a file with instructions which are call instructions
+        /*
         if(INS_IsCall(ins)){
             call_str << std::hex << "0x" << ins_addr << " is a call instruction";
             if(!INS_IsProcedureCall(ins)){
@@ -282,6 +285,7 @@ VOID Instruction(INS ins, VOID* v){
         }
 
         calls << call_str.str();
+        */
         
     }
     
@@ -337,9 +341,11 @@ VOID Instruction(INS ins, VOID* v){
  */
 VOID Fini(INT32 code, VOID *v)
 {
+    /*
     fprintf(trace, "\n===============================================\n");
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
+    */
 
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
         // Write text file with full overlaps
@@ -398,8 +404,10 @@ VOID Fini(INT32 code, VOID *v)
         overlaps << "===============================================" << endl << endl << endl << endl << endl;
     }
 
+    /*
     fclose(trace);
     routines.close();
+    */
 }
 
 /*!
@@ -427,11 +435,11 @@ int main(int argc, char *argv[])
         filename = "memtrace.log";
     }
 
-    trace = fopen(filename.c_str(), "w");
-    routines.open("routines.log");
-    calls.open("calls.log");
+    // trace = fopen(filename.c_str(), "w");
+    // routines.open("routines.log");
+    //calls.open("calls.log");
     memOverlaps.open("overlaps.log");
-    stackAddress.open("stackAddress.log");
+    //stackAddress.open("stackAddress.log");
     std::ifstream functions("funcs.lst");
 
     ADDRINT addr;
@@ -466,7 +474,7 @@ int main(int argc, char *argv[])
     
     IMG_AddInstrumentFunction(Image, 0);
     PIN_AddThreadStartFunction(OnThreadStart, 0);
-    RTN_AddInstrumentFunction(Routine, 0);
+    //RTN_AddInstrumentFunction(Routine, 0);
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
     
@@ -475,10 +483,10 @@ int main(int argc, char *argv[])
     cerr << "See file " << filename << " for analysis results" << endl;
     cerr <<  "===============================================" << endl;
 
-    fprintf(trace, "===============================================\n");
-    fprintf(trace, "MEMORY TRACE START\n");
-    fprintf(trace, "===============================================\n\n");
-    fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
+    //fprintf(trace, "===============================================\n");
+    //fprintf(trace, "MEMORY TRACE START\n");
+    //fprintf(trace, "===============================================\n\n");
+    //fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
 
     // Start the program, never returns
     PIN_StartProgram();
