@@ -78,10 +78,10 @@ INT32 Usage()
     return -1;
 }
 
-bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* disasm){
+bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* disasm, AccessType type){
     if(threadInfos.find(tid) == threadInfos.end())
         exit(1);
-    if(disasm->find("push") != disasm->npos){
+    if(type == AccessType::WRITE && disasm->find("push") != disasm->npos){
         // If it is a push instruction, it surely writes a stack address
         return true;
     }
@@ -184,7 +184,7 @@ VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT 
 
     // Only keep track of accesses on the stack
     //ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-    if(!isStackAddress(tid, addr, lastSp, ins_disasm)){
+    if(!isStackAddress(tid, addr, lastSp, ins_disasm, type)){
         return;
     }
 
