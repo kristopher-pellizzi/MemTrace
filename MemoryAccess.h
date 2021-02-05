@@ -12,6 +12,7 @@ class MemoryAccess{
         UINT32 accessSize;
         AccessType type;
         std::string instructionDisasm;
+        bool isUninitializedRead;
 
     public:
         MemoryAccess(ADDRINT ip, ADDRINT addr, UINT32 size, AccessType type, std::string disasm) : 
@@ -19,7 +20,8 @@ class MemoryAccess{
             accessAddress(addr),
             accessSize(size),
             type(type),
-            instructionDisasm(disasm)
+            instructionDisasm(disasm),
+            isUninitializedRead(false)
             {};
 
         ADDRINT getIP() const;
@@ -31,6 +33,10 @@ class MemoryAccess{
         AccessType getType() const;
 
         std::string getDisasm() const;
+
+        bool getIsUninitializedRead() const;
+
+        void setUninitializedRead();
 
         bool operator< (const MemoryAccess &other) const;
 };

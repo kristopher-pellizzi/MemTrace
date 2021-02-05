@@ -48,10 +48,12 @@ map<THREADID, ADDRINT> threadInfos;
 
 set<AccessIndex> initializedMemory;
 std::vector<set<AccessIndex>> initializedStack;
+std::vector<AccessIndex> retAddrLocationStack;
 set<ADDRINT> funcsAddresses;
 map<ADDRINT, std::string> funcs;
 
 bool mainCalled = false;
+bool procedureCallTarget = false;
 ADDRINT mainStartAddr = 0;
 ADDRINT mainRetAddr = 0;
 
@@ -134,16 +136,20 @@ UINT32 min(UINT32 x, UINT32 y){
 // Analysis routines
 /* ===================================================================== */
 
-VOID detectFunctionStart(ADDRINT ip, bool isRet){
-    if(ip < textStart || ip > textEnd)
+VOID detectFunctionStart(ADDRINT ip, ADDRINT retAddrSp, UINT32 SpSize){
+    if(ip < textStart || ip > textEnd){
+        // If this is the target of a procedure call, but it's not inside text section (e.g. library function call)
+        // then remove the added return address cell from the call stack
+        /*if(procedureCallTarget){
+            retAddrLocationStack.pop_back();
+        }*/
+        procedureCallTarget = false;
         return;
+    }
+    procedureCallTarget = false;
     ADDRINT effectiveIp = ip - loadOffset;
 
-    if(isRet && effectiveIp == mainRetAddr){
-        mainCalled = false;
-    }
-
-    if(funcsAddresses.find(effectiveIp) != funcsAddresses.end()){
+    if(ip >= textStart && ip <= textEnd && funcsAddresses.find(effectiveIp) != funcsAddresses.end()){
 
         // If main has already been detected, it's useless and time-consuming to try and detect it again
         // This way, we avoid a lookup in a map and a string comparison
@@ -157,15 +163,69 @@ VOID detectFunctionStart(ADDRINT ip, bool isRet){
 
         initializedStack.push_back(initializedMemory);
         initializedMemory.clear();
-    } else if(isRet && !initializedStack.empty()){
-        initializedMemory.clear();
-        set<AccessIndex> &toRestore = initializedStack.back();
-        initializedMemory.insert(toRestore.begin(), toRestore.end());
-        initializedStack.pop_back();
     }
 }
 
-VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr){
+VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
+                bool isRet, bool isProcedureCall, bool isFirstVisit){
+
+    /*if((ip < textStart || ip > textEnd) && procedureCallTarget){
+        retAddrLocationStack.pop_back();
+    }*/
+
+    procedureCallTarget = false;
+
+    ADDRINT effectiveIp = ip - loadOffset;
+
+    // This trick is needed as procedure calls write the return address into stack.
+    // Normally, the tool set as initialized the cell for the caller, but that's actually used by the callee on return, so,
+    // ,n procedure call, insert the written memory area into the initialized memory of the callee.
+    // On return, the tool will see the cell containing the return address as initialized, thus removing 
+    // "ret" instructions from the results (as they are false positives)
+    if(mainCalled && isProcedureCall && type == AccessType::WRITE){
+        procedureCallTarget = true;
+        // Insert the address containing function return address as initialized memory
+        AccessIndex ai(addr, size);
+        retAddrLocationStack.push_back(ai);
+    }
+
+    if(isFirstVisit){
+
+        if(mainCalled && isRet && retAddrLocationStack.empty()){
+            mainCalled = false;
+        }
+
+        if(ip >= textStart && ip <= textEnd && funcsAddresses.find(effectiveIp) != funcsAddresses.end()){
+
+            // If main has already been detected, it's useless and time-consuming to try and detect it again
+            // This way, we avoid a lookup in a map and a string comparison
+            if(!mainCalled){
+                // Detect if this is 'main' first instruction
+                std::string &funcName = funcs[effectiveIp];
+                if(!funcName.compare("main")){
+                    mainCalled = true;
+                }
+            }
+
+            initializedStack.push_back(initializedMemory);
+            initializedMemory.clear();
+        } 
+        
+        if(mainCalled && isRet){
+            if(ip >= textStart && ip <= textEnd){
+                initializedMemory.clear();
+                set<AccessIndex> &toRestore = initializedStack.back();
+                initializedMemory.insert(toRestore.begin(), toRestore.end());
+                initializedStack.pop_back();
+            }
+
+            AccessIndex &retAddrLocation = retAddrLocationStack.back();
+            initializedMemory.insert(retAddrLocation);
+            retAddrLocationStack.pop_back();
+            
+        }
+    }
+
     if(!mainCalled)
         return;
 
@@ -195,12 +255,15 @@ VOID memtrace(THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT 
     MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
-    if(isWrite){
+    if(isWrite && !isProcedureCall){
         initializedMemory.insert(ai);
     }
     else if(readsInitializedMemory(ai)){
         // If memory access reads an initialized memory area, ignore it, as it can't lead to a leak
         return;
+    }
+    else{
+        ma.setUninitializedRead();
     }
  
     PIN_MutexLock(&lock);
@@ -288,46 +351,58 @@ VOID Instruction(INS ins, VOID* v){
         */
         
     }
-    
-    INS_InsertCall(
+
+    bool isProcedureCall = INS_IsProcedureCall(ins);
+
+    UINT32 memoperands = INS_MemoryOperandCount(ins);
+
+    if(memoperands == 0){
+        INS_InsertCall(
         ins, 
         IPOINT_BEFORE, 
         (AFUNPTR) detectFunctionStart, 
         IARG_INST_PTR, 
-        IARG_BOOL, INS_IsRet(ins),
+        isProcedureCall ? IARG_MEMORYWRITE_EA : IARG_INST_PTR,
+        IARG_UINT32, isProcedureCall ? INS_MemoryWriteSize(ins) : 0,
         IARG_END);
+    }
+    else{
+        for(UINT32 memop = 0; memop < memoperands; memop++){
+            if(INS_MemoryOperandIsWritten(ins, memop) ){
+                INS_InsertPredicatedCall(
+                    ins, 
+                    IPOINT_BEFORE, 
+                    (AFUNPTR) memtrace, 
+                    IARG_THREAD_ID, 
+                    IARG_CONTEXT, 
+                    IARG_UINT32, AccessType::WRITE, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYWRITE_EA, 
+                    IARG_MEMORYWRITE_SIZE, 
+                    IARG_PTR, new std::string(INS_Disassemble(ins)), 
+                    IARG_BOOL, INS_IsRet(ins),
+                    IARG_BOOL, isProcedureCall,
+                    IARG_BOOL, memop == 0,
+                    IARG_END);           
+            }
 
-    UINT32 memoperands = INS_MemoryOperandCount(ins);
-
-    for(UINT32 memop = 0; memop < memoperands; memop++){
-        if(INS_MemoryOperandIsWritten(ins, memop) ){
-            INS_InsertPredicatedCall(
-                ins, 
-                IPOINT_BEFORE, 
-                (AFUNPTR) memtrace, 
-                IARG_THREAD_ID, 
-                IARG_CONTEXT, 
-                IARG_UINT32, AccessType::WRITE, 
-                IARG_INST_PTR, 
-                IARG_MEMORYWRITE_EA, 
-                IARG_MEMORYWRITE_SIZE, 
-                IARG_PTR, new std::string(INS_Disassemble(ins)), 
-                IARG_END);           
-        }
-
-        if(INS_MemoryOperandIsRead(ins, memop)){
-            INS_InsertPredicatedCall(
-                ins, 
-                IPOINT_BEFORE, 
-                (AFUNPTR) memtrace, 
-                IARG_THREAD_ID, 
-                IARG_CONTEXT, 
-                IARG_UINT32, AccessType::READ, 
-                IARG_INST_PTR, 
-                IARG_MEMORYREAD_EA, 
-                IARG_MEMORYREAD_SIZE, 
-                IARG_PTR, new std::string(INS_Disassemble(ins)),
-                IARG_END);
+            if(INS_MemoryOperandIsRead(ins, memop)){
+                INS_InsertPredicatedCall(
+                    ins, 
+                    IPOINT_BEFORE, 
+                    (AFUNPTR) memtrace, 
+                    IARG_THREAD_ID, 
+                    IARG_CONTEXT, 
+                    IARG_UINT32, AccessType::READ, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYREAD_EA, 
+                    IARG_MEMORYREAD_SIZE, 
+                    IARG_PTR, new std::string(INS_Disassemble(ins)),
+                    IARG_BOOL, INS_IsRet(ins),
+                    IARG_BOOL, isProcedureCall,
+                    IARG_BOOL, memop == 0,
+                    IARG_END);
+            }
         }
     }
 }
@@ -355,7 +430,7 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
             memOverlaps << "===============================================" << endl << endl;
             for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
-                memOverlaps << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << std::hex << " B @ 0x" << v_it->getAddress() << endl;
+                memOverlaps << (v_it->getIsUninitializedRead() ? "*" : "") << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << std::hex << " B @ 0x" << v_it->getAddress() << endl;
             }
             memOverlaps << "===============================================" << endl;
             memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
@@ -404,10 +479,10 @@ VOID Fini(INT32 code, VOID *v)
         overlaps << "===============================================" << endl << endl << endl << endl << endl;
     }
 
-    /*
-    fclose(trace);
-    routines.close();
-    */
+    
+    // fclose(trace);
+    // routines.close();
+    
 }
 
 /*!
@@ -483,10 +558,12 @@ int main(int argc, char *argv[])
     cerr << "See file " << filename << " for analysis results" << endl;
     cerr <<  "===============================================" << endl;
 
-    //fprintf(trace, "===============================================\n");
-    //fprintf(trace, "MEMORY TRACE START\n");
-    //fprintf(trace, "===============================================\n\n");
-    //fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
+    /*
+    fprintf(trace, "===============================================\n");
+    fprintf(trace, "MEMORY TRACE START\n");
+    fprintf(trace, "===============================================\n\n");
+    fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
+    */
 
     // Start the program, never returns
     PIN_StartProgram();

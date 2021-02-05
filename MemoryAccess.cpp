@@ -20,6 +20,14 @@ std::string MemoryAccess::getDisasm() const{
     return instructionDisasm;
 }
 
+bool MemoryAccess::getIsUninitializedRead() const{
+    return isUninitializedRead;
+}
+
+void MemoryAccess::setUninitializedRead(){
+    isUninitializedRead = true;
+}
+
 bool MemoryAccess::operator<(const MemoryAccess &other) const{
     return 
         accessAddress < other.accessAddress ||
