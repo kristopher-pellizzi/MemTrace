@@ -95,8 +95,9 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* 
 }
 
 bool readsInitializedMemory(AccessIndex& ai){
-    if(initializedMemory.find(ai) != initializedMemory.end())
+    if(initializedMemory.find(ai) != initializedMemory.end()){
         return true;
+    }
 
     std::pair<unsigned int, unsigned int> uninitializedBytes(0, ai.getSecond());
     set<AccessIndex>::iterator iter = initializedMemory.begin();
@@ -108,11 +109,12 @@ bool readsInitializedMemory(AccessIndex& ai){
         ADDRINT currentStart = iter->getFirst();
         ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
         // If will remain uninitialized bytes at the beginning, between iter start and target start
-        if(currentStart > uninitializedBytes.first)
+        if(currentStart > targetStart + uninitializedBytes.first)
             return false;
         // If there are no more uninitialized bytes
-        if(targetEnd <= currentEnd)
+        if(targetEnd <= currentEnd){
             return true;
+        }
 
         uninitializedBytes.first += iter->getSecond();
         ++iter;   
@@ -255,12 +257,18 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
+    bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
+    set<MemoryAccess> &lst = fullOverlaps[ai];
+
     if(isWrite && !isProcedureCall){
         initializedMemory.insert(ai);
     }
     else if(readsInitializedMemory(ai)){
-        // If memory access reads an initialized memory area, ignore it, as it can't lead to a leak
-        return;
+        // If memory access reads an initialized memory area and there's not an overlap set for that AccessIndex, 
+        // ignore it, as it can't lead to a leak
+        if(!(overlapSetAlreadyExists && containsReadIns(lst))){
+            return;
+        }      
     }
     else{
         ma.setUninitializedRead();
@@ -268,8 +276,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
  
     PIN_MutexLock(&lock);
 
-    if(fullOverlaps.find(ai) != fullOverlaps.end()){
-        set<MemoryAccess> &lst = fullOverlaps[ai];
+    if(overlapSetAlreadyExists){
         lst.insert(ma);
     }
     else{
@@ -471,7 +478,7 @@ VOID Fini(INT32 code, VOID *v)
 
         for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
             ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
-            overlaps    << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" 
+            overlaps    << (v_it->getIsUninitializedRead() ? "*" : "") << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" 
                         << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
                         << "bytes [" << std::dec << overlapBeginning << " ~ " << min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1) << "]" << endl;
         }
