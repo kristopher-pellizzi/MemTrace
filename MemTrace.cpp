@@ -10,6 +10,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <cstdarg>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -39,7 +40,7 @@ std::ofstream memOverlaps;
 
 PIN_MUTEX lock;
 
-// FILE* trace;
+FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT loadOffset;
@@ -182,8 +183,8 @@ VOID detectFunctionStart(ADDRINT ip){
             }
         }
 
-        initializedStack.push_back(initializedMemory);
-        initializedMemory.clear();
+        //initializedStack.push_back(initializedMemory);
+        //initializedMemory.clear();
     }
 }
 
@@ -206,9 +207,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     mainCalled = true;
                 }
             }
-
-            initializedStack.push_back(initializedMemory);
-            initializedMemory.clear();
         } 
         
     }
@@ -237,7 +235,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
 
     bool isWrite = type == AccessType::WRITE;
-    // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
+     fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
 
     MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
@@ -269,9 +267,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     PIN_MutexUnlock(&lock);
 }
 
-VOID procCallTrace( ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT targetAddr)
+VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT targetAddr, ...)
 {
-    ADDRINT effectiveIp = ip - loadOffset;
+    //ADDRINT effectiveIp = ip - loadOffset;
 
     // This trick is needed as procedure calls write the return address into stack.
     // Normally, the tool set as initialized the cell for the caller, but that's actually used by the callee on return, so,
@@ -279,14 +277,44 @@ VOID procCallTrace( ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT targetAddr)
     // On return, the tool will see the cell containing the return address as initialized, thus removing 
     // "ret" instructions from the results (as they are false positives)
     if(mainCalled){
+
+        if(ip >= textStart && ip <= textEnd){
+            // Always refer to an address in the .text section of the executable, never follow libraries addresses
+            lastExecutedInstruction = ip - loadOffset;
+            // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
+            lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+        }
+
         // Insert the address containing function return address as initialized memory
         AccessIndex ai(addr, size);
         retAddrLocationStack.push_back(ai);
 
         send_address(targetAddr);
-        int args = receiveArgCount();
+        int args_count = receiveArgCount();
 
-        // Do things with argument count
+        std::va_list args;
+        va_start(args, targetAddr);
+        set<AccessIndex> toPropagate;
+        for(int i = 0; i < args_count; ++i){
+            ADDRINT argument = va_arg(args, ADDRINT);
+            *out << "New argument propagated: " << argument << endl;
+            for(set<AccessIndex>::iterator i = initializedMemory.begin(); i != initializedMemory.end(); ++i){
+                if(i->getFirst() == argument){
+                    toPropagate.insert(AccessIndex(argument, i->getSecond()));
+                }
+            }
+        }
+        va_end(args);
+
+        // Push initializedMemory only if the target function is inside the .text section
+        // e.g. avoid pushing if library function are called
+        if(targetAddr >= textStart && targetAddr <= textEnd){
+            initializedStack.push_back(initializedMemory);
+            initializedMemory.clear();
+        }
+
+        initializedMemory.insert(toPropagate.begin(), toPropagate.end());
+
     }
 }
 
@@ -403,14 +431,20 @@ VOID Instruction(INS ins, VOID* v){
         for(UINT32 memop = 0; memop < memoperands; memop++){
             if(INS_MemoryOperandIsWritten(ins, memop) ){
                 if(isProcedureCall){
+                    IARGLIST args = IARGLIST_Alloc();
+                    for(int i = 0; i < 10; ++i){
+                        IARGLIST_AddArguments(args, IARG_FUNCARG_CALLSITE_VALUE, i, IARG_END);
+                    }
                     INS_InsertPredicatedCall(
                         ins,
                         IPOINT_BEFORE,
                         (AFUNPTR) procCallTrace,
+                        IARG_CONTEXT,
                         IARG_INST_PTR,
                         IARG_MEMORYWRITE_EA,
                         IARG_MEMORYWRITE_SIZE,
                         IARG_BRANCH_TARGET_ADDR,
+                        IARG_IARGLIST, args,
                         IARG_END
                     );
                 }
@@ -479,11 +513,11 @@ VOID Instruction(INS ins, VOID* v){
  */
 VOID Fini(INT32 code, VOID *v)
 {
-    /*
+    
     fprintf(trace, "\n===============================================\n");
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
-    */
+    
 
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
         // Write text file with full overlaps
@@ -543,7 +577,7 @@ VOID Fini(INT32 code, VOID *v)
     }
 
     
-    // fclose(trace);
+     fclose(trace);
     // routines.close();
     send_address(0);
     
@@ -574,7 +608,7 @@ int main(int argc, char *argv[])
         filename = "memtrace.log";
     }
 
-    // trace = fopen(filename.c_str(), "w");
+ trace = fopen(filename.c_str(), "w");
     // routines.open("routines.log");
     //calls.open("calls.log");
     memOverlaps.open("overlaps.log");
@@ -638,12 +672,12 @@ int main(int argc, char *argv[])
     cerr << "See file " << filename << " for analysis results" << endl;
     cerr <<  "===============================================" << endl;
 
-    /*
+    
     fprintf(trace, "===============================================\n");
     fprintf(trace, "MEMORY TRACE START\n");
     fprintf(trace, "===============================================\n\n");
     fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
-    */
+    
 
     // Start the program, never returns
     PIN_StartProgram();
