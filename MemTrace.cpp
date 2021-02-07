@@ -11,6 +11,12 @@
 #include <vector>
 #include <set>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <math.h>
+
 #include "MemoryAccess.h"
 #include "AccessIndex.h"
 
@@ -56,6 +62,9 @@ bool mainCalled = false;
 ADDRINT mainStartAddr = 0;
 ADDRINT mainRetAddr = 0;
 
+int sockfd, serversock;
+struct sockaddr_in address;
+
 
 /* ===================================================================== */
 // Command line switches
@@ -77,6 +86,24 @@ INT32 Usage()
     cerr << KNOB_BASE::StringKnobSummary() << endl;
 
     return -1;
+}
+
+void send_address(unsigned long ip){
+    unsigned int digits = 20;
+    char ip_str[20];
+    if(ip != 0){
+        snprintf(ip_str, digits, "0x%lx", ip);
+        write(sockfd, ip_str, digits);
+    }
+    else{
+        write(sockfd, "0", 2);
+    }
+}
+
+int receiveArgCount(){
+    char counter_str[50];
+    read(sockfd, counter_str, 50);
+    return atoi(counter_str);
 }
 
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* disasm, AccessType type){
@@ -256,10 +283,10 @@ VOID procCallTrace( ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT targetAddr)
         AccessIndex ai(addr, size);
         retAddrLocationStack.push_back(ai);
 
-        if(effectiveIp == 0x4011d7){
-            *out << "Target address: 0x" << std::hex << targetAddr << endl;
-            //*out << "It has " << std::dec << RadareAnalyzer::getInstance().countArgs(targetAddr) << " arguments" << endl;
-        }
+        send_address(targetAddr);
+        int args = receiveArgCount();
+
+        // Do things with argument count
     }
 }
 
@@ -518,6 +545,7 @@ VOID Fini(INT32 code, VOID *v)
     
     // fclose(trace);
     // routines.close();
+    send_address(0);
     
 }
 
@@ -552,6 +580,22 @@ int main(int argc, char *argv[])
     memOverlaps.open("overlaps.log");
     //stackAddress.open("stackAddress.log");
     std::ifstream functions("funcs.lst");
+
+    // Prepare socket connection
+    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == 0){
+        perror("Cannot create socket\n");
+        return 1;
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_port = htons(8123);
+    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+    if(connect(sockfd, (struct sockaddr*) &address, sizeof(address)) < 0){
+        perror("Connection failed");
+        return 2;
+    }
+
+    *out << "Connection successfully established" << endl;
 
     ADDRINT addr;
     std::string addr_str;
