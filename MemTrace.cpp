@@ -40,7 +40,7 @@ std::ofstream memOverlaps;
 
 PIN_MUTEX lock;
 
-FILE* trace;
+// FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT loadOffset;
@@ -136,14 +136,17 @@ bool readsInitializedMemory(AccessIndex& ai){
         ADDRINT currentStart = iter->getFirst();
         ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
         // If will remain uninitialized bytes at the beginning, between iter start and target start
-        if(currentStart > targetStart + uninitializedBytes.first)
+        if(currentStart > targetStart + uninitializedBytes.first){
             return false;
+        }
         // If there are no more uninitialized bytes
         if(targetEnd <= currentEnd){
             return true;
         }
 
-        uninitializedBytes.first += iter->getSecond();
+        if(currentEnd >= targetStart){
+            uninitializedBytes.first += iter->getSecond() - (targetStart + uninitializedBytes.first - currentStart);
+        }
         ++iter;   
     }
     return false;
@@ -235,7 +238,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
 
     bool isWrite = type == AccessType::WRITE;
-     fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
+    // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
 
     MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
@@ -278,26 +281,51 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
     // "ret" instructions from the results (as they are false positives)
     if(mainCalled){
 
+        ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+
         if(ip >= textStart && ip <= textEnd){
             // Always refer to an address in the .text section of the executable, never follow libraries addresses
             lastExecutedInstruction = ip - loadOffset;
             // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
-            lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+            lastSp = sp;
         }
 
         // Insert the address containing function return address as initialized memory
         AccessIndex ai(addr, size);
         retAddrLocationStack.push_back(ai);
 
-        send_address(targetAddr);
-        int args_count = receiveArgCount();
+        /* Arguments handling (OLD)
+        int args_count;
+        if(targetAddr >= textStart && targetAddr <= textEnd){
+            send_address(targetAddr);
+            args_count = receiveArgCount();
+        }
+        else{
+            args_count = 10;
+        }
 
         std::va_list args;
         va_start(args, targetAddr);
         set<AccessIndex> toPropagate;
+        int stackArgumentIndex = 0;
         for(int i = 0; i < args_count; ++i){
             ADDRINT argument = va_arg(args, ADDRINT);
-            *out << "New argument propagated: " << argument << endl;
+            ADDRINT* arg_ptr = (ADDRINT*) sp;
+            ADDRINT arg_val;
+            arg_ptr += stackArgumentIndex;
+            PIN_SafeCopy(&arg_val, arg_ptr, sizeof(ADDRINT));
+            if(arg_val == argument){
+                ++stackArgumentIndex;
+                AccessIndex argPtrAI((ADDRINT) arg_ptr, sizeof(ADDRINT));
+                //toPropagate.insert(argPtrAI);
+            }
+            
+
+            *out << "0x" << std::hex << effectiveIp << ": New argument ";
+            if(arg_val == argument){
+                *out << "stored @ 0x" << std::hex << arg_ptr << " ";
+            }
+            *out << "propagated: 0x" << argument << endl;
             for(set<AccessIndex>::iterator i = initializedMemory.begin(); i != initializedMemory.end(); ++i){
                 if(i->getFirst() == argument){
                     toPropagate.insert(AccessIndex(argument, i->getSecond()));
@@ -305,15 +333,18 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
             }
         }
         va_end(args);
+        */
 
         // Push initializedMemory only if the target function is inside the .text section
         // e.g. avoid pushing if library function are called
         if(targetAddr >= textStart && targetAddr <= textEnd){
             initializedStack.push_back(initializedMemory);
-            initializedMemory.clear();
+            // Avoid clearing initialized memory on procedure calls:
+            // every memory cell initialized by a caller, is considered initialized also by the callee.
+            //initializedMemory.clear();
         }
 
-        initializedMemory.insert(toPropagate.begin(), toPropagate.end());
+        //initializedMemory.insert(toPropagate.begin(), toPropagate.end());
 
     }
 }
@@ -321,13 +352,22 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 bool isFirstVisit)
 {
+    if(ip >= textStart && ip <= textEnd){
+        // Always refer to an address in the .text section of the executable, never follow libraries addresses
+        lastExecutedInstruction = ip - loadOffset;
+        // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
+        lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+    }
+
     if(mainCalled && retAddrLocationStack.empty()){
             mainCalled = false;
     }
 
     // Second check necessary because previous block may have changed 'mainCalled' value
     if(mainCalled){
+
         if(ip >= textStart && ip <= textEnd){
+            // Restore initializedMemory set as it was before the call of this function
             initializedMemory.clear();
             set<AccessIndex> &toRestore = initializedStack.back();
             initializedMemory.insert(toRestore.begin(), toRestore.end());
@@ -513,11 +553,11 @@ VOID Instruction(INS ins, VOID* v){
  */
 VOID Fini(INT32 code, VOID *v)
 {
-    
+    /*
     fprintf(trace, "\n===============================================\n");
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
-    
+    */
 
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
         // Write text file with full overlaps
@@ -577,7 +617,7 @@ VOID Fini(INT32 code, VOID *v)
     }
 
     
-     fclose(trace);
+    // fclose(trace);
     // routines.close();
     send_address(0);
     
@@ -608,7 +648,7 @@ int main(int argc, char *argv[])
         filename = "memtrace.log";
     }
 
- trace = fopen(filename.c_str(), "w");
+    // trace = fopen(filename.c_str(), "w");
     // routines.open("routines.log");
     //calls.open("calls.log");
     memOverlaps.open("overlaps.log");
@@ -672,12 +712,12 @@ int main(int argc, char *argv[])
     cerr << "See file " << filename << " for analysis results" << endl;
     cerr <<  "===============================================" << endl;
 
-    
+    /*
     fprintf(trace, "===============================================\n");
     fprintf(trace, "MEMORY TRACE START\n");
     fprintf(trace, "===============================================\n\n");
     fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
-    
+    */
 
     // Start the program, never returns
     PIN_StartProgram();
