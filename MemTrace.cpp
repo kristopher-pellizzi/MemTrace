@@ -107,6 +107,10 @@ int receiveArgCount(){
     return atoi(counter_str);
 }
 
+UINT32 min(UINT32 x, UINT32 y){
+    return x <= y ? x : y;
+}
+
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* disasm, AccessType type){
     if(threadInfos.find(tid) == threadInfos.end())
         exit(1);
@@ -121,9 +125,9 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* 
     return addr >= currentSp && addr <= threadInfos[tid];
 }
 
-bool readsInitializedMemory(AccessIndex& ai){
+std::pair<int, int> getUninitializedInterval(AccessIndex& ai){
     if(initializedMemory.find(ai) != initializedMemory.end()){
-        return true;
+        return std::pair<int, int>(-1, -1);
     }
 
     std::pair<unsigned int, unsigned int> uninitializedBytes(0, ai.getSecond());
@@ -137,17 +141,48 @@ bool readsInitializedMemory(AccessIndex& ai){
         ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
         // If will remain uninitialized bytes at the beginning, between iter start and target start
         if(currentStart > targetStart + uninitializedBytes.first){
-            return false;
+            // Return false
+            return std::pair<int, int>(uninitializedBytes.first, uninitializedBytes.second - 1);
         }
         // If there are no more uninitialized bytes
         if(targetEnd <= currentEnd){
-            return true;
+            // Return true
+            return std::pair<int, int>(-1, -1);
         }
 
         if(currentEnd >= targetStart){
             uninitializedBytes.first += iter->getSecond() - (targetStart + uninitializedBytes.first - currentStart);
         }
         ++iter;   
+    }
+    return std::pair<int, int>(-1, -1);
+}
+
+std::pair<int, int>* intervalIntersection(std::pair<int, int> int1, std::pair<int, int> int2){
+    if(int1.first <= int2.first){
+        if(int1.second < int2.first)
+            return NULL;
+        return new std::pair<int, int>(int1.first, min(int1.second, int2.second));
+    }
+    else{
+        if(int2.second < int1.first)
+            return NULL;
+        return new std::pair<int, int>(int2.first, min(int1.second, int2.second));
+    }
+}
+
+bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<MemoryAccess> s){
+    for(set<MemoryAccess>::iterator i = s.begin(); i != s.end(); ++i){
+        if(!i->getIsUninitializedRead())
+            continue;
+        std::pair<int, int> uninitializedInterval = i->getUninitializedInterval();
+        ADDRINT overlapBeginning = i->getAddress() - targetAI.getFirst();
+        ADDRINT overlapEnd = min(overlapBeginning + i->getSize() - 1, targetAI.getSecond() - 1);
+        ADDRINT overlapSize = overlapEnd - overlapBeginning;
+        
+        if(intervalIntersection(std::pair<int, int>(0, overlapSize), uninitializedInterval) != NULL)
+            return true;
+        
     }
     return false;
 }
@@ -158,10 +193,6 @@ bool containsReadIns(set<MemoryAccess> s){
             return true;
     }
     return false;
-}
-
-UINT32 min(UINT32 x, UINT32 y){
-    return x <= y ? x : y;
 }
 
 /* ===================================================================== */
@@ -245,15 +276,17 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
     set<MemoryAccess> &lst = fullOverlaps[ai];
+    std::pair<int, int> uninitializedInterval;
 
     if(isWrite){
         initializedMemory.insert(ai);
     }
-    else if(readsInitializedMemory(ai)){
-              
-    }
     else{
-        ma.setUninitializedRead();
+        uninitializedInterval = getUninitializedInterval(ai);
+        if(uninitializedInterval.first != -1){
+            ma.setUninitializedRead();
+            ma.setUninitializedInterval(uninitializedInterval);
+        }
     }
  
     PIN_MutexLock(&lock);
@@ -600,17 +633,25 @@ VOID Fini(INT32 code, VOID *v)
     // Write text file with partial overlaps
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = partialOverlaps.begin(); it != partialOverlaps.end(); ++it){
         set<MemoryAccess> v = it->second;
-        if(v.size() < 1 || !containsReadIns(v))
+        if(v.size() < 1 || !containsUninitializedPartialOverlap(it->first, v)){
             continue;
+        }
         overlaps << "===============================================" << endl;
-        overlaps << "0x" << std::hex << it->first.getFirst() << endl;
+        overlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
         overlaps << "===============================================" << endl;
 
         for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
             ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
-            overlaps    << (v_it->getIsUninitializedRead() ? "*" : "") << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" 
+            ADDRINT overlapEnd = min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1);
+            ADDRINT overlapSize = overlapEnd - overlapBeginning;
+            std::pair<int, int>* uninitializedOverlap = intervalIntersection(std::pair<int, int>(0, overlapSize), v_it->getUninitializedInterval());
+            if(uninitializedOverlap == NULL)
+                continue;
+            uninitializedOverlap->first += overlapBeginning;
+            uninitializedOverlap->second += overlapBeginning;
+            overlaps    << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" 
                         << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
-                        << "bytes [" << std::dec << overlapBeginning << " ~ " << min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1) << "]" << endl;
+                        << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
         }
         overlaps << "===============================================" << endl;
         overlaps << "===============================================" << endl << endl << endl << endl << endl;
