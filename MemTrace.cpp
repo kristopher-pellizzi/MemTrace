@@ -12,12 +12,6 @@
 #include <set>
 #include <cstdarg>
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <math.h>
-
 #include "MemoryAccess.h"
 #include "AccessIndex.h"
 
@@ -63,10 +57,6 @@ bool mainCalled = false;
 ADDRINT mainStartAddr = 0;
 ADDRINT mainRetAddr = 0;
 
-int sockfd, serversock;
-struct sockaddr_in address;
-
-
 /* ===================================================================== */
 // Command line switches
 /* ===================================================================== */
@@ -87,24 +77,6 @@ INT32 Usage()
     cerr << KNOB_BASE::StringKnobSummary() << endl;
 
     return -1;
-}
-
-void send_address(unsigned long ip){
-    unsigned int digits = 20;
-    char ip_str[20];
-    if(ip != 0){
-        snprintf(ip_str, digits, "0x%lx", ip);
-        write(sockfd, ip_str, digits);
-    }
-    else{
-        write(sockfd, "0", 2);
-    }
-}
-
-int receiveArgCount(){
-    char counter_str[50];
-    read(sockfd, counter_str, 50);
-    return atoi(counter_str);
 }
 
 UINT32 min(UINT32 x, UINT32 y){
@@ -326,47 +298,6 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
         // Insert the address containing function return address as initialized memory
         AccessIndex ai(addr, size);
         retAddrLocationStack.push_back(ai);
-
-        /* Arguments handling (OLD)
-        int args_count;
-        if(targetAddr >= textStart && targetAddr <= textEnd){
-            send_address(targetAddr);
-            args_count = receiveArgCount();
-        }
-        else{
-            args_count = 10;
-        }
-
-        std::va_list args;
-        va_start(args, targetAddr);
-        set<AccessIndex> toPropagate;
-        int stackArgumentIndex = 0;
-        for(int i = 0; i < args_count; ++i){
-            ADDRINT argument = va_arg(args, ADDRINT);
-            ADDRINT* arg_ptr = (ADDRINT*) sp;
-            ADDRINT arg_val;
-            arg_ptr += stackArgumentIndex;
-            PIN_SafeCopy(&arg_val, arg_ptr, sizeof(ADDRINT));
-            if(arg_val == argument){
-                ++stackArgumentIndex;
-                AccessIndex argPtrAI((ADDRINT) arg_ptr, sizeof(ADDRINT));
-                //toPropagate.insert(argPtrAI);
-            }
-            
-
-            *out << "0x" << std::hex << effectiveIp << ": New argument ";
-            if(arg_val == argument){
-                *out << "stored @ 0x" << std::hex << arg_ptr << " ";
-            }
-            *out << "propagated: 0x" << argument << endl;
-            for(set<AccessIndex>::iterator i = initializedMemory.begin(); i != initializedMemory.end(); ++i){
-                if(i->getFirst() == argument){
-                    toPropagate.insert(AccessIndex(argument, i->getSecond()));
-                }
-            }
-        }
-        va_end(args);
-        */
 
         // Push initializedMemory only if the target function is inside the .text section
         // e.g. avoid pushing if library function are called
@@ -660,7 +591,6 @@ VOID Fini(INT32 code, VOID *v)
     
     // fclose(trace);
     // routines.close();
-    send_address(0);
     
 }
 
@@ -695,22 +625,6 @@ int main(int argc, char *argv[])
     memOverlaps.open("overlaps.log");
     //stackAddress.open("stackAddress.log");
     std::ifstream functions("funcs.lst");
-
-    // Prepare socket connection
-    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == 0){
-        perror("Cannot create socket\n");
-        return 1;
-    }
-
-    address.sin_family = AF_INET;
-    address.sin_port = htons(8123);
-    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
-    if(connect(sockfd, (struct sockaddr*) &address, sizeof(address)) < 0){
-        perror("Connection failed");
-        return 2;
-    }
-
-    *out << "Connection successfully established" << endl;
 
     ADDRINT addr;
     std::string addr_str;
