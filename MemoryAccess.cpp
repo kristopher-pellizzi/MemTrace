@@ -24,6 +24,15 @@ bool MemoryAccess::getIsUninitializedRead() const{
     return isUninitializedRead;
 }
 
+std::pair<int, int> MemoryAccess::getUninitializedInterval() const{
+    return uninitializedInterval;
+}
+
+void MemoryAccess::setUninitializedInterval(std::pair<int, int>& interval){
+    uninitializedInterval.first = interval.first;
+    uninitializedInterval.second = interval.second;
+}
+
 void MemoryAccess::setUninitializedRead(){
     isUninitializedRead = true;
 }
