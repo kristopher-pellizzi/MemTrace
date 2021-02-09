@@ -571,6 +571,21 @@ VOID Fini(INT32 code, VOID *v)
         overlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
         overlaps << "===============================================" << endl;
 
+        overlaps << "Accessing instructions: " << endl << endl;
+        set<MemoryAccess>& fullOverlapsSet = fullOverlaps[it->first];
+        for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
+            overlaps 
+                << "0x" << std::hex << i->getIP() 
+                << ": " << i->getDisasm() << "\t"
+                << (i->getType() == AccessType::WRITE ? "W " : "R ") 
+                << std::dec << i->getSize() 
+                << std::hex << " B @ 0x" 
+                << i->getAddress() << endl;
+        }
+        overlaps << "===============================================" << endl;
+        
+        overlaps << "Partiallly overlapping instructions: " << endl << endl;
+
         for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
             ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
             ADDRINT overlapEnd = min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1);
