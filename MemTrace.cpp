@@ -85,10 +85,22 @@ UINT32 min(UINT32 x, UINT32 y){
     return x <= y ? x : y;
 }
 
-bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, std::string* disasm, AccessType type){
+bool isPushInstruction(OPCODE opcode){
+    return
+        opcode == XED_ICLASS_PUSH ||
+        opcode == XED_ICLASS_PUSHA || 
+        opcode == XED_ICLASS_PUSHAD || 
+        opcode == XED_ICLASS_PUSHF || 
+        opcode == XED_ICLASS_PUSHFD || 
+        opcode == XED_ICLASS_PUSHFQ;
+}
+
+bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcode_ptr, AccessType type){
     if(threadInfos.find(tid) == threadInfos.end())
         exit(1);
-    if(type == AccessType::WRITE && disasm->find("push") != disasm->npos){
+    OPCODE opcode = *opcode_ptr;
+    free(opcode_ptr);
+    if(type == AccessType::WRITE && isPushInstruction(opcode)){
         // If it is a push instruction, it surely writes a stack address
         return true;
     }
@@ -197,7 +209,7 @@ VOID detectFunctionStart(ADDRINT ip){
 }
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                bool isFirstVisit)
+                VOID* opcode, bool isFirstVisit)
 {
 
     ADDRINT effectiveIp = ip - loadOffset;
@@ -238,7 +250,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     // Only keep track of accesses on the stack
     //ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-    if(!isStackAddress(tid, addr, lastSp, ins_disasm, type)){
+    if(!isStackAddress(tid, addr, lastSp, static_cast<OPCODE*>(opcode), type)){
         return;
     }
 
@@ -328,7 +340,7 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                bool isFirstVisit)
+                VOID* opcode, bool isFirstVisit)
 {
     if(ip >= textStart && ip <= textEnd){
         // Always refer to an address in the .text section of the executable, never follow libraries addresses
@@ -358,7 +370,7 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         
     }
 
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, isFirstVisit);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 }
 
 /* ===================================================================== */
@@ -441,6 +453,16 @@ VOID Instruction(INS ins, VOID* v){
         return;
     }
     else{
+
+        #ifdef DEBUG
+            std::string* disassembly = new std::string(INS_Disassemble(ins));
+        #else
+            std::string* disassembly = new std::string("");
+        #endif
+
+        OPCODE* opcode = (OPCODE*) malloc(sizeof(OPCODE));
+        *opcode = INS_Opcode(ins);
+
         for(UINT32 memop = 0; memop < memoperands; memop++){
             if(INS_MemoryOperandIsWritten(ins, memop) ){
                 if(isProcedureCall){
@@ -471,8 +493,9 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_UINT32, AccessType::WRITE, 
                         IARG_INST_PTR, 
                         IARG_MEMORYWRITE_EA, 
-                        IARG_MEMORYWRITE_SIZE, 
-                        IARG_PTR, new std::string(INS_Disassemble(ins)), 
+                        IARG_MEMORYWRITE_SIZE,
+                        IARG_PTR, disassembly, 
+                        IARG_PTR, opcode, 
                         IARG_BOOL, memop == 0,
                         IARG_END
                     ); 
@@ -491,7 +514,8 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_INST_PTR,
                         IARG_MEMORYREAD_EA,
                         IARG_MEMORYREAD_SIZE,
-                        IARG_PTR, new std::string(INS_Disassemble(ins)),
+                        IARG_PTR, disassembly,
+                        IARG_PTR, opcode,
                         IARG_BOOL, memop == 0,
                         IARG_END
                     );
@@ -507,7 +531,8 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_INST_PTR, 
                         IARG_MEMORYREAD_EA, 
                         IARG_MEMORYREAD_SIZE, 
-                        IARG_PTR, new std::string(INS_Disassemble(ins)),
+                        IARG_PTR, disassembly,
+                        IARG_PTR, opcode,
                         IARG_BOOL, memop == 0,
                         IARG_END
                     );
