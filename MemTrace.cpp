@@ -57,6 +57,8 @@ bool mainCalled = false;
 ADDRINT mainStartAddr = 0;
 ADDRINT mainRetAddr = 0;
 
+int calledFunctions = 0;
+
 /* ===================================================================== */
 // Command line switches
 /* ===================================================================== */
@@ -185,7 +187,7 @@ VOID detectFunctionStart(ADDRINT ip){
             // Detect if this is 'main' first instruction
             std::string &funcName = funcs[effectiveIp];
             if(!funcName.compare("main")){
-                mainCalled = true;
+                //mainCalled = true;
             }
         }
 
@@ -210,7 +212,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 // Detect if this is 'main' first instruction
                 std::string &funcName = funcs[effectiveIp];
                 if(!funcName.compare("main")){
-                    mainCalled = true;
+                    //mainCalled = true;
                 }
             }
         } 
@@ -310,6 +312,18 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
 
         //initializedMemory.insert(toPropagate.begin(), toPropagate.end());
 
+    }
+
+    if(!mainCalled && targetAddr >= textStart && targetAddr <= textEnd){
+        if(calledFunctions == 2){
+            ++calledFunctions;
+            mainCalled = true;
+            *out << "****************" << endl;
+            *out << "Main entry point: 0x" << std::hex << targetAddr << endl;
+        }
+        else{
+            ++calledFunctions;
+        }
     }
 }
 
@@ -424,12 +438,7 @@ VOID Instruction(INS ins, VOID* v){
     UINT32 memoperands = INS_MemoryOperandCount(ins);
 
     if(memoperands == 0){
-        INS_InsertCall(
-        ins, 
-        IPOINT_BEFORE, 
-        (AFUNPTR) detectFunctionStart, 
-        IARG_INST_PTR, 
-        IARG_END);
+        return;
     }
     else{
         for(UINT32 memop = 0; memop < memoperands; memop++){
