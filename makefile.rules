@@ -99,3 +99,26 @@ $(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h
 
 radareTest: radareTest.cpp
 	$(CXX) -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
+
+
+# DEBUG ENABLED EXECUTABLES
+# Build the intermediate object file.
+./debug/MemTrace$(OBJ_SUFFIX): MemTrace.cpp
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+./debug/MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+./debug/AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the tool as a dll (shared object).
+./debug/MemTrace$(PINTOOL_SUFFIX): ./debug/MemTrace$(OBJ_SUFFIX) \
+./debug/MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
+./debug/AccessIndex$(OBJ_SUFFIX) AccessIndex.h
+	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
+
+launchDebug: radareTest.cpp
+	$(CXX) -DDEBUG -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)

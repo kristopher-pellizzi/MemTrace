@@ -134,7 +134,11 @@ int main(int argc, char** argv) {
 		getMainReturnAddr(r2);
 		r2pipe_close (r2);
 
-		const char* pin_prefix = "/opt/pin/pin -t obj-intel64/MemTrace.so -- ";
+		#ifdef DEBUG
+			const char* pin_prefix = "/opt/pin/pin -t debug/MemTrace.so -- ";
+		#else
+			const char* pin_prefix = "/opt/pin/pin -t obj-intel64/MemTrace.so -- ";
+		#endif
 		char* tmp = build_cmd(pin_prefix, argv[1]);
 		cmd = append_args(tmp, &argv[2]);
 		free(tmp);
