@@ -8,6 +8,7 @@ enum class AccessType{
 class MemoryAccess{
     private:
         ADDRINT instructionPointer;
+        ADDRINT actualInstructionPointer;
         ADDRINT accessAddress;
         UINT32 accessSize;
         AccessType type;
@@ -16,8 +17,9 @@ class MemoryAccess{
         std::pair<int, int> uninitializedInterval;
 
     public:
-        MemoryAccess(ADDRINT ip, ADDRINT addr, UINT32 size, AccessType type, std::string disasm) : 
+        MemoryAccess(ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, UINT32 size, AccessType type, std::string disasm) : 
             instructionPointer(ip),
+            actualInstructionPointer(actualInstructionPointer),
             accessAddress(addr),
             accessSize(size),
             type(type),
@@ -29,6 +31,8 @@ class MemoryAccess{
             };
 
         ADDRINT getIP() const;
+
+        ADDRINT getActualIP() const;
 
         ADDRINT getAddress() const;
 

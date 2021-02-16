@@ -4,6 +4,10 @@ ADDRINT MemoryAccess::getIP() const{
     return instructionPointer;
 }
 
+ADDRINT MemoryAccess::getActualIP() const{
+    return actualInstructionPointer;
+}
+
 ADDRINT MemoryAccess::getAddress() const{
     return accessAddress;
 }

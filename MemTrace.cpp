@@ -99,7 +99,6 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
     if(threadInfos.find(tid) == threadInfos.end())
         exit(1);
     OPCODE opcode = *opcode_ptr;
-    free(opcode_ptr);
     if(type == AccessType::WRITE && isPushInstruction(opcode)){
         // If it is a push instruction, it surely writes a stack address
         return true;
@@ -257,7 +256,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     bool isWrite = type == AccessType::WRITE;
     // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
 
-    MemoryAccess ma(lastExecutedInstruction, addr, size, type, std::string(*ins_disasm));
+    MemoryAccess ma(lastExecutedInstruction, ip, addr, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
     bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
@@ -565,7 +564,15 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
             memOverlaps << "===============================================" << endl << endl;
             for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
-                memOverlaps << (v_it->getIsUninitializedRead() ? "*" : "") << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << std::hex << " B @ 0x" << v_it->getAddress() << endl;
+                memOverlaps 
+                    << (v_it->getIsUninitializedRead() ? "*" : "") 
+                    << "0x" << std::hex << v_it->getIP() 
+                    << " (0x" << v_it->getActualIP() << ")"
+                    << ": " << v_it->getDisasm() << "\t" 
+                    << (v_it->getType() == AccessType::WRITE ? "W " : "R ") 
+                    << std::dec << v_it->getSize() 
+                    << std::hex << " B @ 0x" << v_it->getAddress() 
+                    << endl;
             }
             memOverlaps << "===============================================" << endl;
             memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
@@ -610,6 +617,7 @@ VOID Fini(INT32 code, VOID *v)
         for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
             overlaps 
                 << "0x" << std::hex << i->getIP() 
+                << " (0x" << i->getActualIP() << ")"
                 << ": " << i->getDisasm() << "\t"
                 << (i->getType() == AccessType::WRITE ? "W " : "R ") 
                 << std::dec << i->getSize() 
@@ -629,9 +637,12 @@ VOID Fini(INT32 code, VOID *v)
                 continue;
             uninitializedOverlap->first += overlapBeginning;
             uninitializedOverlap->second += overlapBeginning;
-            overlaps    << "0x" << std::hex << v_it->getIP() << ": " << v_it->getDisasm() << "\t" 
-                        << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
-                        << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
+            overlaps    
+                << "0x" << std::hex << v_it->getIP() 
+                << " (0x" << v_it->getActualIP() << ")"
+                << ": " << v_it->getDisasm() << "\t" 
+                << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
+                << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
         }
         overlaps << "===============================================" << endl;
         overlaps << "===============================================" << endl << endl << endl << endl << endl;
@@ -673,6 +684,7 @@ int main(int argc, char *argv[])
     //calls.open("calls.log");
     memOverlaps.open("overlaps.log");
     //stackAddress.open("stackAddress.log");
+    /*
     std::ifstream functions("funcs.lst");
 
     ADDRINT addr;
@@ -704,6 +716,7 @@ int main(int argc, char *argv[])
 
     *out << "Main start address: 0x" << std::hex << mainStartAddr << endl;
     *out << "Main return address: 0x" << std::hex << mainRetAddr << endl;
+    */
     
     IMG_AddInstrumentFunction(Image, 0);
     PIN_AddThreadStartFunction(OnThreadStart, 0);
