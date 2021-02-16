@@ -10,6 +10,7 @@ class MemoryAccess{
         ADDRINT instructionPointer;
         ADDRINT actualInstructionPointer;
         ADDRINT accessAddress;
+        int spOffset;
         UINT32 accessSize;
         AccessType type;
         std::string instructionDisasm;
@@ -17,10 +18,11 @@ class MemoryAccess{
         std::pair<int, int> uninitializedInterval;
 
     public:
-        MemoryAccess(ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, UINT32 size, AccessType type, std::string disasm) : 
+        MemoryAccess(ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, UINT32 size, AccessType type, std::string disasm) : 
             instructionPointer(ip),
             actualInstructionPointer(actualInstructionPointer),
             accessAddress(addr),
+            spOffset(spOffset),
             accessSize(size),
             type(type),
             instructionDisasm(disasm),
@@ -35,6 +37,8 @@ class MemoryAccess{
         ADDRINT getActualIP() const;
 
         ADDRINT getAddress() const;
+
+        int getSPOffset() const;
 
         UINT32 getSize() const;
 

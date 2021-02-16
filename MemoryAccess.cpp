@@ -12,6 +12,10 @@ ADDRINT MemoryAccess::getAddress() const{
     return accessAddress;
 }
 
+int MemoryAccess::getSPOffset() const{
+    return spOffset;
+}
+
 UINT32 MemoryAccess::getSize() const{
     return accessSize;
 }

@@ -246,17 +246,19 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
 
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
+    OPCODE* opcode_ptr = static_cast<OPCODE*>(opcode);
 
     // Only keep track of accesses on the stack
     //ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-    if(!isStackAddress(tid, addr, lastSp, static_cast<OPCODE*>(opcode), type)){
+    if(!isStackAddress(tid, addr, lastSp, opcode_ptr, type)){
         return;
     }
 
     bool isWrite = type == AccessType::WRITE;
     // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
+    int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - lastSp;
 
-    MemoryAccess ma(lastExecutedInstruction, ip, addr, size, type, std::string(*ins_disasm));
+    MemoryAccess ma(lastExecutedInstruction, ip, addr, spOffset, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
     bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
@@ -571,7 +573,7 @@ VOID Fini(INT32 code, VOID *v)
                     << ": " << v_it->getDisasm() << "\t" 
                     << (v_it->getType() == AccessType::WRITE ? "W " : "R ") 
                     << std::dec << v_it->getSize() 
-                    << std::hex << " B @ 0x" << v_it->getAddress() 
+                    << std::hex << " B @ (sp + " << std::dec << v_it->getSPOffset() << ");"
                     << endl;
             }
             memOverlaps << "===============================================" << endl;
@@ -621,8 +623,8 @@ VOID Fini(INT32 code, VOID *v)
                 << ": " << i->getDisasm() << "\t"
                 << (i->getType() == AccessType::WRITE ? "W " : "R ") 
                 << std::dec << i->getSize() 
-                << std::hex << " B @ 0x" 
-                << i->getAddress() << endl;
+                << std::hex << " B @ (sp + " << std::dec << i->getSPOffset() << ");"
+                << endl;
         }
         overlaps << "===============================================" << endl;
         
@@ -642,6 +644,7 @@ VOID Fini(INT32 code, VOID *v)
                 << " (0x" << v_it->getActualIP() << ")"
                 << ": " << v_it->getDisasm() << "\t" 
                 << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
+                << "@ (sp + " << std::dec << v_it->getSPOffset() << "); "
                 << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
         }
         overlaps << "===============================================" << endl;
