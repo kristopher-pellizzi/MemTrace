@@ -42,6 +42,7 @@ ADDRINT loadOffset;
 // the following couple of definitions in a per-thread fashion
 ADDRINT lastExecutedInstruction;
 ADDRINT lastSp;
+ADDRINT lastBp;
 
 map<AccessIndex, set<MemoryAccess>> fullOverlaps;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
@@ -238,6 +239,16 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         lastExecutedInstruction = ip - loadOffset;
         // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
         lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+
+        REG regBasePtr;
+        if(REG_Size(REG_STACK_PTR) == 8){
+            regBasePtr = REG_GBP;
+        }
+        else{
+            regBasePtr = REG_EBP;
+        }
+
+        lastBp = PIN_GetContextReg(ctxt, regBasePtr);
     }
     else{
         if(lastExecutedInstruction == 0){
@@ -257,8 +268,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     bool isWrite = type == AccessType::WRITE;
     // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
     int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - lastSp;
+    int bpOffset = addr - lastBp;
 
-    MemoryAccess ma(lastExecutedInstruction, ip, addr, spOffset, size, type, std::string(*ins_disasm));
+    MemoryAccess ma(lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
     bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
@@ -308,6 +320,16 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
             lastExecutedInstruction = ip - loadOffset;
             // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
             lastSp = sp;
+
+            REG regBasePtr;
+            if(REG_Size(REG_STACK_PTR) == 8){
+                regBasePtr = REG_GBP;
+            }
+            else{
+                regBasePtr = REG_EBP;
+            }
+
+            lastBp = PIN_GetContextReg(ctxt, regBasePtr);
         }
 
         // Insert the address containing function return address as initialized memory
@@ -348,6 +370,16 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         lastExecutedInstruction = ip - loadOffset;
         // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
         lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+
+        REG regBasePtr;
+        if(REG_Size(REG_STACK_PTR) == 8){
+            regBasePtr = REG_GBP;
+        }
+        else{
+            regBasePtr = REG_EBP;
+        }
+
+        lastBp = PIN_GetContextReg(ctxt, regBasePtr);
     }
 
     if(mainCalled && retAddrLocationStack.empty()){
@@ -566,6 +598,9 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
             memOverlaps << "===============================================" << endl << endl;
             for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
+                int spOffset = v_it->getSPOffset();
+                int bpOffset = v_it->getBPOffset();
+
                 memOverlaps 
                     << (v_it->getIsUninitializedRead() ? "*" : "") 
                     << "0x" << std::hex << v_it->getIP() 
@@ -573,7 +608,9 @@ VOID Fini(INT32 code, VOID *v)
                     << ": " << v_it->getDisasm() << "\t" 
                     << (v_it->getType() == AccessType::WRITE ? "W " : "R ") 
                     << std::dec << v_it->getSize() 
-                    << std::hex << " B @ (sp + " << std::dec << v_it->getSPOffset() << ");"
+                    << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ") 
+                    << std::dec << abs(v_it->getSPOffset()) << ");"
+                    << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << abs(v_it->getBPOffset()) << ")"
                     << endl;
             }
             memOverlaps << "===============================================" << endl;
@@ -617,13 +654,18 @@ VOID Fini(INT32 code, VOID *v)
         overlaps << "Accessing instructions: " << endl << endl;
         set<MemoryAccess>& fullOverlapsSet = fullOverlaps[it->first];
         for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
+            int spOffset = i->getSPOffset();
+            int bpOffset = i->getBPOffset();
+            
             overlaps 
                 << "0x" << std::hex << i->getIP() 
                 << " (0x" << i->getActualIP() << ")"
                 << ": " << i->getDisasm() << "\t"
                 << (i->getType() == AccessType::WRITE ? "W " : "R ") 
                 << std::dec << i->getSize() 
-                << std::hex << " B @ (sp + " << std::dec << i->getSPOffset() << ");"
+                << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ")
+                << std::dec << abs(i->getSPOffset()) << ");"
+                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << abs(i->getBPOffset()) << ")"
                 << endl;
         }
         overlaps << "===============================================" << endl;
@@ -639,12 +681,17 @@ VOID Fini(INT32 code, VOID *v)
                 continue;
             uninitializedOverlap->first += overlapBeginning;
             uninitializedOverlap->second += overlapBeginning;
+
+            int spOffset = v_it->getSPOffset();
+            int bpOffset = v_it->getBPOffset();
+
             overlaps    
                 << "0x" << std::hex << v_it->getIP() 
                 << " (0x" << v_it->getActualIP() << ")"
                 << ": " << v_it->getDisasm() << "\t" 
                 << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
-                << "@ (sp + " << std::dec << v_it->getSPOffset() << "); "
+                << "@ (sp " << (spOffset >= 0 ? "+ " : "- ") << std::dec << abs(v_it->getSPOffset()) << "); "
+                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << abs(v_it->getBPOffset()) << ") "
                 << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
         }
         overlaps << "===============================================" << endl;

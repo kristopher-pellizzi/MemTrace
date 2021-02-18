@@ -16,6 +16,10 @@ int MemoryAccess::getSPOffset() const{
     return spOffset;
 }
 
+int MemoryAccess::getBPOffset() const{
+    return bpOffset;
+}
+
 UINT32 MemoryAccess::getSize() const{
     return accessSize;
 }
