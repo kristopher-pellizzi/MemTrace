@@ -609,8 +609,8 @@ VOID Fini(INT32 code, VOID *v)
                     << (v_it->getType() == AccessType::WRITE ? "W " : "R ") 
                     << std::dec << v_it->getSize() 
                     << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ") 
-                    << std::dec << abs(v_it->getSPOffset()) << ");"
-                    << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << abs(v_it->getBPOffset()) << ")"
+                    << std::dec << llabs(v_it->getSPOffset()) << ");"
+                    << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ")"
                     << endl;
             }
             memOverlaps << "===============================================" << endl;
@@ -664,8 +664,8 @@ VOID Fini(INT32 code, VOID *v)
                 << (i->getType() == AccessType::WRITE ? "W " : "R ") 
                 << std::dec << i->getSize() 
                 << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ")
-                << std::dec << abs(i->getSPOffset()) << ");"
-                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << abs(i->getBPOffset()) << ")"
+                << std::dec << llabs(i->getSPOffset()) << ");"
+                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(i->getBPOffset()) << ")"
                 << endl;
         }
         overlaps << "===============================================" << endl;
@@ -690,8 +690,8 @@ VOID Fini(INT32 code, VOID *v)
                 << " (0x" << v_it->getActualIP() << ")"
                 << ": " << v_it->getDisasm() << "\t" 
                 << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
-                << "@ (sp " << (spOffset >= 0 ? "+ " : "- ") << std::dec << abs(v_it->getSPOffset()) << "); "
-                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << abs(v_it->getBPOffset()) << ") "
+                << "@ (sp " << (spOffset >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
+                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") "
                 << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
         }
         overlaps << "===============================================" << endl;

@@ -10,8 +10,8 @@ class MemoryAccess{
         ADDRINT instructionPointer;
         ADDRINT actualInstructionPointer;
         ADDRINT accessAddress;
-        int spOffset;
-        int bpOffset;
+        long long int spOffset;
+        long long int bpOffset;
         UINT32 accessSize;
         AccessType type;
         std::string instructionDisasm;
@@ -40,9 +40,9 @@ class MemoryAccess{
 
         ADDRINT getAddress() const;
 
-        int getSPOffset() const;
+        long long int getSPOffset() const;
 
-        int getBPOffset() const;
+        long long int getBPOffset() const;
 
         UINT32 getSize() const;
 

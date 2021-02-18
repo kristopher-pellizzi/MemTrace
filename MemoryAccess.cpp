@@ -12,11 +12,11 @@ ADDRINT MemoryAccess::getAddress() const{
     return accessAddress;
 }
 
-int MemoryAccess::getSPOffset() const{
+long long int MemoryAccess::getSPOffset() const{
     return spOffset;
 }
 
-int MemoryAccess::getBPOffset() const{
+long long int MemoryAccess::getBPOffset() const{
     return bpOffset;
 }
 
