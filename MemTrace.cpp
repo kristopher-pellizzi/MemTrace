@@ -590,17 +590,39 @@ VOID Fini(INT32 code, VOID *v)
     fprintf(trace, "===============================================\n\n");
     */
 
+    int regSize = REG_Size(REG_STACK_PTR);
+    memOverlaps.write("\x00", 1);
+    memOverlaps << regSize << ";";
+
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
         // Write text file with full overlaps
         set<MemoryAccess> v = it->second;
         if(containsReadIns(v) && v.size() > 1){
-            memOverlaps << "===============================================" << endl;
-            memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
-            memOverlaps << "===============================================" << endl << endl;
-            for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
-                int spOffset = v_it->getSPOffset();
-                int bpOffset = v_it->getBPOffset();
 
+            ADDRINT tmp = it->first.getFirst();
+            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+            memOverlaps << it->first.getSecond() << ";";
+
+            /*memOverlaps << "===============================================" << endl;
+            memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
+            memOverlaps << "===============================================" << endl << endl;*/
+            for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
+                //int spOffset = v_it->getSPOffset();
+                //int bpOffset = v_it->getBPOffset();
+
+                memOverlaps.write((v_it->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
+                tmp = v_it->getIP();
+                memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+                tmp = v_it->getActualIP();
+                memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+                memOverlaps << v_it->getDisasm() << ";";
+                memOverlaps.write((v_it->getType() == AccessType::WRITE ? "\x1a" :"\x1b"), 1);
+                memOverlaps << v_it->getSize() << ";";
+                memOverlaps << v_it->getSPOffset() << ";";
+                memOverlaps << v_it->getBPOffset() << ";";
+
+
+                /*
                 memOverlaps 
                     << (v_it->getIsUninitializedRead() ? "*" : "") 
                     << "0x" << std::hex << v_it->getIP() 
@@ -612,9 +634,10 @@ VOID Fini(INT32 code, VOID *v)
                     << std::dec << llabs(v_it->getSPOffset()) << ");"
                     << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ")"
                     << endl;
+                    */
             }
-            memOverlaps << "===============================================" << endl;
-            memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
+            //memOverlaps << "===============================================" << endl;
+            //memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
         }
 
         // Fill the partial overlaps map
@@ -639,6 +662,7 @@ VOID Fini(INT32 code, VOID *v)
             accessedAddress = partialOverlapIterator->first.getFirst();
         }
     }
+    memOverlaps.write("\x01", 1);
 
     std::ofstream overlaps("partialOverlaps.log");
     // Write text file with partial overlaps
@@ -732,7 +756,7 @@ int main(int argc, char *argv[])
     // trace = fopen(filename.c_str(), "w");
     // routines.open("routines.log");
     //calls.open("calls.log");
-    memOverlaps.open("overlaps.log");
+    memOverlaps.open("overlaps.bin", std::ios_base::binary);
     //stackAddress.open("stackAddress.log");
     /*
     std::ifstream functions("funcs.lst");
