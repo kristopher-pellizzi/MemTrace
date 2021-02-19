@@ -671,16 +671,38 @@ VOID Fini(INT32 code, VOID *v)
         if(v.size() < 1 || !containsUninitializedPartialOverlap(it->first, v)){
             continue;
         }
+
+        ADDRINT tmp = it->first.getFirst();
+        
+        memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+        memOverlaps << it->first.getSecond() << ";";
+
+
+        /*
         overlaps << "===============================================" << endl;
         overlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
         overlaps << "===============================================" << endl;
-
+        
         overlaps << "Accessing instructions: " << endl << endl;
+        */
         set<MemoryAccess>& fullOverlapsSet = fullOverlaps[it->first];
         for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
             int spOffset = i->getSPOffset();
             int bpOffset = i->getBPOffset();
             
+            memOverlaps.write((i->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
+            tmp = i->getIP();
+            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+            tmp = i->getActualIP();
+            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+            memOverlaps << i->getDisasm() << ";";
+            memOverlaps.write((i->getType() == AccessType::WRITE ? "\x1a" : "\x1b"), 1);
+            memOverlaps << i->getSize() << ";";
+            memOverlaps << i->getSPOffset() << ";";
+            memOverlaps << i->getBPOffset() << ";";
+
+
+
             overlaps 
                 << "0x" << std::hex << i->getIP() 
                 << " (0x" << i->getActualIP() << ")"
@@ -692,10 +714,12 @@ VOID Fini(INT32 code, VOID *v)
                 << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(i->getBPOffset()) << ")"
                 << endl;
         }
-        overlaps << "===============================================" << endl;
+        //overlaps << "===============================================" << endl;
         
-        overlaps << "Partiallly overlapping instructions: " << endl << endl;
+        //overlaps << "Partiallly overlapping instructions: " << endl << endl;
 
+        memOverlaps.write("\x02", 1);
+        
         for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
             ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
             ADDRINT overlapEnd = min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1);
@@ -706,9 +730,23 @@ VOID Fini(INT32 code, VOID *v)
             uninitializedOverlap->first += overlapBeginning;
             uninitializedOverlap->second += overlapBeginning;
 
-            int spOffset = v_it->getSPOffset();
-            int bpOffset = v_it->getBPOffset();
+            //int spOffset = v_it->getSPOffset();
+            //int bpOffset = v_it->getBPOffset();
 
+            tmp = v_it->getIP();
+            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+            tmp = v_it->getActualIP();
+            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
+            memOverlaps << v_it->getDisasm() << ";";
+            memOverlaps.write((v_it->getType() == AccessType::WRITE ? "\x1a" : "\x1b"), 1);
+            memOverlaps << v_it->getSPOffset() << ";";
+            memOverlaps << v_it->getBPOffset() << ";";
+            memOverlaps << uninitializedOverlap->first << ";";
+            memOverlaps << uninitializedOverlap->second << ";";
+
+
+
+            /*
             overlaps    
                 << "0x" << std::hex << v_it->getIP() 
                 << " (0x" << v_it->getActualIP() << ")"
@@ -717,10 +755,17 @@ VOID Fini(INT32 code, VOID *v)
                 << "@ (sp " << (spOffset >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
                 << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") "
                 << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
+            */
         }
-        overlaps << "===============================================" << endl;
-        overlaps << "===============================================" << endl << endl << endl << endl << endl;
+
+        memOverlaps.write("\x03", 1);
+
+        //overlaps << "===============================================" << endl;
+        //overlaps << "===============================================" << endl << endl << endl << endl << endl;
+        
     }
+
+    memOverlaps.write("\x04", 1);
 
     
     // fclose(trace);
