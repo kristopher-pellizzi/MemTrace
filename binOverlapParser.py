@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from binascii import b2a_hex
 
 class ParseError(Exception):
@@ -204,11 +206,11 @@ def parse_partial_overlap_entry(f, reg_size):
     str_list.append(" W " if access_type == b"\x1a" else " R ")
     str_list.append("(sp ")
     str_list.append("+ " if sp_offset >= 0 else "- ")
-    str_list.append(str(sp_offset))
+    str_list.append(str(abs(sp_offset)))
     str_list.append("); ")
     str_list.append("(bp ")
     str_list.append("+ " if bp_offset >= 0 else "- ")
-    str_list.append(str(bp_offset))
+    str_list.append(str(abs(bp_offset)))
     str_list.append("); ")
     str_list.append("[")
     str_list.append(str(overlap_begin))
