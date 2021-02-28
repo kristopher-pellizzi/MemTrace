@@ -13,7 +13,7 @@
 #include <cstdarg>
 
 #include "MemoryAccess.h"
-#include "AccessIndex.h"
+#include "InitializedMemory.h"
 
 using std::cerr;
 using std::string;
@@ -48,8 +48,8 @@ map<AccessIndex, set<MemoryAccess>> fullOverlaps;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 map<THREADID, ADDRINT> threadInfos;
 
-set<AccessIndex> initializedMemory;
-std::vector<set<AccessIndex>> initializedStack;
+InitializedMemory* initializedMemory = NULL;
+//std::vector<set<AccessIndex>> initializedStack;
 std::vector<AccessIndex> retAddrLocationStack;
 set<ADDRINT> funcsAddresses;
 map<ADDRINT, std::string> funcs;
@@ -112,17 +112,17 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
 }
 
 std::pair<int, int> getUninitializedInterval(AccessIndex& ai){
-    if(initializedMemory.find(ai) != initializedMemory.end()){
+    if(initializedMemory->find(ai) != initializedMemory->end()){
         return std::pair<int, int>(-1, -1);
     }
 
     std::pair<unsigned int, unsigned int> uninitializedBytes(0, ai.getSecond());
-    set<AccessIndex>::iterator iter = initializedMemory.begin();
+    set<AccessIndex>::const_iterator iter = initializedMemory->begin();
 
     ADDRINT targetStart = ai.getFirst();
     ADDRINT targetEnd = targetStart + ai.getSecond() - 1;
 
-    while(iter != initializedMemory.end()){
+    while(iter != initializedMemory->end()){
         ADDRINT currentStart = iter->getFirst();
         ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
         // If will remain uninitialized bytes at the beginning, between iter start and target start
@@ -278,7 +278,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     std::pair<int, int> uninitializedInterval;
 
     if(isWrite){
-        initializedMemory.insert(ai);
+        initializedMemory->insert(ai);
     }
     else{
         uninitializedInterval = getUninitializedInterval(ai);
@@ -339,7 +339,8 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
         // Push initializedMemory only if the target function is inside the .text section
         // e.g. avoid pushing if library function are called
         if(targetAddr >= textStart && targetAddr <= textEnd){
-            initializedStack.push_back(initializedMemory);
+            //initializedStack.push_back(initializedMemory);
+            initializedMemory = new InitializedMemory(initializedMemory, addr);
             // Avoid clearing initialized memory on procedure calls:
             // every memory cell initialized by a caller, is considered initialized also by the callee.
             //initializedMemory.clear();
@@ -353,6 +354,7 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
         if(calledFunctions == 2){
             ++calledFunctions;
             mainCalled = true;
+            initializedMemory = new InitializedMemory(initializedMemory, addr);
             *out << "****************" << endl;
             *out << "Main entry point: 0x" << std::hex << targetAddr << endl;
         }
@@ -391,14 +393,15 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         if(ip >= textStart && ip <= textEnd){
             // Restore initializedMemory set as it was before the call of this function
-            initializedMemory.clear();
-            set<AccessIndex> &toRestore = initializedStack.back();
-            initializedMemory.insert(toRestore.begin(), toRestore.end());
-            initializedStack.pop_back();
+            //initializedMemory.clear();
+            //set<AccessIndex> &toRestore = initializedStack.back();
+            //initializedMemory.insert(toRestore.begin(), toRestore.end());
+            //initializedStack.pop_back();
+            initializedMemory = initializedMemory->deleteFrame();
         }
 
         AccessIndex &retAddrLocation = retAddrLocationStack.back();
-        initializedMemory.insert(retAddrLocation);
+        initializedMemory->insert(retAddrLocation);
         retAddrLocationStack.pop_back();
         
     }
@@ -591,7 +594,7 @@ VOID Fini(INT32 code, VOID *v)
     */
 
     int regSize = REG_Size(REG_STACK_PTR);
-    memOverlaps.write("\x00", 1);
+    memOverlaps.write("\x00\x00\x00\x00", 4);
     memOverlaps << regSize << ";";
 
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
@@ -636,6 +639,9 @@ VOID Fini(INT32 code, VOID *v)
                     << endl;
                     */
             }
+
+            memOverlaps.write("\x00\x00\x00\x05", 4);
+
             //memOverlaps << "===============================================" << endl;
             //memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
         }
@@ -662,7 +668,7 @@ VOID Fini(INT32 code, VOID *v)
             accessedAddress = partialOverlapIterator->first.getFirst();
         }
     }
-    memOverlaps.write("\x01", 1);
+    memOverlaps.write("\x00\x00\x00\x01", 4);
 
     std::ofstream overlaps("partialOverlaps.log");
     // Write text file with partial overlaps
@@ -718,7 +724,7 @@ VOID Fini(INT32 code, VOID *v)
         
         //overlaps << "Partiallly overlapping instructions: " << endl << endl;
 
-        memOverlaps.write("\x02", 1);
+        memOverlaps.write("\x00\x00\x00\x02", 4);
         
         for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
             ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
@@ -758,14 +764,14 @@ VOID Fini(INT32 code, VOID *v)
             */
         }
 
-        memOverlaps.write("\x03", 1);
+        memOverlaps.write("\x00\x00\x00\x03", 4);
 
         //overlaps << "===============================================" << endl;
         //overlaps << "===============================================" << endl << endl << endl << endl << endl;
         
     }
 
-    memOverlaps.write("\x04", 1);
+    memOverlaps.write("\x00\x00\x00\x04", 4);
 
     
     // fclose(trace);
