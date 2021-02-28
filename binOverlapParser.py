@@ -43,9 +43,10 @@ class PartialOverlapsWriter(ReportWriter):
 
 
 def accept(f, acceptable):
-    if(f.read(1) == acceptable):
+    l = len(acceptable)
+    if(f.read(l) == acceptable):
         return True
-    f.seek(-1, 1)
+    f.seek(-l, 1)
     return False
 
 
@@ -58,40 +59,49 @@ def expect(f, expected_list):
 
 
 def parse_integer(f):
-    int_val = b""
-    is_negative = accept(f, b"-")
+    try:
+        int_val = b""
+        is_negative = accept(f, b"-")
 
-    read_byte = f.read(1)
-    while(read_byte != b";"):
-        if read_byte == b"":
-            raise ParseError(f, "EOF reached while parsing integer")
-        int_val += read_byte
         read_byte = f.read(1)
-    
-    if int_val == b"":
-        return 0
-    
-    ret = int(int_val, 16)
-    return - ret if is_negative else ret
+        while(read_byte != b";"):
+            if read_byte == b"":
+                raise ParseError(f, "EOF reached while parsing integer")
+            int_val += read_byte
+            read_byte = f.read(1)
+        
+        if int_val == b"":
+            return 0
+        
+        ret = int(int_val, 10)
+        return - ret if is_negative else ret
+    except:
+        raise ParseError(f)
 
 
 def parse_address(f, reg_size):
-    addr = f.read(reg_size)
-    if len(addr) != reg_size:
-        raise ParseError(f, "EOF reached while parsing an address")
-    addr = int(b2a_hex(addr[::-1]), 16)
-    return hex(addr)
+    try:
+        addr = f.read(reg_size)
+        if len(addr) != reg_size:
+            raise ParseError(f, "EOF reached while parsing an address")
+        addr = int(b2a_hex(addr[::-1]), 16)
+        return hex(addr)
+    except:
+        raise ParseError(f)
 
 
 def parse_string(f):
-    string = b""
-    read_byte = f.read(1)
-    while read_byte != b";":
-        if(read_byte == b""):
-            raise ParseError(f, "EOF reached while parsing a string")
-        string += read_byte
+    try:
+        string = b""
         read_byte = f.read(1)
-    return string.decode("utf-8")
+        while read_byte != b";":
+            if(read_byte == b""):
+                raise ParseError(f, "EOF reached while parsing a string")
+            string += read_byte
+            read_byte = f.read(1)
+        return string.decode("utf-8")
+    except:
+        raise ParseError(f)
 
 
 def print_table_header(rw, header):
@@ -112,10 +122,6 @@ def print_table_footer(rw):
 def parse_full_overlap_entry(f, reg_size):
     global fo
     
-    # Seek required because the call to 'accept' previously done to check there were other entries moved the cursor
-    # ahead of one byte. So we need to set its position 1 byte behind in order to verify whether it is an 
-    # uninitialized read or not
-    f.seek(-1, 1) 
     is_uninitialized_read = True if f.read(1) == b"\x0a" else False
     ip = parse_address(f, reg_size)
     actual_ip = parse_address(f, reg_size)
@@ -152,7 +158,7 @@ def parse_full_overlap(f, reg_size):
     # Emit table header
     header = addr + " - " + str(access_size)
     print_table_header(fo, header)
-    while(accept(f, b"\x0a") or accept(f, b"\x0b")):
+    while(not accept(f, b"\x00\x00\x00\x05")):
         parse_full_overlap_entry(f, reg_size)
     print_table_footer(fo)
 
@@ -230,11 +236,11 @@ def parse_partial_overlap(f, reg_size):
     header = addr + " - " + str(access_size)
     print_table_header(po, header)
     po.writelines(["Accessing instructions:", ""])
-    while not accept(f, b"\x02"):
+    while not accept(f, b"\x00\x00\x00\x02"):
         parse_partial_overlap_accessing_instr(f, reg_size)
     po.writelines(["==============================================="])
     po.writelines(["Partially overlapping instructions:", ""])
-    while not accept(f, b"\03"):
+    while not accept(f, b"\x00\x00\x00\03"):
         parse_partial_overlap_entry(f, reg_size)
     print_table_footer(po)
 
@@ -243,20 +249,23 @@ fo = FullOverlapsWriter()
 po = PartialOverlapsWriter()
 
 with open("overlaps.bin", "rb") as f:
-    read_byte = f.read(1)
-    while(read_byte != b"\x00"):
-        if(read_byte == b""):
-            raise ParseError(f, "Report beginning (byte 0x00) not found")
-        read_byte = f.read(1)
+    read_bytes = b"\xff"
+    while(read_bytes != b"\x00\x00\x00\x00"):
+        while(read_bytes != b"\x00"):
+            if(read_bytes == b""):
+                raise ParseError(f, "Report beginning (byte 0x00) not found")
+            read_bytes = f.read(1)
+        f.seek(-1, 1)
+        read_bytes = f.read(4)
     
     reg_size = parse_integer(f)
 
     # While there are full overlaps...
-    while not accept(f, b"\x01"):
+    while not accept(f, b"\x00\x00\x00\x01"):
         parse_full_overlap(f, reg_size)
 
     # While there are partial overlaps...
-    while not accept(f, b"\x04"):
+    while not accept(f, b"\x00\x00\x00\x04"):
         parse_partial_overlap(f, reg_size)
 
 print("Finished parsing binary file. Textual reports created")
