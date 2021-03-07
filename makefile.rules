@@ -79,6 +79,8 @@ SANITY_SUBSET := $(TEST_TOOL_ROOTS) $(TEST_ROOTS)
 # This section contains the build rules for all binaries that have special build rules.
 # See makefile.default.rules for the default build rules.
 
+TOOL_CXXFLAGS += -std=c++11 -MMD
+
 # Build the intermediate object file.
 $(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
@@ -132,3 +134,8 @@ radareTest: radareTest.cpp
 
 launchDebug: radareTest.cpp
 	$(CXX) -DDEBUG -g -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
+
+# Syscall handling code is provided as simple header files. In order to enable re-compilation
+# on header files modifications, include the dependencies files in the makefile.
+-include ./debug/*.d
+-include *.d
