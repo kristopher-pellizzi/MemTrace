@@ -438,6 +438,7 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     ADDRINT actualIp = PIN_GetContextReg(ctxt, REG_INST_PTR);
     syscallIP = actualIp;
     ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
+    //*out << "Entering syscall " << std::dec << sysNum << endl;
     vector<SyscallArg> args = SyscallSignatureProvider::getInstance().getSyscallSignature(sysNum);
     vector<ADDRINT> actualArgs;
     for(SyscallArg argptr : args){
