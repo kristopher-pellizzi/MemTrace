@@ -439,13 +439,13 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     syscallIP = actualIp;
     ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
     //*out << "Entering syscall " << std::dec << sysNum << endl;
-    vector<SyscallArg> args = SyscallSignatureProvider::getInstance().getSyscallSignature(sysNum);
+    unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
     vector<ADDRINT> actualArgs;
-    for(SyscallArg argptr : args){
-        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, argptr.index);
+    for(int i = 0; i < argsCount; ++i){
+        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, i);
         actualArgs.push_back(arg);
     }
-    SyscallHandler::getInstance().setSysArgs((unsigned short) sysNum, actualArgs, lastSp, lastBp);
+    SyscallHandler::getInstance().setSysArgs((unsigned short) sysNum, actualArgs);
 }
 
 VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){

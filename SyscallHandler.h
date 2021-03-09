@@ -1,8 +1,6 @@
 #include <iostream>
 #include <set>
 
-#include "SyscallSignatureProvider.h"
-
 #ifdef __amd64__
     #define X86_64
     #include "x86_64_linux_syscall_handlers.h"
@@ -39,7 +37,7 @@ class SyscallHandler{
             }
 
         public:
-            virtual SyscallHandlerState* setSysArgs(unsigned short sysNum, vector<ADDRINT>& args, ADDRINT lastSp, ADDRINT lastBp){
+            virtual SyscallHandlerState* setSysArgs(unsigned short sysNum, vector<ADDRINT>& args){
                 stateError("Setting system call arguments is not valid at this state");
                 return NULL;
             }
@@ -155,7 +153,7 @@ class SyscallHandler{
                 return std::string("Unset State");
             }
             
-            SyscallHandlerState* setSysArgs(unsigned short sysNum, vector<ADDRINT>& args, ADDRINT lastSp, ADDRINT lastBp) override{
+            SyscallHandlerState* setSysArgs(unsigned short sysNum, vector<ADDRINT>& args) override{
                 this->sysNum = sysNum;
                 this->args = vector<ADDRINT>(args);
                 SyscallHandlerState* state = nextState();
@@ -187,8 +185,8 @@ class SyscallHandler{
             return instance;
         }
 
-        void setSysArgs(unsigned short sysNum, vector<ADDRINT> actualArgs, ADDRINT lastSp, ADDRINT lastBp){
-            currentState = currentState->setSysArgs(sysNum, actualArgs, lastSp, lastBp);
+        void setSysArgs(unsigned short sysNum, vector<ADDRINT> actualArgs){
+            currentState = currentState->setSysArgs(sysNum, actualArgs);
         }
 
         void setSysRet(ADDRINT retVal){
@@ -203,5 +201,9 @@ class SyscallHandler{
 
         std::string getStateName(){
             return currentState->getName();
+        }
+
+        unsigned short getSyscallArgsCount(unsigned short sysNum){
+            return HandlerSelector::getInstance().getSyscallArgsCount(sysNum);
         }
 };
