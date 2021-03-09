@@ -8,6 +8,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/utsname.h>
+#include <sys/time.h>
+#include <sys/times.h>
+#include <sys/utime.h>
+#include <sys/resource.h>
+#include <sys/sysinfo.h>
+#include <ustat.h>
+#include <sys/statfs.h>
 
 #include "SyscallMemAccess.h"
 
@@ -16,10 +25,8 @@
 
 using std::vector;
 using std::unordered_map;
+using std::pair;
 
-// NOTE: REMEMBER THAT IT IS ALSO NECESSARY TO ADD THE SIGNATURE OF 
-// ANY NEW SYSTEM CALL ADDED TO THE HANDLERS.
-// SEE <ARCH>_syscall_signatures.yaml FOR MORE DETAILS.
 
 /////////////////////////////////////////////////////////////////
 //                      SYSCALL HANDLERS                       //
@@ -35,6 +42,9 @@ using std::unordered_map;
 
 RETTYPE sys_read_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     SyscallMemAccess ma(args[1], retVal, AccessType::WRITE);
     ret.insert(ma);
     return ret;
@@ -42,6 +52,9 @@ RETTYPE sys_read_handler ARGUMENTS{
 
 RETTYPE sys_write_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     SyscallMemAccess ma(args[1], retVal, AccessType::READ);
     ret.insert(ma);
     return ret;
@@ -49,6 +62,9 @@ RETTYPE sys_write_handler ARGUMENTS{
 
 RETTYPE sys_pread_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     SyscallMemAccess ma(args[1], retVal, AccessType::WRITE);
     ret.insert(ma);
     return ret;
@@ -56,6 +72,9 @@ RETTYPE sys_pread_handler ARGUMENTS{
 
 RETTYPE sys_pwrite_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     SyscallMemAccess ma(args[1], retVal, AccessType::READ);
     ret.insert(ma);
     return ret;
@@ -65,6 +84,11 @@ RETTYPE sys_pwrite_handler ARGUMENTS{
 // CHANGES TO THEM WILL AFFECT THE HANDLING OF THOSE SYSTEM CALLS AS WELL.
 RETTYPE sys_readv_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+
+    if((long long) retVal < 0){
+        return ret;
+    }
+
     const struct iovec* bufs = (struct iovec*) args[1];
     int buf_cnt = args[2];
     UINT32 stillToBeReadCnt = retVal;
@@ -86,6 +110,11 @@ RETTYPE sys_readv_handler ARGUMENTS{
 
 RETTYPE sys_writev_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+
+    if((long long) retVal < 0){
+        return ret;
+    }
+
     const struct iovec* bufs = (struct iovec*) args[1];
     int buf_cnt = args[2];
     UINT32 stillToBeWrittenCnt = retVal;
@@ -107,6 +136,9 @@ RETTYPE sys_writev_handler ARGUMENTS{
 
 RETTYPE sys_readlink_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     const char* pathname = (char*) args[0];
     SyscallMemAccess pathMA(args[0], strlen(pathname), AccessType::READ);
     SyscallMemAccess ma(args[1], retVal, AccessType::WRITE);
@@ -116,13 +148,11 @@ RETTYPE sys_readlink_handler ARGUMENTS{
 }
 
 RETTYPE sys_readlinkat_handler ARGUMENTS{
-    set<SyscallMemAccess> ret;
-    const char* pathname = (char*) args[1];
-    SyscallMemAccess pathMA(args[1], strlen(pathname), AccessType::READ);
-    SyscallMemAccess ma(args[2], retVal, AccessType::WRITE);
-    ret.insert(pathMA);
-    ret.insert(ma);
-    return ret;
+    vector<ADDRINT> readlink_args;
+    readlink_args.push_back(args[1]);
+    readlink_args.push_back(args[2]);
+    readlink_args.push_back(args[3]);
+    return sys_readlink_handler(retVal, readlink_args);
 }
 
 // The next 2 syscalls have 1 additional argument w.r.t. readv/writev, but it is added as a 4th argument. Arguments at index 0, 1 and 2
@@ -166,6 +196,9 @@ RETTYPE sys_process_vm_writev_handler ARGUMENTS{
 // ANY MODIFICATION TO THIS HANDLER WILL AFFECT THOSE SYSCALLS AS WELL
 RETTYPE sys_stat_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     const char* pathname = (char*) args[0];
 
     SyscallMemAccess pathMA(args[0], strlen(pathname), AccessType::READ);
@@ -177,6 +210,9 @@ RETTYPE sys_stat_handler ARGUMENTS{
 
 RETTYPE sys_fstat_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
     SyscallMemAccess ma(args[1], sizeof(struct stat), AccessType::WRITE);
     ret.insert(ma);
     return ret;
@@ -193,39 +229,758 @@ RETTYPE sys_fstatat_handler ARGUMENTS{
     return sys_stat_handler(retVal, stat_args);
 }
 
+RETTYPE sys_newfstatat_handler ARGUMENTS{
+    return sys_fstatat_handler(retVal, args);
+}
+
+// *******************************************************************
+// NEW ONES
+
+
+// NOTE: THIS SYSCALL HAS BEEN USED TO HANDLE OTHER SIMILAR SYSCALLS.
+// ANY MODIFICATION TO THIS HANDLER WILL AFFECT THOSE SYSCALLS AS WELL
+RETTYPE sys_open_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
+    const char* pathname = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(pathname), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_creat_handler ARGUMENTS{
+    // As 'open', this syscall simply reads the pathname from args[0].
+    // Delegate to sys_open_handler.
+    return sys_open_handler(retVal, args);
+}
+
+RETTYPE sys_openat_handler ARGUMENTS{
+    // Works as 'open'. Adjust args vector and delegate to sys_open_handler.
+    vector<ADDRINT> open_args;
+    open_args.push_back(args[1]);
+    open_args.push_back(args[2]);
+    open_args.push_back(args[3]);
+    return sys_open_handler(retVal, open_args);
+}
+
+// NOTE: THIS SYSCALL HANDLER HAS BEEN USED TO HANDLE OTHER SIMILAR SYSCALLS.
+// ANY MODIFICATION TO THIS HANDLER WILL AFFECT THOSE SYSCALLS AS WELL.
+RETTYPE sys_access_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    const char* pathname = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(pathname), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_faccessat_handler ARGUMENTS{
+    // Works as 'access'. Adjust args vector and delegate to sys_access_handler.
+    vector<ADDRINT> access_args;
+    access_args.push_back(args[1]);
+    access_args.push_back(args[2]);
+    return sys_access_handler(retVal, access_args);
+}
+
+RETTYPE sys_pipe_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0){
+        return ret;
+    }
+    SyscallMemAccess ma(args[0], 2 * sizeof(int), AccessType::WRITE);;
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_pipe2_handler ARGUMENTS{
+    // Works as 'pipe'. Delegate to sys_pipe_handler.
+    return sys_pipe_handler(retVal, args);
+}
+
+RETTYPE sys_connect_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], args[2], AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+// NOTE: THIS HANDLER IS USED TO HANDLE OTHER SYSCALLS.
+// ANY MODIFICATION TO THIS HANDLER WILL AFFECT THOSE SYSCALLS AS WELL
+RETTYPE sys_accept_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    socklen_t* addrLen = (socklen_t*) args[2];
+    SyscallMemAccess ma(args[1], *addrLen, AccessType::WRITE);
+    SyscallMemAccess addrLenMA(args[2], sizeof(socklen_t), AccessType::WRITE);
+    ret.insert(ma);
+    ret.insert(addrLenMA);
+    return ret;
+}
+
+RETTYPE sys_accept4_handler ARGUMENTS{
+    // Works as accept. Delegate to sys_accept_handler.
+    return sys_accept_handler(retVal, args);
+}
+
+RETTYPE sys_recvfrom_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess bufMA(args[1], retVal, AccessType::WRITE);
+    ret.insert(bufMA);
+    struct sockaddr* src_addr = (struct sockaddr*)args[4];
+    if(src_addr != NULL){
+        socklen_t* addrLen = (socklen_t*) args[5];
+        SyscallMemAccess addrMA(args[4], MIN(sizeof(struct sockaddr), *addrLen), AccessType::WRITE);
+        SyscallMemAccess addrLenMA(args[5], sizeof(socklen_t), AccessType::WRITE);
+        ret.insert(addrMA);
+        ret.insert(addrLenMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_recvmsg_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    struct msghdr* msg = (struct msghdr*) args[1];
+    SyscallMemAccess msghdrMA(args[1], sizeof(struct msghdr), AccessType::READ);
+    struct iovec* msg_vec = (struct iovec*) msg->msg_iov;
+    size_t msg_iovlen = (size_t) msg->msg_iovlen;
+
+    // This syscalls behaves exactly as readv for msg_vec. Adjust args vector and retrieve written buffers from sys_readv_handler.
+    // Note that the first argument of readv is a fd. However that's not useful to register
+    // memory operations. Just set it to 0.
+    vector<ADDRINT> readv_args;
+    readv_args.push_back(0);
+    readv_args.push_back((ADDRINT) msg_vec);
+    readv_args.push_back((ADDRINT) msg_iovlen);
+    set<SyscallMemAccess> readvResult = sys_readv_handler(retVal, readv_args);
+
+    ret.insert(msghdrMA);
+    ret.insert(readvResult.begin(), readvResult.end());
+    return ret;
+}
+
+RETTYPE sys_recvmmsg_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+
+    unsigned int vlen = (unsigned int) args[2];
+    struct mmsghdr* msgvec = (struct mmsghdr*) args[1];
+    for(unsigned int i = 0; i < vlen; ++i, ++msgvec){
+        SyscallMemAccess arrMA((ADDRINT)msgvec, sizeof(struct mmsghdr), AccessType::READ);
+        // For each msg header, get the corresponding memory operations from sys_recvmsg_handler.
+        vector<ADDRINT> recvmsg_args;
+        recvmsg_args.push_back(args[0]);
+        recvmsg_args.push_back((ADDRINT) msgvec);
+        recvmsg_args.push_back(args[3]);
+        set<SyscallMemAccess> recvmsgResult = sys_recvmsg_handler(msgvec->msg_len, recvmsg_args);
+        ret.insert(recvmsgResult.begin(), recvmsgResult.end());
+        ret.insert(arrMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_bind_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], args[2], AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_getsockname_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess lenMA(args[2], sizeof(socklen_t), AccessType::WRITE);
+    socklen_t* addrlen = (socklen_t*) args[2];
+    SyscallMemAccess addrMA(args[1], MIN(*addrlen, sizeof(struct sockaddr)), AccessType::WRITE);
+    ret.insert(lenMA);
+    ret.insert(addrMA);
+    return ret;
+}
+
+RETTYPE sys_getpeername_handler ARGUMENTS{
+    // This syscall has the very same behaviour of getsockname. Just delegate to sys_getsockname_handler.
+    return sys_getsockname_handler(retVal, args);
+}
+
+RETTYPE sys_socketpair_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[3], 2 * sizeof(int), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_setsockopt_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[3], args[4], AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_getsockopt_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    socklen_t* optlen = (socklen_t*) args[4];
+    SyscallMemAccess ma(args[3], *optlen, AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_uname_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[0], sizeof(struct utsname), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_truncate_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_getcwd_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((char*) retVal == NULL)
+        return ret;
+    char* buf = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(buf), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_chdir_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_rename_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    char* old = (char*) args[0];
+    char* newpath = (char*) args[1];
+    SyscallMemAccess oldMA(args[0], strlen(old), AccessType::READ);
+    SyscallMemAccess newMA(args[1], strlen(newpath), AccessType::READ);
+    ret.insert(oldMA);
+    ret.insert(newMA);
+    return ret;
+}
+
+RETTYPE sys_renameat_handler ARGUMENTS{
+    vector<ADDRINT> rename_args;
+    rename_args.push_back(args[1]);
+    rename_args.push_back(args[3]);
+    return sys_rename_handler(retVal, rename_args);
+}
+
+RETTYPE sys_mkdir_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_mkdirat_handler ARGUMENTS{
+    vector<ADDRINT> mkdir_args;
+    mkdir_args.push_back(args[1]);
+    mkdir_args.push_back(args[2]);
+    return sys_mkdir_handler(retVal, mkdir_args);
+}
+
+RETTYPE sys_rmdir_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_link_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    char* oldpath = (char*) args[0];
+    char* newpath = (char*) args[1];
+    SyscallMemAccess oldMA(args[0], strlen(oldpath), AccessType::READ);
+    SyscallMemAccess newMA(args[1], strlen(newpath), AccessType::READ);
+    ret.insert(oldMA);
+    ret.insert(newMA);
+    return ret;
+}
+
+RETTYPE sys_linkat_handler ARGUMENTS{
+    vector<ADDRINT> link_args;
+    link_args.push_back(args[1]);
+    link_args.push_back(args[3]);
+    return sys_link_handler(retVal, link_args);
+}
+
+RETTYPE sys_unlink_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_unlinkat_handler ARGUMENTS{
+    vector<ADDRINT> unlink_args;
+    unlink_args.push_back(args[1]);
+    return sys_unlink_handler(retVal, unlink_args);
+}
+
+RETTYPE sys_symlink_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* target = (char*) args[0];
+    const char* linkpath = (char*) args[1];
+    SyscallMemAccess targetMA(args[0], strlen(target), AccessType::READ);
+    SyscallMemAccess pathMA(args[1], strlen(linkpath), AccessType::READ);
+    ret.insert(targetMA);
+    ret.insert(pathMA);
+    return ret;
+}
+
+RETTYPE sys_symlinkat_handler ARGUMENTS{
+    vector<ADDRINT> symlink_args;
+    symlink_args.push_back(args[0]);
+    symlink_args.push_back(args[2]);
+    return sys_symlink_handler(retVal, symlink_args);
+}
+
+RETTYPE sys_chmod_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0) 
+        return ret;
+    const char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_fchmodat_handler ARGUMENTS{
+    vector<ADDRINT> chmod_args;
+    chmod_args.push_back(args[1]);
+    chmod_args.push_back(args[2]);
+    return sys_chmod_handler(retVal, chmod_args);
+}
+
+RETTYPE sys_chown_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_lchown_handler ARGUMENTS{
+    return sys_chown_handler(retVal, args);
+}
+
+RETTYPE sys_fchownat_handler ARGUMENTS{
+    vector<ADDRINT> chown_args;
+    chown_args.push_back(args[1]);
+    chown_args.push_back(args[2]);
+    chown_args.push_back(args[3]);
+    return sys_chown_handler(retVal, chown_args);
+}
+
+RETTYPE sys_gettimeofday_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    struct timeval* tv = (struct timeval*) args[0];
+    struct timezone* tz = (struct timezone*) args[1];
+    if(tv != NULL){
+        SyscallMemAccess tvMA(args[0], sizeof(struct timeval), AccessType::WRITE);
+        ret.insert(tvMA);
+    }
+    if(tz != NULL){
+        SyscallMemAccess tzMA(args[1], sizeof(struct timezone), AccessType::WRITE);
+        ret.insert(tzMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_settimeofday_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const struct timeval* tv = (struct timeval*) args[0];
+    const struct timezone* tz = (struct timezone*) args[1];
+    if(tv != NULL){
+        SyscallMemAccess tvMA(args[0], sizeof(struct timeval), AccessType::READ);
+        ret.insert(tvMA);
+    }
+    if(tz != NULL){
+        SyscallMemAccess tzMA(args[1], sizeof(struct timezone), AccessType::READ);
+        ret.insert(tzMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_getrlimit_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], sizeof(struct rlimit), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_setrlimit_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], sizeof(struct rlimit), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_prlimit_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    vector<ADDRINT> getrlimit_args;
+    vector<ADDRINT> setrlimit_args;
+    set<SyscallMemAccess> partialRes;
+
+    struct rlimit* old_limit = (struct rlimit*) args[3];
+    if(old_limit != NULL){
+        getrlimit_args.push_back(args[1]);
+        getrlimit_args.push_back(args[3]);
+        partialRes = sys_getrlimit_handler(retVal, getrlimit_args);
+        ret.insert(partialRes.begin(), partialRes.end());
+        partialRes.clear();
+    }
+
+    const struct rlimit* new_limit = (struct rlimit*) args[2];
+    if(new_limit != NULL){
+        setrlimit_args.push_back(args[1]);
+        setrlimit_args.push_back(args[2]);
+        partialRes = sys_setrlimit_handler(retVal, setrlimit_args);
+        ret.insert(partialRes.begin(), partialRes.end());
+    }
+    return ret;
+}
+
+RETTYPE sys_getrusage_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], sizeof(struct rusage), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_sysinfo_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[0], sizeof(struct sysinfo), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_times_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    // Man page tells the returned value may overflow the possible range, and on error -1 is returned.
+    // So, instead of a < comparison, perform an == comparison
+    if((time_t) retVal == -1)
+        return ret;
+    SyscallMemAccess ma(args[0], sizeof(struct tms), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_getgroups_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    gid_t* list = (gid_t*) args[1];
+    for(unsigned int i = 0; i < retVal; ++i, ++list){
+        SyscallMemAccess ma((ADDRINT) list, sizeof(gid_t), AccessType::WRITE);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_setgroups_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    gid_t* list = (gid_t*) args[1];
+    for(unsigned int i = 0; i < args[0]; ++i, ++list){
+        SyscallMemAccess ma((ADDRINT) list, sizeof(gid_t), AccessType::READ);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_getresuid_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    size_t size = sizeof(uid_t);
+    SyscallMemAccess realMA(args[0], size, AccessType::WRITE);
+    SyscallMemAccess effectiveMA(args[1], size, AccessType::WRITE);
+    SyscallMemAccess setMA(args[2], size, AccessType::WRITE);
+    ret.insert(realMA);
+    ret.insert(effectiveMA);
+    ret.insert(setMA);
+    return ret;
+}
+
+RETTYPE sys_getresgid_handler ARGUMENTS{
+    return sys_getresuid_handler(retVal, args);
+}
+
+RETTYPE sys_utime_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* filename = (char*) args[0];
+    SyscallMemAccess filenameMA(args[0], strlen(filename), AccessType::READ);
+    ret.insert(filenameMA);
+    const struct utimbuf* times = (struct utimbuf*) args[1];
+    if(times != NULL){
+        SyscallMemAccess timesMA(args[1], sizeof(struct utimbuf), AccessType::READ);
+        ret.insert(timesMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_utimes_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* filename = (char*) args[0];
+    SyscallMemAccess filenameMA(args[0], strlen(filename), AccessType::READ);
+    ret.insert(filenameMA);
+    const struct timeval* times = (struct timeval*) args[1];
+    if(times != NULL){
+        SyscallMemAccess timesMA(args[1], 2 * sizeof(struct timeval), AccessType::READ);
+        ret.insert(timesMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_utimensat_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* pathname = (char*) args[1];
+    SyscallMemAccess pathMA(args[1], strlen(pathname), AccessType::READ);
+    const struct timespec* times = (struct timespec*) args[2];
+    if(times != NULL){
+        SyscallMemAccess timesMA(args[2], 2 * sizeof(struct timespec), AccessType::READ);
+        ret.insert(timesMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_futimens ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const struct timespec* times = (struct timespec*) args[1];
+    if(times != NULL){
+        SyscallMemAccess ma(args[1], 2 * sizeof(struct timespec), AccessType::READ);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_mknod_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_mknodat_handler ARGUMENTS{
+    vector<ADDRINT> mknod_args;
+    mknod_args.push_back(args[1]);
+    mknod_args.push_back(args[2]);
+    mknod_args.push_back(args[3]);
+    return sys_mknod_handler(retVal, mknod_args);
+}
+
+RETTYPE sys_ustat_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], sizeof(struct ustat), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_statfs_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* path = (char*) args[0];
+    SyscallMemAccess pathMA(args[0], strlen(path), AccessType::READ);
+    SyscallMemAccess bufMA(args[1], sizeof(struct statfs), AccessType::WRITE);
+    ret.insert(pathMA);
+    ret.insert(bufMA);
+    return ret;
+}
+
+RETTYPE sys_fstatfs_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess ma(args[1], sizeof(struct statfs), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_chroot_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* path = (char*) args[0];
+    SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_acct_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* filename = (char*) args[0];
+    if(filename != NULL){
+        SyscallMemAccess ma(args[0], strlen(filename), AccessType::READ);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_gethostname_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0) 
+        return ret;
+    char* name = (char*) args[0];
+    SyscallMemAccess ma(args[0], MIN(args[1], strlen(name) + 1), AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_sethostname_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const char* name = (char*) args[0];
+    SyscallMemAccess ma(args[0], MIN(args[1], strlen(name)), AccessType::READ);
+    ret.insert(ma);
+    return ret;
+}
+
+RETTYPE sys_getdomainname_handler ARGUMENTS{
+    return sys_gethostname_handler(retVal, args);
+}
+
+RETTYPE sys_setdomainname_handler ARGUMENTS{
+    return sys_sethostname_handler(retVal, args);
+}
+
+RETTYPE sys_time_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((time_t) retVal == -1)
+        return ret;
+    time_t* tloc = (time_t*) args[0];
+    if(tloc != NULL){
+        SyscallMemAccess ma(args[0], sizeof(time_t), AccessType::WRITE);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+
 
 //////////////////////////////////////////////////////////////////
 //                      HANDLER SELECTOR                        //
 //  The only thing to do here is adding the new defined         //
-//  handler into 'handlers' map, inside method 'init()'.        //
+//  handler into 'handlers' map, inside method 'init()'         //
+//  by using the macro 'SYSCALL_ENTRY'.                         //
+//  Macro's signature:                                          //    
+//  SYSCALL_ENTRY(<Syscall_Number>, <Args_Number>, <Handler>).  //
+//  <Args_Number> is the number of arguments the system call    //
+//  requires (e.g. read system call requires 3 arguments).      //
 //  If no new handler has been defined, then nothing has to be  //
 //  done here.                                                  //
 //////////////////////////////////////////////////////////////////
 
 typedef set<SyscallMemAccess>(*HandlerFunction)(ADDRINT, vector<ADDRINT>);
-#define SYSCALL_ENTRY(SYS_NUM, SYS_HANDLER) handlers.insert(pair<unsigned short, HandlerFunction>((SYS_NUM), (SYS_HANDLER)))
+
+#define SYSCALL_ENTRY(SYS_NUM, SYS_ARGS, SYS_HANDLER) \
+handlers.insert(pair<unsigned short, HandlerFunction>((SYS_NUM), (SYS_HANDLER)));\
+argsCount.insert(pair<unsigned short, unsigned short>((SYS_NUM), (SYS_ARGS)))
 
 class HandlerSelector{
     private:
         unordered_map<unsigned short, HandlerFunction> handlers;
+        unordered_map<unsigned short, unsigned short> argsCount;
 
         void init(){
-            SYSCALL_ENTRY(0, sys_read_handler);
-            SYSCALL_ENTRY(1, sys_write_handler);
-            SYSCALL_ENTRY(4, sys_stat_handler);
-            SYSCALL_ENTRY(5, sys_fstat_handler);
-            SYSCALL_ENTRY(6, sys_lstat_handler);
-            SYSCALL_ENTRY(17, sys_pread_handler);
-            SYSCALL_ENTRY(18, sys_pwrite_handler);
-            SYSCALL_ENTRY(19, sys_readv_handler);
-            SYSCALL_ENTRY(20, sys_writev_handler);
-            SYSCALL_ENTRY(89, sys_readlink_handler);
-            SYSCALL_ENTRY(262, sys_fstatat_handler);
-            SYSCALL_ENTRY(267, sys_readlinkat_handler);
-            SYSCALL_ENTRY(295, sys_preadv_handler);
-            SYSCALL_ENTRY(296, sys_pwritev_handler);
-            SYSCALL_ENTRY(310, sys_process_vm_readv_handler);
-            SYSCALL_ENTRY(311, sys_process_vm_writev_handler);
+            SYSCALL_ENTRY(0, 3, sys_read_handler);
+            SYSCALL_ENTRY(1, 3, sys_write_handler);
+            SYSCALL_ENTRY(4, 2, sys_stat_handler);
+            SYSCALL_ENTRY(5, 2, sys_fstat_handler);
+            SYSCALL_ENTRY(6, 2, sys_lstat_handler);
+            SYSCALL_ENTRY(17, 4, sys_pread_handler);
+            SYSCALL_ENTRY(18, 4, sys_pwrite_handler);
+            SYSCALL_ENTRY(19, 3, sys_readv_handler);
+            SYSCALL_ENTRY(20, 3, sys_writev_handler);
+            SYSCALL_ENTRY(89, 3, sys_readlink_handler);
+            SYSCALL_ENTRY(262, 4, sys_fstatat_handler);
+            SYSCALL_ENTRY(267, 4, sys_readlinkat_handler);
+            SYSCALL_ENTRY(295, 4, sys_preadv_handler);
+            SYSCALL_ENTRY(296, 4, sys_pwritev_handler);
+            SYSCALL_ENTRY(310, 6, sys_process_vm_readv_handler);
+            SYSCALL_ENTRY(311, 6, sys_process_vm_writev_handler);
         }
 
         HandlerSelector(){
@@ -246,6 +1001,11 @@ class HandlerSelector{
             // If there's an handler in the map, execute it and return the result;
             // otherwise, just return an empty set
             return handler == handlers.end() ? set<SyscallMemAccess>() : set<SyscallMemAccess>((*handler->second)(retVal, args));
+        }
+
+        unsigned short getSyscallArgsCount(unsigned short sysNum){
+            auto count = argsCount.find(sysNum);
+            return count == argsCount.end() ? 0 : count->second;
         }
 
 };
