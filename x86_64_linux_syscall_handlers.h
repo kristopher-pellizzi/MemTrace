@@ -229,13 +229,6 @@ RETTYPE sys_fstatat_handler ARGUMENTS{
     return sys_stat_handler(retVal, stat_args);
 }
 
-RETTYPE sys_newfstatat_handler ARGUMENTS{
-    return sys_fstatat_handler(retVal, args);
-}
-
-// *******************************************************************
-// NEW ONES
-
 
 // NOTE: THIS SYSCALL HAS BEEN USED TO HANDLE OTHER SIMILAR SYSCALLS.
 // ANY MODIFICATION TO THIS HANDLER WILL AFFECT THOSE SYSCALLS AS WELL
@@ -382,6 +375,61 @@ RETTYPE sys_recvmmsg_handler ARGUMENTS{
         recvmsg_args.push_back(args[3]);
         set<SyscallMemAccess> recvmsgResult = sys_recvmsg_handler(msgvec->msg_len, recvmsg_args);
         ret.insert(recvmsgResult.begin(), recvmsgResult.end());
+        ret.insert(arrMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_sendto_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    SyscallMemAccess bufMA(args[1], retVal, AccessType::READ);
+    ret.insert(bufMA);
+    const struct sockaddr* dest_addr = (struct sockaddr*) args[4];
+    if(dest_addr != NULL){
+        SyscallMemAccess addrMA(args[4], args[5], AccessType::READ);
+        ret.insert(addrMA);
+    }
+    return ret;
+}
+
+RETTYPE sys_sendmsg_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    const struct msghdr* msg = (struct msghdr*) args[1];
+    SyscallMemAccess msgMA(args[1], sizeof(struct msghdr), AccessType::READ);
+    ret.insert(msgMA);
+    struct iovec* msg_vec = (struct iovec*) msg->msg_iov;
+    size_t msg_iovlen = (size_t) msg->msg_iovlen;
+
+    // This syscalls behaves exactly as writev for msg_vec. Adjust args vector and retrieve read buffers from sys_readv_handler.
+    // Note that the first argument of readv is a fd. However that's not useful to register
+    // memory operations. Just set it to 0.
+    vector<ADDRINT> writev_args;
+    writev_args.push_back(0);
+    writev_args.push_back((ADDRINT) msg_vec);
+    writev_args.push_back((ADDRINT) msg_iovlen);
+    set<SyscallMemAccess> writevResult = sys_writev_handler(retVal, writev_args);
+    ret.insert(writevResult.begin(), writevResult.end());
+    return ret;
+}
+
+RETTYPE sys_sendmmsg_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    unsigned int vlen = (unsigned int) args[2];
+    struct mmsghdr* arr = (struct mmsghdr*) args[1];
+    for(unsigned int i = 0; i < vlen; ++i, ++arr){
+        SyscallMemAccess arrMA((ADDRINT) arr, sizeof(struct mmsghdr), AccessType::READ);
+        vector<ADDRINT> sendmsg_args;
+        sendmsg_args.push_back(args[0]);
+        sendmsg_args.push_back((ADDRINT) arr);
+        sendmsg_args.push_back(args[3]);
+        set<SyscallMemAccess> sendmsg_result = sys_sendmsg_handler(arr->msg_len, sendmsg_args);
+        ret.insert(sendmsg_result.begin(), sendmsg_result.end());
         ret.insert(arrMA);
     }
     return ret;
@@ -816,7 +864,8 @@ RETTYPE sys_utimensat_handler ARGUMENTS{
     return ret;
 }
 
-RETTYPE sys_futimens ARGUMENTS{
+// Syscall number not found
+RETTYPE sys_futimens_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal < 0)
         return ret;
@@ -898,6 +947,7 @@ RETTYPE sys_acct_handler ARGUMENTS{
     return ret;
 }
 
+// Syscall number not found
 RETTYPE sys_gethostname_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal < 0) 
@@ -918,6 +968,7 @@ RETTYPE sys_sethostname_handler ARGUMENTS{
     return ret;
 }
 
+// Syscall number not found
 RETTYPE sys_getdomainname_handler ARGUMENTS{
     return sys_gethostname_handler(retVal, args);
 }
@@ -967,6 +1018,7 @@ class HandlerSelector{
         void init(){
             SYSCALL_ENTRY(0, 3, sys_read_handler);
             SYSCALL_ENTRY(1, 3, sys_write_handler);
+            SYSCALL_ENTRY(2, 3, sys_open_handler);
             SYSCALL_ENTRY(4, 2, sys_stat_handler);
             SYSCALL_ENTRY(5, 2, sys_fstat_handler);
             SYSCALL_ENTRY(6, 2, sys_lstat_handler);
@@ -974,13 +1026,85 @@ class HandlerSelector{
             SYSCALL_ENTRY(18, 4, sys_pwrite_handler);
             SYSCALL_ENTRY(19, 3, sys_readv_handler);
             SYSCALL_ENTRY(20, 3, sys_writev_handler);
+            SYSCALL_ENTRY(21, 2, sys_access_handler);
+            SYSCALL_ENTRY(22, 1, sys_pipe_handler);
+            SYSCALL_ENTRY(42, 3, sys_connect_handler);
+            SYSCALL_ENTRY(43, 3, sys_accept_handler);
+            SYSCALL_ENTRY(44, 6, sys_sendto_handler);
+            SYSCALL_ENTRY(45, 6, sys_recvfrom_handler);
+            SYSCALL_ENTRY(46, 3, sys_sendmsg_handler);
+            SYSCALL_ENTRY(47, 3, sys_recvmsg_handler);
+            SYSCALL_ENTRY(49, 3, sys_bind_handler);
+            SYSCALL_ENTRY(51, 3, sys_getsockname_handler);
+            SYSCALL_ENTRY(52, 3, sys_getpeername_handler);
+            SYSCALL_ENTRY(53, 4, sys_socketpair_handler);
+            SYSCALL_ENTRY(54, 5, sys_setsockopt_handler);
+            SYSCALL_ENTRY(55, 5, sys_getsockopt_handler);
+            SYSCALL_ENTRY(63, 1, sys_uname_handler);
+            SYSCALL_ENTRY(76, 2, sys_truncate_handler);
+            SYSCALL_ENTRY(79, 2, sys_getcwd_handler);
+            SYSCALL_ENTRY(80, 1, sys_chdir_handler);
+            SYSCALL_ENTRY(82, 2, sys_rename_handler);
+            SYSCALL_ENTRY(83, 2, sys_mkdir_handler);
+            SYSCALL_ENTRY(84, 1, sys_rmdir_handler);
+            SYSCALL_ENTRY(85, 2, sys_creat_handler);
+            SYSCALL_ENTRY(86, 2, sys_link_handler);
+            SYSCALL_ENTRY(87, 1, sys_unlink_handler);
+            SYSCALL_ENTRY(88, 2, sys_symlink_handler);
             SYSCALL_ENTRY(89, 3, sys_readlink_handler);
+            SYSCALL_ENTRY(90, 2, sys_chmod_handler);
+            SYSCALL_ENTRY(92, 3, sys_chown_handler);
+            SYSCALL_ENTRY(94, 3, sys_lchown_handler);
+            SYSCALL_ENTRY(96, 2, sys_gettimeofday_handler);
+            SYSCALL_ENTRY(97, 2, sys_getrlimit_handler);
+            SYSCALL_ENTRY(98, 2, sys_getrusage_handler);
+            SYSCALL_ENTRY(99, 1, sys_sysinfo_handler);
+            SYSCALL_ENTRY(100, 1, sys_times_handler);
+            SYSCALL_ENTRY(115, 2, sys_getgroups_handler);
+            SYSCALL_ENTRY(116, 2, sys_setgroups_handler);
+            SYSCALL_ENTRY(118, 3, sys_getresuid_handler);
+            SYSCALL_ENTRY(120, 3, sys_getresgid_handler);
+            SYSCALL_ENTRY(132, 2, sys_utime_handler);
+            SYSCALL_ENTRY(133, 3, sys_mknod_handler);
+            SYSCALL_ENTRY(136, 2, sys_ustat_handler);
+            SYSCALL_ENTRY(137, 2, sys_statfs_handler);
+            SYSCALL_ENTRY(138, 2, sys_fstatfs_handler);
+            SYSCALL_ENTRY(160, 2, sys_setrlimit_handler);
+            SYSCALL_ENTRY(161, 1, sys_chroot_handler);
+            SYSCALL_ENTRY(163, 1, sys_acct_handler);
+            SYSCALL_ENTRY(164, 2, sys_settimeofday_handler);
+            SYSCALL_ENTRY(170, 2, sys_sethostname_handler);
+            SYSCALL_ENTRY(171, 2, sys_setdomainname_handler);
+            SYSCALL_ENTRY(201, 1, sys_time_handler);
+            SYSCALL_ENTRY(235, 2, sys_utimes_handler);
+            SYSCALL_ENTRY(257, 4, sys_openat_handler);
+            SYSCALL_ENTRY(258, 3, sys_mkdirat_handler);
+            SYSCALL_ENTRY(259, 4, sys_mknodat_handler);
+            SYSCALL_ENTRY(260, 5, sys_fchownat_handler);
             SYSCALL_ENTRY(262, 4, sys_fstatat_handler);
+            SYSCALL_ENTRY(263, 3, sys_unlinkat_handler);
+            SYSCALL_ENTRY(264, 4, sys_renameat_handler);
+            SYSCALL_ENTRY(265, 5, sys_linkat_handler);
+            SYSCALL_ENTRY(266, 3, sys_symlinkat_handler);
             SYSCALL_ENTRY(267, 4, sys_readlinkat_handler);
+            SYSCALL_ENTRY(268, 4, sys_fchmodat_handler);
+            SYSCALL_ENTRY(269, 4, sys_faccessat_handler);
+            SYSCALL_ENTRY(280, 4, sys_utimensat_handler);
+            SYSCALL_ENTRY(288, 4, sys_accept4_handler);
+            SYSCALL_ENTRY(293, 2, sys_pipe2_handler);
             SYSCALL_ENTRY(295, 4, sys_preadv_handler);
             SYSCALL_ENTRY(296, 4, sys_pwritev_handler);
+            SYSCALL_ENTRY(299, 5, sys_recvmmsg_handler);
+            SYSCALL_ENTRY(302, 4, sys_prlimit_handler);
+            SYSCALL_ENTRY(307, 4, sys_sendmmsg_handler);
             SYSCALL_ENTRY(310, 6, sys_process_vm_readv_handler);
             SYSCALL_ENTRY(311, 6, sys_process_vm_writev_handler);
+
+            // Insert unused handlers into a vector in order to avoid compilation warnings
+            // which are converted into errors by Intel PIN
+            vector<HandlerFunction> unused;
+            unused.push_back(sys_getdomainname_handler);
+            unused.push_back(sys_futimens_handler);
         }
 
         HandlerSelector(){
