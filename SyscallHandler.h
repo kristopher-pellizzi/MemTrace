@@ -52,6 +52,10 @@ class SyscallHandler{
                 return set<SyscallMemAccess>();
             }
 
+            virtual bool isInitialized() const{
+                return false;
+            }
+
             virtual const std::string getName(){
                 return std::string("Generic State");
             }
@@ -89,7 +93,7 @@ class SyscallHandler{
             SyscallHandlerSysExitState& operator=(const SyscallHandlerSysExitState& other) = delete;
 
             const std::string getName() override{
-                return std::string("Sys Exit Name");
+                return std::string("Sys Exit State");
             }
             
             set<SyscallMemAccess> getReadsWrites() override{
@@ -122,7 +126,7 @@ class SyscallHandler{
             SyscallHandlerSysEntryState& operator=(const SyscallHandlerSysEntryState& other) = delete;
 
             const std::string getName() override{
-                return std::string("Sys Entry Name");
+                return std::string("Sys Entry State");
             }
             
             SyscallHandlerState* setSysRet(ADDRINT sysRet) override{
@@ -161,6 +165,10 @@ class SyscallHandler{
                 return state;
             }
 
+            bool isInitialized() const override{
+                return true;
+            }
+
     };
 
 
@@ -197,6 +205,16 @@ class SyscallHandler{
             set<SyscallMemAccess> ret = currentState->getReadsWrites();
             initHandler();
             return ret;
+        }
+
+        // Returns true if initialization is required, denoting that the last called system call
+        // did not return
+        bool init(){
+            if(!currentState->isInitialized()){
+                initHandler();
+                return true;
+            }
+            return false;
         }
 
         std::string getStateName(){

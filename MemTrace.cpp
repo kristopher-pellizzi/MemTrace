@@ -33,7 +33,7 @@ std::ofstream memOverlaps;
 
 PIN_MUTEX lock;
 
- FILE* trace;
+// FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT loadOffset;
@@ -267,7 +267,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
 
     bool isWrite = type == AccessType::WRITE;
-     fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
+    // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
     int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - lastSp;
     int bpOffset = addr - lastBp;
 
@@ -445,6 +445,12 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
         ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, i);
         actualArgs.push_back(arg);
     }
+    bool lastSyscallReturned = !SyscallHandler::getInstance().init();
+    #ifdef DEBUG
+        if(!lastSyscallReturned)
+            *out << "Current state: " << SyscallHandler::getInstance().getStateName() << "; Reinitializing handler..." << endl << endl;
+        *out << endl << "Setting arguments for syscall number " << std::dec << sysNum << endl;
+    #endif
     SyscallHandler::getInstance().setSysArgs((unsigned short) sysNum, actualArgs);
 }
 
@@ -456,7 +462,13 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
     }
 
     ADDRINT sysRet = PIN_GetSyscallReturn(ctxt, std);
+    #ifdef DEBUG
+        *out << "Setting return value of the syscall" << endl;
+    #endif
     SyscallHandler::getInstance().setSysRet(sysRet);
+    #ifdef DEBUG
+        *out << "Getting system call memory accesses and resetting state" << endl << endl;
+    #endif
     set<SyscallMemAccess> accesses = SyscallHandler::getInstance().getReadsWrites();
     addSyscallToAccesses(threadIndex, ctxt, accesses);
 }
@@ -639,11 +651,11 @@ VOID Instruction(INS ins, VOID* v){
  */
 VOID Fini(INT32 code, VOID *v)
 {
-    
+    /*
     fprintf(trace, "\n===============================================\n");
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
-    
+    */
 
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
@@ -826,7 +838,7 @@ VOID Fini(INT32 code, VOID *v)
     memOverlaps.write("\x00\x00\x00\x04", 4);
 
     
-     fclose(trace);
+    // fclose(trace);
     // routines.close();
     
 }
@@ -856,7 +868,7 @@ int main(int argc, char *argv[])
         filename = "memtrace.log";
     }
 
-     trace = fopen(filename.c_str(), "w");
+    // trace = fopen(filename.c_str(), "w");
     // routines.open("routines.log");
     //calls.open("calls.log");
     memOverlaps.open("overlaps.bin", std::ios_base::binary);
@@ -910,12 +922,12 @@ int main(int argc, char *argv[])
     cerr << "See file " << filename << " for analysis results" << endl;
     cerr <<  "===============================================" << endl;
 
-    
+    /*
     fprintf(trace, "===============================================\n");
     fprintf(trace, "MEMORY TRACE START\n");
     fprintf(trace, "===============================================\n\n");
     fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
-    
+    */
 
     // Start the program, never returns
     PIN_StartProgram();
