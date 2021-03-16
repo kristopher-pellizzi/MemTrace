@@ -52,10 +52,12 @@ void MemoryAccess::setUninitializedRead(){
 bool MemoryAccess::operator<(const MemoryAccess &other) const{
     if(accessAddress != other.accessAddress)
         return accessAddress < other.accessAddress;
+    if(accessSize != other.accessSize)
+        return accessSize > other.accessSize;
     if(instructionPointer != other.instructionPointer)
         return instructionPointer < other.instructionPointer;
-    if(accessSize != other.accessSize)
-        return accessSize < other.accessSize;
+    if(actualInstructionPointer != other.actualInstructionPointer)
+        return actualInstructionPointer < other.actualInstructionPointer;
     if(type != other.type)
         return type == AccessType::WRITE;
     return false;

@@ -10,7 +10,7 @@ std::pair<set<AccessIndex>::iterator, bool> InitializedMemory::insert(const Acce
 
 void InitializedMemory::insert(set<AccessIndex>::iterator firstIterator, set<AccessIndex>::iterator lastIterator){
     InitializedMemory* currentFrame = this;
-    while(firstIterator->getFirst() >= currentFrame->frameBeginning && currentFrame->prev != NULL){
+    while(firstIterator->getFirst() > currentFrame->frameBeginning && currentFrame->prev != NULL){
         currentFrame = currentFrame->prev;
     }
     currentFrame->initializations.insert(firstIterator, lastIterator);

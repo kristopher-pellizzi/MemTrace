@@ -65,7 +65,7 @@ static void getMainReturnAddr(R2Pipe* r2){
 				while(strstr(addr, "0x") == NULL)
 					addr = strtok_r(NULL, " \t", parsedStrings + 1);
 				char* opcode = strtok_r(NULL, " \t", parsedStrings + 1);
-				printf("OPCODE: %s\n", opcode);
+				//printf("OPCODE: %s\n", opcode);
 				if(!strcmp(opcode, "c3")){
 					fprintf(out, "%s\n", addr);
 					fclose(out);
