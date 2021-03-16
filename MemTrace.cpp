@@ -53,7 +53,8 @@ std::vector<AccessIndex> retAddrLocationStack;
 set<ADDRINT> funcsAddresses;
 map<ADDRINT, std::string> funcs;
 
-bool mainCalled = false;
+bool mainCalled = true;
+bool entryPointExecuted = false;
 ADDRINT mainStartAddr = 0;
 ADDRINT mainRetAddr = 0;
 
@@ -160,6 +161,11 @@ std::pair<int, int>* intervalIntersection(std::pair<int, int> int1, std::pair<in
 
 bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<MemoryAccess> s){
     for(set<MemoryAccess>::iterator i = s.begin(); i != s.end(); ++i){
+        // If it is a WRITE access, consider it an uninitialized partial overlap, as it may be 
+        // a write access partially overlapping the given targetAI. If it is 
+        // not considered uninitialized, it is not added to the partial overlaps
+        if(i->getType() == AccessType::WRITE)
+            return true;
         if(!i->getIsUninitializedRead())
             continue;
         std::pair<int, int> uninitializedInterval = i->getUninitializedInterval();
@@ -235,11 +241,30 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     if(!mainCalled)
         return;
 
+    ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+
+    REG regBasePtr;
+    if(REG_Size(REG_STACK_PTR) == 8){
+        regBasePtr = REG_GBP;
+    }
+    else{
+        regBasePtr = REG_EBP;
+    }
+    ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
+
     if(ip >= textStart && ip <= textEnd){
+        if(!entryPointExecuted){
+            entryPointExecuted = true;
+            *out << endl << endl << "ENTRY POINT SP: 0x" << std::hex << sp << endl;
+            *out << "INSERTING 0x" << std::hex << sp << " - " << std::dec << threadInfos[0] - sp + 1 << endl << endl;
+            initializedMemory = new InitializedMemory(NULL, threadInfos[0]);
+            AccessIndex ai(sp, (threadInfos[0] - sp + 1));
+            initializedMemory->insert(ai);
+        }
         // Always refer to an address in the .text section of the executable, never follow libraries addresses
         lastExecutedInstruction = ip - loadOffset;
         // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
-        lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+        lastSp = sp;
 
         REG regBasePtr;
         if(REG_Size(REG_STACK_PTR) == 8){
@@ -262,14 +287,14 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     // Only keep track of accesses on the stack
     //ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-    if(!isStackAddress(tid, addr, lastSp, opcode_ptr, type)){
+    if(!isStackAddress(tid, addr, sp, opcode_ptr, type)){
         return;
     }
 
     bool isWrite = type == AccessType::WRITE;
     // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
-    int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - lastSp;
-    int bpOffset = addr - lastBp;
+    int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - sp;
+    int bpOffset = addr - bp;
 
     MemoryAccess ma(lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
@@ -347,7 +372,7 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
             //initializedMemory.clear();
         }
 
-        //initializedMemory.insert(toPropagate.begin(), toPropagate.end());
+        initializedMemory->insert(ai);
 
     }
 
@@ -504,12 +529,15 @@ VOID Image(IMG img, VOID* v){
         savedMapping << cont << endl;
         */
     }
+    *out << IMG_Name(img) << " loaded @ 0x" << std::hex << IMG_LoadOffset(img) << endl;
 }
 
 VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     ADDRINT stackBase = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     *out << "Stack base of thread " << tid << " is 0x" << std::hex << stackBase << endl;
+    *out << "Stack ptr: 0x" << std::hex << PIN_GetContextReg(ctxt, REG_STACK_PTR) << endl;
     threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
+    initializedMemory = new InitializedMemory(NULL, stackBase);
 }
 
 VOID OnThreadEnd(THREADID tid, CONTEXT* ctxt, INT32 code, VOID* v){
@@ -650,8 +678,8 @@ VOID Instruction(INS ins, VOID* v){
  *                              PIN_AddFiniFunction function call
  */
 VOID Fini(INT32 code, VOID *v)
-{
-    /*
+{   
+    /* 
     fprintf(trace, "\n===============================================\n");
     fprintf(trace, "MEMORY TRACE END\n");
     fprintf(trace, "===============================================\n\n");
@@ -757,9 +785,6 @@ VOID Fini(INT32 code, VOID *v)
         */
         set<MemoryAccess>& fullOverlapsSet = fullOverlaps[it->first];
         for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
-            int spOffset = i->getSPOffset();
-            int bpOffset = i->getBPOffset();
-            
             memOverlaps.write((i->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
             tmp = i->getIP();
             memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
@@ -773,7 +798,7 @@ VOID Fini(INT32 code, VOID *v)
 
 
 
-            overlaps 
+            /*overlaps 
                 << "0x" << std::hex << i->getIP() 
                 << " (0x" << i->getActualIP() << ")"
                 << ": " << i->getDisasm() << "\t"
@@ -782,7 +807,7 @@ VOID Fini(INT32 code, VOID *v)
                 << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ")
                 << std::dec << llabs(i->getSPOffset()) << ");"
                 << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(i->getBPOffset()) << ")"
-                << endl;
+                << endl;*/
         }
         //overlaps << "===============================================" << endl;
         
@@ -794,7 +819,10 @@ VOID Fini(INT32 code, VOID *v)
             ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
             ADDRINT overlapEnd = min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1);
             ADDRINT overlapSize = overlapEnd - overlapBeginning;
-            std::pair<int, int>* uninitializedOverlap = intervalIntersection(std::pair<int, int>(0, overlapSize), v_it->getUninitializedInterval());
+            std::pair<int, int>* uninitializedOverlap = 
+                            v_it->getType() == AccessType::READ ? 
+                            intervalIntersection(std::pair<int, int>(0, overlapSize), v_it->getUninitializedInterval()) :
+                            new std::pair<int, int>(0, overlapSize);
             if(uninitializedOverlap == NULL)
                 continue;
             uninitializedOverlap->first += overlapBeginning;
