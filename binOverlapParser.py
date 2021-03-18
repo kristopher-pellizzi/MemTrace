@@ -104,6 +104,14 @@ def parse_string(f):
         raise ParseError(f)
 
 
+def get_fo_legend():
+    legend = \
+        "ENTRY FORMAT: \n[*]<binaryIP> (<actualIP>): [<assembly_instr>] {R/W} <access_size> B @ "\
+            "(sp {+/-} <sp_relative_offset>); (bp {+/-} <bp_relative_offset>) "\
+            "['['<uninitialized_lower_bound> ~ <uninitialized_upper_bound>']']"
+    return legend
+
+
 def print_table_header(rw, header):
     l1 = "==============================================="
     l2 = header
@@ -130,6 +138,11 @@ def parse_full_overlap_entry(f, reg_size):
     access_size = parse_integer(f)
     sp_offset = parse_integer(f)
     bp_offset = parse_integer(f)
+    # If it is an uninitialized read access, the report contains also
+    # the interval that is considered uninitialized
+    if is_uninitialized_read:
+            interval_lower_bound = parse_integer(f)
+            interval_upper_bound = parse_integer(f)
 
     # Emit full overlap table entry
     str_list = []
@@ -145,6 +158,8 @@ def parse_full_overlap_entry(f, reg_size):
     str_list.append("(bp ")
     str_list.append("+ " if bp_offset >= 0 else "- ")
     str_list.append(str(abs(bp_offset)) + ")")
+    if(is_uninitialized_read):
+        str_list.append(" [" + str(interval_lower_bound) + " ~ " + str(interval_upper_bound) + "]")
 
     print_table_entry(fo, "".join(str_list))
 
@@ -259,6 +274,8 @@ with open("overlaps.bin", "rb") as f:
         read_bytes = f.read(4)
     
     reg_size = parse_integer(f)
+
+    fo.writelines([get_fo_legend(), "\n"])
 
     # While there are full overlaps...
     while not accept(f, b"\x00\x00\x00\x01"):

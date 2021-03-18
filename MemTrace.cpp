@@ -114,36 +114,7 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
 }
 
 std::pair<int, int> getUninitializedInterval(AccessIndex& ai){
-    if(initializedMemory->find(ai) != initializedMemory->end()){
-        return std::pair<int, int>(-1, -1);
-    }
-
-    std::pair<unsigned int, unsigned int> uninitializedBytes(0, ai.getSecond());
-    set<AccessIndex>::const_iterator iter = initializedMemory->begin();
-
-    ADDRINT targetStart = ai.getFirst();
-    ADDRINT targetEnd = targetStart + ai.getSecond() - 1;
-
-    while(iter != initializedMemory->end()){
-        ADDRINT currentStart = iter->getFirst();
-        ADDRINT currentEnd = currentStart + iter->getSecond() - 1;
-        // If will remain uninitialized bytes at the beginning, between iter start and target start
-        if(currentStart > targetStart + uninitializedBytes.first){
-            // Return false
-            return std::pair<int, int>(uninitializedBytes.first, uninitializedBytes.second - 1);
-        }
-        // If there are no more uninitialized bytes
-        if(targetEnd <= currentEnd){
-            // Return true
-            return std::pair<int, int>(-1, -1);
-        }
-
-        if(currentEnd >= targetStart){
-            uninitializedBytes.first += iter->getSecond() - (targetStart + uninitializedBytes.first - currentStart);
-        }
-        ++iter;   
-    }
-    return std::pair<int, int>(-1, -1);
+    return initializedMemory->getUninitializedInterval(ai);
 }
 
 std::pair<int, int>* intervalIntersection(std::pair<int, int> int1, std::pair<int, int> int2){
@@ -256,10 +227,13 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         if(!entryPointExecuted){
             entryPointExecuted = true;
             *out << endl << endl << "ENTRY POINT SP: 0x" << std::hex << sp << endl;
-            *out << "INSERTING 0x" << std::hex << sp << " - " << std::dec << threadInfos[0] - sp + 1 << endl << endl;
+            *out << "ENTRY POINT IP: 0x" << std::hex << ip << endl;
+            *out << "INSERTING 0x" << std::hex << sp << " - " << std::dec << threadInfos[0] - sp << endl << endl;
             initializedMemory = new InitializedMemory(NULL, threadInfos[0]);
-            AccessIndex ai(sp, (threadInfos[0] - sp + 1));
-            initializedMemory->insert(ai);
+            if(threadInfos[0] - sp > 0){
+                AccessIndex ai(sp, (threadInfos[0] - sp));
+                initializedMemory->insert(ai);
+            }
         }
         // Always refer to an address in the .text section of the executable, never follow libraries addresses
         lastExecutedInstruction = ip - loadOffset;
@@ -505,6 +479,7 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
 VOID Image(IMG img, VOID* v){
     if(IMG_IsMainExecutable(img)){
         *out << "Main executable: " << IMG_Name(img) << endl;
+        *out << "Entry Point: 0x" << std::hex << IMG_EntryAddress(img) << endl;
         for(SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)){
             if(!SEC_Name(sec).compare(".text")){
                 textStart = SEC_Address(sec);
@@ -715,6 +690,11 @@ VOID Fini(INT32 code, VOID *v)
                 memOverlaps << v_it->getSize() << ";";
                 memOverlaps << v_it->getSPOffset() << ";";
                 memOverlaps << v_it->getBPOffset() << ";";
+                if(v_it->getIsUninitializedRead()){
+                    std::pair<int, int> interval = v_it->getUninitializedInterval();
+                    memOverlaps << interval.first << ";";
+                    memOverlaps << interval.second << ";";
+                }
 
 
                 /*

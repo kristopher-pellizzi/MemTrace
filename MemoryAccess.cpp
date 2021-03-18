@@ -60,5 +60,11 @@ bool MemoryAccess::operator<(const MemoryAccess &other) const{
         return actualInstructionPointer < other.actualInstructionPointer;
     if(type != other.type)
         return type == AccessType::WRITE;
+    if(isUninitializedRead && other.isUninitializedRead){
+        if(uninitializedInterval.first != other.uninitializedInterval.first)
+            return uninitializedInterval.first < other.uninitializedInterval.first;
+        if(uninitializedInterval.second != other.uninitializedInterval.second)
+            return uninitializedInterval.second < other.uninitializedInterval.second;
+    }
     return false;
 }

@@ -29,4 +29,6 @@ class InitializedMemory{
         set<AccessIndex>::const_iterator end() const;
 
         InitializedMemory* deleteFrame();
+
+        std::pair<int, int> getUninitializedInterval(AccessIndex& ai);
 };
