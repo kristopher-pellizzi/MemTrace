@@ -68,3 +68,7 @@ bool MemoryAccess::operator<(const MemoryAccess &other) const{
     }
     return false;
 }
+
+bool MemoryAccess::ExecutionComparator::operator()(const MemoryAccess& ma1, const MemoryAccess& ma2){
+    return ma1.executionOrder < ma2.executionOrder;
+}

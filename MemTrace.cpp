@@ -42,6 +42,7 @@ ADDRINT loadOffset;
 ADDRINT lastExecutedInstruction;
 ADDRINT lastSp;
 ADDRINT lastBp;
+unsigned long long executedAccesses;
 
 map<AccessIndex, set<MemoryAccess>> fullOverlaps;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
@@ -130,7 +131,7 @@ std::pair<int, int>* intervalIntersection(std::pair<int, int> int1, std::pair<in
     }
 }
 
-bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<MemoryAccess> s){
+bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<MemoryAccess>& s){
     for(set<MemoryAccess>::iterator i = s.begin(); i != s.end(); ++i){
         // If it is a WRITE access, consider it an uninitialized partial overlap, as it may be 
         // a write access partially overlapping the given targetAI. If it is 
@@ -151,7 +152,7 @@ bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<MemoryAccess>
     return false;
 }
 
-bool containsReadIns(set<MemoryAccess> s){
+bool containsReadIns(set<MemoryAccess, MemoryAccess::ExecutionComparator>& s){
     for(set<MemoryAccess>::iterator i = s.begin(); i != s.end(); ++i){
         if(i->getIsUninitializedRead())
             return true;
@@ -270,11 +271,10 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - sp;
     int bpOffset = addr - bp;
 
-    MemoryAccess ma(lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
+    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
     bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
-    set<MemoryAccess> &lst = fullOverlaps[ai];
     std::pair<int, int> uninitializedInterval;
 
     if(isWrite){
@@ -291,6 +291,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     PIN_MutexLock(&lock);
 
     if(overlapSetAlreadyExists){
+        set<MemoryAccess> &lst = fullOverlaps[ai];
         lst.insert(ma);
     }
     else{
@@ -666,7 +667,8 @@ VOID Fini(INT32 code, VOID *v)
 
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
         // Write text file with full overlaps
-        set<MemoryAccess> v = it->second;
+        // Copy all elements in another set ordered by execution order
+        set<MemoryAccess, MemoryAccess::ExecutionComparator> v(it->second.begin(), it->second.end());
         if(containsReadIns(v) && v.size() > 1){
 
             ADDRINT tmp = it->first.getFirst();

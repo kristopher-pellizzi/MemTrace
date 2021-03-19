@@ -6,6 +6,9 @@ enum class AccessType{
 };
 
 class MemoryAccess{
+    protected:
+        unsigned long long executionOrder;
+
     private:
         ADDRINT instructionPointer;
         ADDRINT actualInstructionPointer;
@@ -19,7 +22,8 @@ class MemoryAccess{
         std::pair<int, int> uninitializedInterval;
 
     public:
-        MemoryAccess(ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string disasm) : 
+        MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string disasm) : 
+            executionOrder(executionOrder),
             instructionPointer(ip),
             actualInstructionPointer(actualInstructionPointer),
             accessAddress(addr),
@@ -59,4 +63,13 @@ class MemoryAccess{
         void setUninitializedRead();
 
         bool operator< (const MemoryAccess &other) const;
+
+        friend struct ExecutionComparator;
+
+
+
+        // Define a functor class which allows to order MemoryAccess objects according to their execution order
+        struct ExecutionComparator{
+            bool operator()(const MemoryAccess& ma1, const MemoryAccess& ma2);
+        };
 };
