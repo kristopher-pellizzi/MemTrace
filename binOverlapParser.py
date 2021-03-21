@@ -12,15 +12,8 @@ class ParseError(Exception):
         print("            |")
 
 
-class ReportWriter():
-    def writelines(self, lines):
-        pass
-
-
-class FullOverlapsWriter(ReportWriter):
-    
-    def __init__(self):
-        self.file = open("overlaps.log", "w")
+class ReportWriter(object):
+    file = None
 
     def __del__(self):
         self.file.close()
@@ -28,18 +21,19 @@ class FullOverlapsWriter(ReportWriter):
     def writelines(self, lines):
         for line in lines:
             self.file.writelines([line, "\n"])
+
+    def write(self, str):
+        self.file.write(str)
+
+
+class FullOverlapsWriter(ReportWriter):   
+    def __init__(self):
+        self.file = open("overlaps.log", "w")
 
 
 class PartialOverlapsWriter(ReportWriter):
     def __init__(self):
         self.file = open("partialOverlaps.log", "w")
-
-    def __del__(self):
-        self.file.close()
-
-    def writelines(self, lines):
-        for line in lines:
-            self.file.writelines([line, "\n"])
 
 
 def accept(f, acceptable):
@@ -173,7 +167,7 @@ def parse_full_overlap(f, reg_size):
     # Emit table header
     header = addr + " - " + str(access_size)
     print_table_header(fo, header)
-    while(not accept(f, b"\x00\x00\x00\x05")):
+    while(not accept(f, b"\x00\x00\x00\x01")):
         parse_full_overlap_entry(f, reg_size)
     print_table_footer(fo)
 
@@ -211,20 +205,45 @@ def parse_partial_overlap_accessing_instr(f, reg_size):
 def parse_partial_overlap_entry(f, reg_size):
     global po
 
+    is_uninitialized_read = True if expect(f, [b"\x0a", b"\x0b"]) == b"\x0a" else False
     ip = parse_address(f, reg_size)
     actual_ip = parse_address(f, reg_size)
     disassembled_instr = parse_string(f)
     access_type = expect(f, [b"\x1a", b"\x1b"])
+    access_size = parse_integer(f)
     sp_offset = parse_integer(f)
     bp_offset = parse_integer(f)
-    overlap_begin = parse_integer(f)
-    overlap_end = parse_integer(f)
+    # Check if this entry has an uninitialized interval
+    # NOTE: it may have an uninitialized interval without being a partial overlap.
+    # That's the case where the access is an uninitialized read access.
+    has_uninitialized_interval = accept(f, b"\xab\xcd\xef\xff")
+    # Check if that's a partial overlap. If it is, check if the overlap and the uninitialized interval
+    # have different lower bounds (happens with some uninitialized partially overlapping read accesses)
+    is_partial_overlap = accept(f, b"\xab\xcd\xef\xff")
+    has_initialized_interval = False
+    if is_partial_overlap:
+            has_initialized_interval = accept(f, b"\xab\xcd\xef\xff")
+            if has_initialized_interval:
+                initialized_interval_begin = parse_integer(f)
+                initialized_interval_end = parse_integer(f)
+    if has_uninitialized_interval:
+        overlap_begin = parse_integer(f)
+        overlap_end = parse_integer(f)
 
     str_list = []
+    if is_partial_overlap:
+        str_list.append("=> ")
+    else:
+        str_list.append("   ")
+
+    if is_uninitialized_read:
+        str_list.append("*")
+
     str_list.append(ip + " (" + actual_ip + "):")
     str_list.append("\t" if len(disassembled_instr) > 0 else " ")
     str_list.append(disassembled_instr)
     str_list.append(" W " if access_type == b"\x1a" else " R ")
+    str_list.append(str(access_size) + " B @ ")
     str_list.append("(sp ")
     str_list.append("+ " if sp_offset >= 0 else "- ")
     str_list.append(str(abs(sp_offset)))
@@ -233,13 +252,20 @@ def parse_partial_overlap_entry(f, reg_size):
     str_list.append("+ " if bp_offset >= 0 else "- ")
     str_list.append(str(abs(bp_offset)))
     str_list.append("); ")
-    str_list.append("[")
-    str_list.append(str(overlap_begin))
-    str_list.append(" ~ ")
-    str_list.append(str(overlap_end))
-    str_list.append("]")
+    if has_uninitialized_interval:
+        str_list.append("[")
+        if has_initialized_interval:
+            str_list.append(str(initialized_interval_begin))
+            str_list.append(" ~ ")
+            str_list.append(str(initialized_interval_end))
+            str_list.append("; ")
+        str_list.append(str(overlap_begin))
+        str_list.append(" ~ ")
+        str_list.append(str(overlap_end))
+        str_list.append("]")
 
     print_table_entry(po, "".join(str_list))
+    # print("[LOG]: parsed ", "".join(str_list))
 
 
 def parse_partial_overlap(f, reg_size):
@@ -250,11 +276,6 @@ def parse_partial_overlap(f, reg_size):
     # Emit table header
     header = addr + " - " + str(access_size)
     print_table_header(po, header)
-    po.writelines(["Accessing instructions:", ""])
-    while not accept(f, b"\x00\x00\x00\x02"):
-        parse_partial_overlap_accessing_instr(f, reg_size)
-    po.writelines(["==============================================="])
-    po.writelines(["Partially overlapping instructions:", ""])
     while not accept(f, b"\x00\x00\x00\03"):
         parse_partial_overlap_entry(f, reg_size)
     print_table_footer(po)
@@ -278,7 +299,7 @@ with open("overlaps.bin", "rb") as f:
     fo.writelines([get_fo_legend(), "\n"])
 
     # While there are full overlaps...
-    while not accept(f, b"\x00\x00\x00\x01"):
+    while not accept(f, b"\x00\x00\x00\x02"):
         parse_full_overlap(f, reg_size)
 
     # While there are partial overlaps...

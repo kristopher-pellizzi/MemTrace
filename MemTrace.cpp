@@ -63,6 +63,9 @@ int calledFunctions = 0;
 
 ADDRINT syscallIP;
 
+std::ofstream f("i.log");
+std::ofstream overlapLog("overlaps.dbg");
+
 /* ===================================================================== */
 // Command line switches
 /* ===================================================================== */
@@ -118,26 +121,50 @@ std::pair<int, int> getUninitializedInterval(AccessIndex& ai){
     return initializedMemory->getUninitializedInterval(ai);
 }
 
-std::pair<int, int>* intervalIntersection(std::pair<int, int> int1, std::pair<int, int> int2){
+std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned int, unsigned int> int1, std::pair<unsigned int, unsigned int> int2){
     if(int1.first <= int2.first){
         if(int1.second < int2.first)
             return NULL;
-        return new std::pair<int, int>(int1.first, min(int1.second, int2.second));
+        return new std::pair<unsigned int, unsigned int>(int2.first, min(int1.second, int2.second));
     }
     else{
         if(int2.second < int1.first)
             return NULL;
-        return new std::pair<int, int>(int2.first, min(int1.second, int2.second));
+        return new std::pair<unsigned int, unsigned int>(int1.first, min(int1.second, int2.second));
     }
 }
 
-bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<MemoryAccess>& s){
-    for(set<MemoryAccess>::iterator i = s.begin(); i != s.end(); ++i){
-        // If it is a WRITE access, consider it an uninitialized partial overlap, as it may be 
+bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<PartialOverlapAccess>& s){
+    for(auto i = s.begin(); i != s.end(); ++i){
+        /*
+        // If it is a WRITE access, consider it an uninitialized partial overlap only if 
+        // there's at least one following access which is an uninitialized read, as it may be 
         // a write access partially overlapping the given targetAI. If it is 
         // not considered uninitialized, it is not added to the partial overlaps
-        if(i->getType() == AccessType::WRITE)
-            return true;
+        if(i->getType() == AccessType::WRITE){
+            set<PartialOverlapAccess>::iterator following = i;
+            ++following;
+
+            while(following != s.end() && !following->getIsUninitializedRead()){
+                // If this writes will be overwritten by some other write before it is read,
+                // ignore it
+                if(
+                    following->getType == AccessType::WRITE && 
+                    following->getAddress() == i->getAddress() &&
+                    following->getSize() == i->getSize()
+                ){
+                    continue;
+                }
+
+                ++following;
+            }
+
+            if(following != s.end())
+                return true;
+            else
+                continue;
+        }
+        */
         if(!i->getIsUninitializedRead())
             continue;
         std::pair<int, int> uninitializedInterval = i->getUninitializedInterval();
@@ -158,6 +185,120 @@ bool containsReadIns(set<MemoryAccess, MemoryAccess::ExecutionComparator>& s){
             return true;
     }
     return false;
+}
+
+std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it){
+    // Return the part of the partial overlap pointed to by v_it that is uninitialized w.r.t. currentSetAI.
+    // If the whole partial overlap is initialized, return NULL
+    ADDRINT overlapBeginning = v_it->getAddress() - currentSetAI.getFirst();
+    ADDRINT overlapEnd = min(v_it->getAddress() + v_it->getSize() - 1 - currentSetAI.getFirst(), currentSetAI.getSecond() - 1);
+    ADDRINT overlapSize = overlapEnd - overlapBeginning; 
+    return intervalIntersection(std::pair<unsigned int, unsigned int>(0, overlapSize), v_it->getUninitializedInterval());
+}
+
+bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
+    ADDRINT writeStart = writeAccess->getAddress();
+    UINT32 writeSize = writeAccess->getSize();
+    ADDRINT writeEnd = writeStart + writeSize - 1;
+
+    f << "[LOG]: 0x" << std::hex << ai.getFirst() << " - " << std::dec << ai.getSecond() << endl;
+    f << "[LOG]: " << std::hex << writeAccess->getDisasm() << " writes " << std::dec << writeSize << " B @ 0x" << std::hex << writeStart << endl;
+
+
+    set<PartialOverlapAccess>::iterator following = writeAccess;
+    ++following;
+
+    unsigned int numOverwrittenBytes = 0;
+    bool* overwrittenBytes = new bool[writeSize];
+
+    for(UINT32 i = 0; i < writeSize; ++i){
+        overwrittenBytes[i] = false;
+    }
+
+    while(following != s.end()){
+
+        if(following == writeAccess)
+            abort();
+
+        ADDRINT folStart = following->getAddress();
+        ADDRINT folEnd = folStart + following->getSize() - 1;
+
+        // Following access bounds are outside write access bounds
+        if(folStart > writeEnd || folEnd < writeStart){
+            ++following;
+            continue;
+        }
+
+        int overlapBeginning = folStart - writeStart;
+        if(overlapBeginning < 0)
+            overlapBeginning = 0;
+
+        int overlapEnd = min(folEnd - writeStart, writeSize - 1);
+
+        
+        if(following->getType() == AccessType::READ && following->getIsUninitializedRead()){
+            std::pair<unsigned, unsigned>* uninitializedOverlap = getOverlappingUninitializedInterval(ai, following);
+            if(uninitializedOverlap == NULL){
+                ++following;
+                continue;
+            }
+
+            f << "[LOG]: " << following->getDisasm() << " reads bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
+
+
+            // Check if the read access reads any byte that is not overwritten
+            // by any other write access
+            for(int i = overlapBeginning; i <= overlapEnd; ++i){
+                if(!overwrittenBytes[i]){
+                    f << "[LOG]: " << following->getDisasm() << " reads a byte of the write" << endl;
+                    // Read access reads not overwritten byte
+                    return true;
+                }
+            }
+        }
+
+        if(following->getType() == AccessType::WRITE){
+
+            for(int i = overlapBeginning; i <= overlapEnd; ++i){
+                f << "[LOG]: " << following->getDisasm() << " overwrites bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
+                if(!overwrittenBytes[i])
+                    ++numOverwrittenBytes;
+                overwrittenBytes[i] = true;
+            }
+            // The write access bytes have been completely overwritten
+            // before any read access could read them.
+            if(numOverwrittenBytes == writeSize){
+                f << "[LOG]: write access completely overwritten" << endl << endl << endl;
+                return false;
+            }
+        }
+        
+        ++ following;
+    }
+    f << "[LOG]: write access not completely overwritten, but never read" << endl << endl << endl;
+    return false;
+}
+
+void dumpMemTrace(){
+    std::ofstream trace("memtrace.log");
+    set<MemoryAccess, MemoryAccess::ExecutionComparator> v;
+
+    for(auto it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
+        v.insert(it->second.begin(), it->second.end());
+    }
+
+    for(auto v_it = v.begin(); v_it != v.end(); ++v_it){
+        trace <<
+            "0x" << std::hex << v_it->getIP() <<
+            "(0x" << v_it->getActualIP() << "): " <<
+            v_it->getDisasm() << " " <<
+            (v_it->getType() == AccessType::READ ? "R " : "W ") <<
+            std::dec << v_it->getSize() << " B @ " << std::hex <<
+            "0x" << v_it->getAddress() << endl;
+
+    }
+
+    trace.close();
 }
 
 /* ===================================================================== */
@@ -339,13 +480,13 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT
 
         // Push initializedMemory only if the target function is inside the .text section
         // e.g. avoid pushing if library function are called
-        if(targetAddr >= textStart && targetAddr <= textEnd){
+        //if(targetAddr >= textStart && targetAddr <= textEnd){
             //initializedStack.push_back(initializedMemory);
             initializedMemory = new InitializedMemory(initializedMemory, addr);
             // Avoid clearing initialized memory on procedure calls:
             // every memory cell initialized by a caller, is considered initialized also by the callee.
             //initializedMemory.clear();
-        }
+        //}
 
         initializedMemory->insert(ai);
 
@@ -392,14 +533,14 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // Second check necessary because previous block may have changed 'mainCalled' value
     if(mainCalled){
 
-        if(ip >= textStart && ip <= textEnd){
+        //if(ip >= textStart && ip <= textEnd){
             // Restore initializedMemory set as it was before the call of this function
             //initializedMemory.clear();
             //set<AccessIndex> &toRestore = initializedStack.back();
             //initializedMemory.insert(toRestore.begin(), toRestore.end());
             //initializedStack.pop_back();
             initializedMemory = initializedMemory->deleteFrame();
-        }
+        //}
 
         AccessIndex &retAddrLocation = retAddrLocationStack.back();
         initializedMemory->insert(retAddrLocation);
@@ -526,6 +667,13 @@ VOID OnThreadEnd(THREADID tid, CONTEXT* ctxt, INT32 code, VOID* v){
 
 VOID Instruction(INS ins, VOID* v){
     std::stringstream call_str;
+
+    // Prefetch instruction is used to simply trigger memory areas in order to
+    // move them to processor's cache. It does not affect program behaviour,
+    // but PIN detects it as a memory read operation, thus producing
+    // an uninitialized read.
+    if(INS_IsPrefetch(ins))
+        return;
 
     
     ADDRINT ins_addr = INS_Address(ins);
@@ -661,15 +809,17 @@ VOID Fini(INT32 code, VOID *v)
     fprintf(trace, "===============================================\n\n");
     */
 
+    dumpMemTrace();
+
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
     memOverlaps << regSize << ";";
 
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
-        // Write text file with full overlaps
         // Copy all elements in another set ordered by execution order
         set<MemoryAccess, MemoryAccess::ExecutionComparator> v(it->second.begin(), it->second.end());
-        if(containsReadIns(v) && v.size() > 1){
+
+        if(containsReadIns(v) && v.size() > 0){
 
             ADDRINT tmp = it->first.getFirst();
             memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
@@ -714,7 +864,8 @@ VOID Fini(INT32 code, VOID *v)
                     */
             }
 
-            memOverlaps.write("\x00\x00\x00\x05", 4);
+            // End of full overlap entries
+            memOverlaps.write("\x00\x00\x00\x01", 4);
 
             //memOverlaps << "===============================================" << endl;
             //memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
@@ -742,12 +893,15 @@ VOID Fini(INT32 code, VOID *v)
             accessedAddress = partialOverlapIterator->first.getFirst();
         }
     }
-    memOverlaps.write("\x00\x00\x00\x01", 4);
+    // End of full overlaps
+    memOverlaps.write("\x00\x00\x00\x02", 4);
 
     std::ofstream overlaps("partialOverlaps.log");
     // Write text file with partial overlaps
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = partialOverlaps.begin(); it != partialOverlaps.end(); ++it){
-        set<MemoryAccess> v = it->second;
+        set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
+        PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
+
         if(v.size() < 1 || !containsUninitializedPartialOverlap(it->first, v)){
             continue;
         }
@@ -757,6 +911,9 @@ VOID Fini(INT32 code, VOID *v)
         memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
         memOverlaps << it->first.getSecond() << ";";
 
+        overlapLog << "===============================================" << endl;
+        overlapLog << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
+        overlapLog << "===============================================" << endl;
 
         /*
         overlaps << "===============================================" << endl;
@@ -765,8 +922,7 @@ VOID Fini(INT32 code, VOID *v)
         
         overlaps << "Accessing instructions: " << endl << endl;
         */
-        set<MemoryAccess>& fullOverlapsSet = fullOverlaps[it->first];
-        for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
+        /*for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
             memOverlaps.write((i->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
             tmp = i->getIP();
             memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
@@ -776,7 +932,7 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps.write((i->getType() == AccessType::WRITE ? "\x1a" : "\x1b"), 1);
             memOverlaps << i->getSize() << ";";
             memOverlaps << i->getSPOffset() << ";";
-            memOverlaps << i->getBPOffset() << ";";
+            memOverlaps << i->getBPOffset() << ";";*/
 
 
 
@@ -789,43 +945,100 @@ VOID Fini(INT32 code, VOID *v)
                 << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ")
                 << std::dec << llabs(i->getSPOffset()) << ");"
                 << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(i->getBPOffset()) << ")"
-                << endl;*/
-        }
+                << endl;
+        }*/
         //overlaps << "===============================================" << endl;
         
         //overlaps << "Partiallly overlapping instructions: " << endl << endl;
 
-        memOverlaps.write("\x00\x00\x00\x02", 4);
+        //memOverlaps.write("\x00\x00\x00\x02", 4);
         
-        for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
-            ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
-            ADDRINT overlapEnd = min(overlapBeginning + v_it->getSize() - 1, it->first.getSecond() - 1);
-            ADDRINT overlapSize = overlapEnd - overlapBeginning;
-            std::pair<int, int>* uninitializedOverlap = 
-                            v_it->getType() == AccessType::READ ? 
-                            intervalIntersection(std::pair<int, int>(0, overlapSize), v_it->getUninitializedInterval()) :
-                            new std::pair<int, int>(0, overlapSize);
-            if(uninitializedOverlap == NULL)
-                continue;
-            uninitializedOverlap->first += overlapBeginning;
-            uninitializedOverlap->second += overlapBeginning;
-
+        for(set<PartialOverlapAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
             //int spOffset = v_it->getSPOffset();
             //int bpOffset = v_it->getBPOffset();
 
+            std::pair<unsigned int, unsigned int>* uninitializedOverlap = NULL;
+            ADDRINT overlapBeginning = v_it->getAddress() - it->first.getFirst();
+            if(v_it->getType() == AccessType::WRITE && isReadByUninitializedRead(v_it, v, it->first))
+                    uninitializedOverlap = new std::pair<unsigned int, unsigned int>(0, v_it->getSize() - 1);
+                    
+            if(v_it->getType() == AccessType::READ && v_it->getIsUninitializedRead()){
+                if(v_it->getIsPartialOverlap()){
+                    uninitializedOverlap = getOverlappingUninitializedInterval(it->first, v_it);
+                }
+                else{
+                    // It is a full overlap, but it is an uninitialized read
+                    uninitializedOverlap = new std::pair<unsigned, unsigned>(v_it->getUninitializedInterval());
+                }
+            }
+
+
+            if(v_it->getIsPartialOverlap())
+                overlapLog << "=> ";
+            else
+                overlapLog << "   ";
+
+            if(v_it->getIsUninitializedRead())
+                overlapLog << "*";
+
+            overlapLog    
+                << "0x" << std::hex << v_it->getIP() 
+                << " (0x" << v_it->getActualIP() << ")"
+                << ": " << v_it->getDisasm() << "\t" 
+                << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << " B "
+                << "@ 0x" << std::hex << v_it->getAddress() << "; (sp " << (v_it->getSPOffset() >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
+                << "(bp " << (v_it->getBPOffset() >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") ";
+            if(uninitializedOverlap != NULL)
+                overlapLog << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]";
+            overlapLog << endl;
+
+
+
+            if(uninitializedOverlap == NULL)
+                continue;
+
+
+            // The overlap beginning may not be the start of the access itself.
+            uninitializedOverlap->first += overlapBeginning;
+            uninitializedOverlap->second += overlapBeginning;
+            // If this is a write access, we consider the whole access as uninitialized. This
+            // can lead to an inconsistency when we write the uninitialized overlap
+            // boundaries in the reports. Fix the upper bound to be lower than
+            // the considered access size
+            if(uninitializedOverlap->second > it->first.getSecond() - 1)
+                uninitializedOverlap->second = it->first.getSecond() - 1;
+            
+            memOverlaps.write(v_it->getIsUninitializedRead() ? "\x0a" : "\x0b", 1);
             tmp = v_it->getIP();
             memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
             tmp = v_it->getActualIP();
             memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
             memOverlaps << v_it->getDisasm() << ";";
             memOverlaps.write((v_it->getType() == AccessType::WRITE ? "\x1a" : "\x1b"), 1);
+            memOverlaps << v_it->getSize() << ";";
             memOverlaps << v_it->getSPOffset() << ";";
             memOverlaps << v_it->getBPOffset() << ";";
-            memOverlaps << uninitializedOverlap->first << ";";
-            memOverlaps << uninitializedOverlap->second << ";";
 
-
-
+            if(uninitializedOverlap != NULL){
+                // Entry has uninitialized interval
+                memOverlaps.write("\xab\xcd\xef\xff", 4);
+                if(v_it->getIsPartialOverlap()){
+                    // Entry is a partial overlap
+                    memOverlaps.write("\xab\xcd\xef\xff", 4);
+                    if(overlapBeginning != uninitializedOverlap->first){
+                        // overlapBeginning is smaller than uninitializedOverlap.
+                        // This may happen with uninitialized partially overlapping read accesses.
+                        // If that is the case, write 2 intervals, the first is the initialized portion,
+                        // the second is the uninitialized one.
+                        memOverlaps.write("\xab\xcd\xef\xff", 4);
+                        memOverlaps << overlapBeginning << ";";
+                        memOverlaps << uninitializedOverlap->first - 1 << ";";
+                    }
+                }
+                memOverlaps << uninitializedOverlap->first << ";";
+                memOverlaps << uninitializedOverlap->second << ";";
+            }
+            
             /*
             overlaps    
                 << "0x" << std::hex << v_it->getIP() 
@@ -840,8 +1053,8 @@ VOID Fini(INT32 code, VOID *v)
 
         memOverlaps.write("\x00\x00\x00\x03", 4);
 
-        //overlaps << "===============================================" << endl;
-        //overlaps << "===============================================" << endl << endl << endl << endl << endl;
+        overlapLog << "===============================================" << endl;
+        overlapLog << "===============================================" << endl << endl << endl << endl << endl;
         
     }
 

@@ -72,3 +72,87 @@ bool MemoryAccess::operator<(const MemoryAccess &other) const{
 bool MemoryAccess::ExecutionComparator::operator()(const MemoryAccess& ma1, const MemoryAccess& ma2){
     return ma1.executionOrder < ma2.executionOrder;
 }
+
+
+// Implementation of PartialOverlapAccess methods
+
+void PartialOverlapAccess::flagAsPartial(){
+    isPartialOverlap = true;
+}
+
+const MemoryAccess& PartialOverlapAccess::getAccess() const{
+    return ma;
+}
+
+bool PartialOverlapAccess::getIsPartialOverlap() const{
+    return isPartialOverlap;
+}
+
+set<PartialOverlapAccess> PartialOverlapAccess::convertToPartialOverlaps(set<MemoryAccess>& s, bool arePartialOverlaps){
+    set<PartialOverlapAccess> ret;
+    for(const MemoryAccess& ma : s){
+        ret.insert(PartialOverlapAccess(ma, arePartialOverlaps));
+    }
+    return ret;
+}
+
+set<PartialOverlapAccess> PartialOverlapAccess::convertToPartialOverlaps(set<MemoryAccess>& s){
+    return convertToPartialOverlaps(s, false);
+}
+
+void PartialOverlapAccess::addToSet(set<PartialOverlapAccess>& ps, set<MemoryAccess>& s, bool arePartialOverlaps){
+    set<PartialOverlapAccess> toAdd = convertToPartialOverlaps(s, arePartialOverlaps);
+    ps.insert(toAdd.begin(), toAdd.end());
+}
+
+void PartialOverlapAccess::addToSet(set<PartialOverlapAccess>& ps, set<MemoryAccess>& s){
+    set<PartialOverlapAccess> toAdd = convertToPartialOverlaps(s);
+    ps.insert(toAdd.begin(), toAdd.end());
+}
+
+bool PartialOverlapAccess::operator<(const PartialOverlapAccess& other) const{
+    MemoryAccess::ExecutionComparator comp;
+    return comp(this->ma, other.ma);
+}
+
+// Contained MemoryAccess structure delegation methods
+
+ADDRINT PartialOverlapAccess::getIP() const{
+    return ma.getIP();
+}
+
+ADDRINT PartialOverlapAccess::getActualIP() const{
+    return ma.getActualIP();
+}
+
+ADDRINT PartialOverlapAccess::getAddress() const{
+    return ma.getAddress();
+}
+
+long long int PartialOverlapAccess::getSPOffset() const{
+    return ma.getSPOffset();
+}
+
+long long int PartialOverlapAccess::getBPOffset() const{
+    return ma.getBPOffset();
+}
+
+UINT32 PartialOverlapAccess::getSize() const{
+    return ma.getSize();
+}
+
+AccessType PartialOverlapAccess::getType() const{
+    return ma.getType();
+}
+
+std::string PartialOverlapAccess::getDisasm() const{
+    return ma.getDisasm();
+}
+
+bool PartialOverlapAccess::getIsUninitializedRead() const{
+    return ma.getIsUninitializedRead();
+}
+
+std::pair<int, int> PartialOverlapAccess::getUninitializedInterval() const{
+    return ma.getUninitializedInterval();
+}
