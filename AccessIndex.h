@@ -20,4 +20,6 @@ class AccessIndex{
         bool operator<(const AccessIndex& other) const;
 
         bool operator==(const AccessIndex &other) const;
+
+        bool operator!=(const AccessIndex &other) const;
 };

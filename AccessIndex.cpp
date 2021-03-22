@@ -15,3 +15,7 @@ bool AccessIndex::operator<(const AccessIndex& other) const{
 bool AccessIndex::operator==(const AccessIndex &other) const{
     return elements.first == other.elements.first && elements.second == other.elements.second;
 }
+
+bool AccessIndex::operator!=(const AccessIndex& other) const{
+    return !operator==(other);
+}
