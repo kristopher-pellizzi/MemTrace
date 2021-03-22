@@ -169,7 +169,7 @@ bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<PartialOverla
             continue;
         std::pair<int, int> uninitializedInterval = i->getUninitializedInterval();
         ADDRINT overlapBeginning = i->getAddress() - targetAI.getFirst();
-        ADDRINT overlapEnd = min(overlapBeginning + i->getSize() - 1, targetAI.getSecond() - 1);
+        ADDRINT overlapEnd = min(i->getAddress() + i->getSize() - 1 - targetAI.getFirst(), targetAI.getSecond() - 1);
         ADDRINT overlapSize = overlapEnd - overlapBeginning;
         
         if(intervalIntersection(std::pair<int, int>(0, overlapSize), uninitializedInterval) != NULL)
@@ -874,20 +874,13 @@ VOID Fini(INT32 code, VOID *v)
         // Fill the partial overlaps map
         ADDRINT lastAccessedByte = it->first.getFirst() + it->first.getSecond() - 1;
         std::map<AccessIndex, set<MemoryAccess>>::iterator partialOverlapIterator = fullOverlaps.find(it->first);
+        // Always create a set to any set in the fullOverlaps map. We will add to the set at least all the
+        // instructions contained in the fullOverlaps[it->first] set
+        set<MemoryAccess>& vect = partialOverlaps[it->first];
         ++partialOverlapIterator;
         ADDRINT accessedAddress = partialOverlapIterator->first.getFirst();
         while(partialOverlapIterator != fullOverlaps.end() && accessedAddress <= lastAccessedByte){
-            //if(containsReadIns(partialOverlapIterator->second)){
-                if(partialOverlaps.find(it->first) != partialOverlaps.end()){
-                    set<MemoryAccess> &vect = partialOverlaps[it->first];
-                    vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
-                }
-                else{
-                    set<MemoryAccess> vect;
-                    vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
-                    partialOverlaps[it->first] = vect;
-                }
-            //}
+            vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
 
             ++partialOverlapIterator;
             accessedAddress = partialOverlapIterator->first.getFirst();
@@ -990,6 +983,8 @@ VOID Fini(INT32 code, VOID *v)
                 << "(bp " << (v_it->getBPOffset() >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") ";
             if(uninitializedOverlap != NULL)
                 overlapLog << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]";
+            else
+                overlapLog << " {NULL interval} ";
             overlapLog << endl;
 
 
