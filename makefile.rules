@@ -104,7 +104,7 @@ $(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
 $(OBJDIR)InitializedMemory$(OBJ_SUFFIX) InitializedMemory.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
-radareTest: radareTest.cpp
+launcher: toolLauncher.cpp
 	$(CXX) -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
 
 
@@ -132,7 +132,7 @@ radareTest: radareTest.cpp
 ./debug/InitializedMemory$(OBJ_SUFFIX) InitializedMemory.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
-launchDebug: radareTest.cpp
+launchDebug: toolLauncher.cpp
 	$(CXX) -DDEBUG -g -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
 
 # Syscall handling code is provided as simple header files. In order to enable re-compilation

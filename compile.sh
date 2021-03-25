@@ -7,5 +7,5 @@ if [ "$1" = "DEBUG" ]; then
 else
     echo "NOT DEBUG"
     $make_cmd obj-intel64/MemTrace.so
-    $make_cmd radareTest
+    $make_cmd launcher
 fi
