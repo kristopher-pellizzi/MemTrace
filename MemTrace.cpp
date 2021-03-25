@@ -1,7 +1,10 @@
 
 /*! @file
- *  This is an example of the PIN tool that demonstrates some basic PIN APIs 
- *  and could serve as the starting point for developing your first PIN tool
+ *  Pintool thought to keep track of memory accesses and report
+ *  memory overlaps on the stack, i.e. memory accesses overlapping (fully or partially)
+ *  with the area read by an instruction reading memory which has not been initialized 
+ *  in its context. This situation may happen, for instance, whenever a function uses an uninitialized local
+ *  variable.
  */
 
 #include <iostream>
@@ -25,52 +28,42 @@ using std::set;
 // Global variables 
 /* ================================================================== */
 
+// stderr stream. This is the stream where the tool prints its messages.
 std::ostream * out = &cerr;
-//std::ofstream routines;
-//std::ofstream calls;
-std::ofstream memOverlaps;
-//std::ofstream stackAddress;
 
-PIN_MUTEX lock;
-
-// FILE* trace;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT loadOffset;
-// TODO: in a multi process or multi threaded application, we need to define
-// the following couple of definitions in a per-thread fashion
+
 ADDRINT lastExecutedInstruction;
-ADDRINT lastSp;
-ADDRINT lastBp;
 unsigned long long executedAccesses;
 
 map<AccessIndex, set<MemoryAccess>> fullOverlaps;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
+
+// NOTE: this map is useful only in case of a multi-process/multi-threaded application.
+// However, the pintool currently supports only single threaded applications; this map has been
+// defined as a future extension of the tool to support multi-threaded applications.
 map<THREADID, ADDRINT> threadInfos;
 
 InitializedMemory* initializedMemory = NULL;
-//std::vector<set<AccessIndex>> initializedStack;
 std::vector<AccessIndex> retAddrLocationStack;
-set<ADDRINT> funcsAddresses;
-map<ADDRINT, std::string> funcs;
 
-bool mainCalled = true;
 bool entryPointExecuted = false;
-ADDRINT mainStartAddr = 0;
-ADDRINT mainRetAddr = 0;
 
-int calledFunctions = 0;
-
+// Global variable required as the syscall IP is only retrievable at syscall
+// entry point, but it is required at syscall exit point to be added to the
+// application's memory accesses.
 ADDRINT syscallIP;
 
-std::ofstream f("i.log");
-std::ofstream overlapLog("overlaps.dbg");
+#ifdef DEBUG
+    std::ofstream isReadLogger("isReadLog.log");
+#endif
 
 /* ===================================================================== */
 // Command line switches
 /* ===================================================================== */
-KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE,  "pintool",
-    "o", "", "specify file name for MemTrace output");
+
 
 /* ===================================================================== */
 // Utilities
@@ -81,7 +74,25 @@ KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE,  "pintool",
  */
 INT32 Usage()
 {
-    cerr << "This tool generates a memory trace of addresses accessed in read or write mode" << endl;
+    cerr << "This tool generates 2 overlap reports:" << endl;
+    cerr << 
+        "The first is overlaps.log, and contains a set of tables (one for each memory access)\
+         containing all the instructions accessing the address reported in the table header, with the size\
+         reported in the header as well." << endl;
+    cerr << 
+        "The reported instructions are in execution order" << endl;
+    cerr << 
+        "Note that the table is reported only if there is at least an instruction reading uninitialized memory area." 
+         << endl << endl;
+    cerr <<
+        "The second report is partialOverlaps.log." << endl;
+    cerr << 
+        "Again, the file contains a set of tables. This time, the tables contain all the read accesses performed\
+         at the address and size specified in the table header and all the write instructions of which the aforementioned\
+         read accesses read at least 1 byte." << endl;
+    cerr << 
+        "This allows the user to determine from where each byte (initialized or uninitialized) of read accesses\
+         come from by simply inspecting the tables in the report" << endl << endl;
 
     cerr << KNOB_BASE::StringKnobSummary() << endl;
 
@@ -92,6 +103,11 @@ UINT32 min(UINT32 x, UINT32 y){
     return x <= y ? x : y;
 }
 
+// Returns true if the considered instruction is any kind of push instruction.
+// Note that this is only useful to correctly compute sp offset of the push instructions as 0, otherwise
+// the tool would consider as accessed address the last value in the sp before this instruction
+// is performed.
+// The size of the access should be correctly detected by PIN according to the type of push instruction.
 bool isPushInstruction(OPCODE opcode){
     return
         opcode == XED_ICLASS_PUSH ||
@@ -103,24 +119,43 @@ bool isPushInstruction(OPCODE opcode){
 }
 
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcode_ptr, AccessType type){
-    if(threadInfos.find(tid) == threadInfos.end())
+    // If the thread ID is not found, there's something wrong.
+    if(threadInfos.find(tid) == threadInfos.end()){
+        *out << "Thread id not found" << endl;
         exit(1);
+    }
+
     OPCODE opcode = *opcode_ptr;
+
+    // NOTE: check on the access type in the predicate is required because a push instruction may also 
+    // read from a memory area, which can be from any memory section (e.g. stack, heap, global variables...)
     if(type == AccessType::WRITE && isPushInstruction(opcode)){
         // If it is a push instruction, it surely writes a stack address
         return true;
     }
-    /*
-    if(addr >= currentSp && addr <= threadInfos[tid])
-        stackAddress << "Current sp: 0x" << std::hex << currentSp << "\tStack base: 0x" << threadInfos[tid] << "\tAddr: 0x" << addr << endl;
-    */
+
     return addr >= currentSp && addr <= threadInfos[tid];
 }
 
+// Function to retrieve the bytes of the given Access Index object which are considered not initialized.
+// The interval contains the offset of the bytes from the beginning of the access represented by
+// the given AccessIndex object.
+// For instance, if a write already initialized bytes [0x0, 0xa] of memory and the given access index accesses 
+// [0x0, 0xf], the returned pair would be (11, 15).
+
+// NOTE: this is not a precise result. If the access represented by |ai| is fully initialized except 1 byte,
+// the returned pair will report as uninitialized the whole interval from the uninitialized byte to the end of the
+// access.
+// This has been done because:
+//  [*] It shouldn't be very frequent that an access to an area of the stack has an uninitialized "hole"
+//  [*] This function is quite expensive, as it essentially scans the recorded memory accesses looking for 
+//      write accesses who wrote a certain byte. In order to try and reduce its cost, the function returns as soon
+//      as it detects an uninitialized byte.
 std::pair<int, int> getUninitializedInterval(AccessIndex& ai){
     return initializedMemory->getUninitializedInterval(ai);
 }
 
+// Utility function to compute the intersection of 2 intervals.
 std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned int, unsigned int> int1, std::pair<unsigned int, unsigned int> int2){
     if(int1.first <= int2.first){
         if(int1.second < int2.first)
@@ -134,40 +169,18 @@ std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned i
     }
 }
 
+// Returns true if the set |s| contains at least a full overlap for AccessIndex |targetAI| which is also an
+// uninitialized read access.
+
+// TODO: check if possible to replace with containsReadIns
 bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<PartialOverlapAccess>& s){
     for(auto i = s.begin(); i != s.end(); ++i){
-        /*
-        // If it is a WRITE access, consider it an uninitialized partial overlap only if 
-        // there's at least one following access which is an uninitialized read, as it may be 
-        // a write access partially overlapping the given targetAI. If it is 
-        // not considered uninitialized, it is not added to the partial overlaps
-        if(i->getType() == AccessType::WRITE){
-            set<PartialOverlapAccess>::iterator following = i;
-            ++following;
-
-            while(following != s.end() && !following->getIsUninitializedRead()){
-                // If this writes will be overwritten by some other write before it is read,
-                // ignore it
-                if(
-                    following->getType == AccessType::WRITE && 
-                    following->getAddress() == i->getAddress() &&
-                    following->getSize() == i->getSize()
-                ){
-                    continue;
-                }
-
-                ++following;
-            }
-
-            if(following != s.end())
-                return true;
-            else
-                continue;
-        }
-        */
-        // In the first case, it is a read access happening at an address lower than the current set
-        // address. It is of no interest here, it will have its own set.
+        // In the first case, it is a partially overlapping access.
+        // It is of no interest here, it will have its own set, if needed.
         // Also read accesses which are completely initialized are not interesting.
+
+        // NOTE: write accesses can't have the |isUninitializedRead| flag set to true, so
+        // the second part of the predicate also skips write accesses.
         if(i->getIsPartialOverlap() || !i->getIsUninitializedRead())
             continue;
         std::pair<int, int> uninitializedInterval = i->getUninitializedInterval();
@@ -190,6 +203,8 @@ bool containsReadIns(set<MemoryAccess, MemoryAccess::ExecutionComparator>& s){
     return false;
 }
 
+// Similar to getUninitializedInterval, but the returned pair contains the bounds of the interval of bytes written
+// by the access pointed to by |v_it| which overlap with the access represented by |currentSetAI|
 std::pair<unsigned, unsigned>* getOverlappingWriteInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it){
     int overlapBeginning = v_it->getAddress() - currentSetAI.getFirst();
     if(overlapBeginning < 0)
@@ -197,6 +212,10 @@ std::pair<unsigned, unsigned>* getOverlappingWriteInterval(const AccessIndex& cu
     int overlapEnd = min(v_it->getAddress() + v_it->getSize() - 1 - currentSetAI.getFirst(), currentSetAI.getSecond() - 1);
     return new pair<unsigned, unsigned>(overlapBeginning, overlapEnd);
 }
+
+// Similar to getUninitializedInterval, but the returned pair contains the bounds of the interval of bytes
+// read by the access pointed to by |v_it| which are also considered not initialized and overlap with
+// the access represented by |currentSetAI|.
 
 std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it){
     // If the read access happens at an address lower that the set address, it is of no interest
@@ -211,14 +230,19 @@ std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessI
     return intervalIntersection(std::pair<unsigned int, unsigned int>(0, overlapSize), v_it->getUninitializedInterval());
 }
 
+// Returns true if the write access pointed to by |writeAccess| writes at least 1 byte that is later read
+// by any uninitialized read access overlapping the access represented by |ai|
+
+// TODO: optimize write access overwriting condition to return immediately if the whole overlapping section is overwritten
 bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
     ADDRINT writeStart = writeAccess->getAddress();
     UINT32 writeSize = writeAccess->getSize();
     ADDRINT writeEnd = writeStart + writeSize - 1;
 
-    f << "[LOG]: 0x" << std::hex << ai.getFirst() << " - " << std::dec << ai.getSecond() << endl;
-    f << "[LOG]: " << std::hex << writeAccess->getDisasm() << " writes " << std::dec << writeSize << " B @ 0x" << std::hex << writeStart << endl;
-
+    #ifdef DEBUG
+        isReadLogger << "[LOG]: 0x" << std::hex << ai.getFirst() << " - " << std::dec << ai.getSecond() << endl;
+        isReadLogger << "[LOG]: " << std::hex << writeAccess->getDisasm() << " writes " << std::dec << writeSize << " B @ 0x" << std::hex << writeStart << endl;
+    #endif
 
     set<PartialOverlapAccess>::iterator following = writeAccess;
     ++following;
@@ -232,13 +256,10 @@ bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess,
 
     while(following != s.end()){
 
-        if(following == writeAccess)
-            abort();
-
         ADDRINT folStart = following->getAddress();
         ADDRINT folEnd = folStart + following->getSize() - 1;
 
-        // Following access bounds are outside write access bounds
+        // Following access bounds are outside write access bounds. It can't overlap, skip it.
         if(folStart > writeEnd || folEnd < writeStart){
             ++following;
             continue;
@@ -250,50 +271,67 @@ bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess,
 
         int overlapEnd = min(folEnd - writeStart, writeSize - 1);
 
-        
+        // If |following| is an uninitialized read access, check if it reads at least a not overwritten byte of 
+        // |writeAccess|
         if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && folStart >= ai.getFirst()){
             std::pair<unsigned, unsigned>* uninitializedOverlap = getOverlappingUninitializedInterval(ai, following);
+            // If the uninitialized read access does not overlap |ai| access, it can overlap |writeAccess|, but it is 
+            // of no interest now.
             if(uninitializedOverlap == NULL){
                 ++following;
                 continue;
             }
 
-            f << "[LOG]: " << following->getDisasm() << " reads bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
-
+            #ifdef DEBUG
+                isReadLogger << "[LOG]: " << following->getDisasm() << " reads bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
+            #endif
 
             // Check if the read access reads any byte that is not overwritten
             // by any other write access
             for(int i = overlapBeginning; i <= overlapEnd; ++i){
                 if(!overwrittenBytes[i]){
-                    f << "[LOG]: " << following->getDisasm() << " reads a byte of the write" << endl;
-                    // Read access reads not overwritten byte
+                    #ifdef DEBUG
+                        isReadLogger << "[LOG]: " << following->getDisasm() << " reads a byte of the write" << endl;
+                    #endif
+                    // Read access reads a not overwritten byte.
                     return true;
                 }
             }
         }
 
+        // If |following| is a write access, update the byte map overwrittenBytes to true where needed.
+        // If |writeAccess| has been completely overwritten, it can't be read by any other access, so return false.
         if(following->getType() == AccessType::WRITE){
+            #ifdef DEBUG
+                isReadLogger << "[LOG]: " << following->getDisasm() << " overwrites bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
+            #endif
 
             for(int i = overlapBeginning; i <= overlapEnd; ++i){
-                f << "[LOG]: " << following->getDisasm() << " overwrites bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
                 if(!overwrittenBytes[i])
                     ++numOverwrittenBytes;
                 overwrittenBytes[i] = true;
             }
-            // The write access bytes have been completely overwritten
+            // The write access bytes have been completely overwritten by another write access
             // before any read access could read them.
             if(numOverwrittenBytes == writeSize){
-                f << "[LOG]: write access completely overwritten" << endl << endl << endl;
+                #ifdef DEBUG
+                    isReadLogger << "[LOG]: write access completely overwritten" << endl << endl << endl;
+                #endif
                 return false;
             }
         }
         
         ++ following;
     }
-    f << "[LOG]: write access not completely overwritten, but never read" << endl << endl << endl;
+    // |writeAccess| has not been completely overwritten, but no uninitialized read access reads its bytes.
+    #ifdef DEBUG
+        isReadLogger << "[LOG]: write access not completely overwritten, but never read" << endl << endl << endl;
+    #endif
     return false;
 }
 
+// Utility function that dumps all the memory accesses recorded during application's execution
+// to a file named memtrace.log
 void dumpMemTrace(){
     std::ofstream trace("memtrace.log");
     set<MemoryAccess, MemoryAccess::ExecutionComparator> v;
@@ -320,58 +358,16 @@ void dumpMemTrace(){
 // Analysis routines
 /* ===================================================================== */
 
-VOID detectFunctionStart(ADDRINT ip){
-    if(ip < textStart || ip > textEnd){
-        return;
-    }
-    ADDRINT effectiveIp = ip - loadOffset;
-
-    if(ip >= textStart && ip <= textEnd && funcsAddresses.find(effectiveIp) != funcsAddresses.end()){
-
-        // If main has already been detected, it's useless and time-consuming to try and detect it again
-        // This way, we avoid a lookup in a map and a string comparison
-        if(!mainCalled){
-            // Detect if this is 'main' first instruction
-            std::string &funcName = funcs[effectiveIp];
-            if(!funcName.compare("main")){
-                //mainCalled = true;
-            }
-        }
-
-        //initializedStack.push_back(initializedMemory);
-        //initializedMemory.clear();
-    }
-}
-
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 VOID* opcode, bool isFirstVisit)
 {
-
-    ADDRINT effectiveIp = ip - loadOffset;
-
-    if(isFirstVisit){
-
-        if(ip >= textStart && ip <= textEnd && funcsAddresses.find(effectiveIp) != funcsAddresses.end()){
-
-            // If main has already been detected, it's useless and time-consuming to try and detect it again
-            // This way, we avoid a lookup in a map and a string comparison
-            if(!mainCalled){
-                // Detect if this is 'main' first instruction
-                std::string &funcName = funcs[effectiveIp];
-                if(!funcName.compare("main")){
-                    //mainCalled = true;
-                }
-            }
-        } 
-        
-    }
-
-    if(!mainCalled)
-        return;
-
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
 
     REG regBasePtr;
+    // If the stack pointer register is 64 bits long, than we are on an x86-64 architecture,
+    // otherwise (size is 32 bits), we are on x86 architecture.
+
+    // NOTE: intel PIN supports only intel x86 and x86-64 architectures, so there's no other possibility.
     if(REG_Size(REG_STACK_PTR) == 8){
         regBasePtr = REG_GBP;
     }
@@ -380,34 +376,24 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
     ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
+    // This is an application instruction
     if(ip >= textStart && ip <= textEnd){
         if(!entryPointExecuted){
             entryPointExecuted = true;
-            *out << endl << endl << "ENTRY POINT SP: 0x" << std::hex << sp << endl;
-            *out << "ENTRY POINT IP: 0x" << std::hex << ip << endl;
-            *out << "INSERTING 0x" << std::hex << sp << " - " << std::dec << threadInfos[0] - sp << endl << endl;
-            initializedMemory = new InitializedMemory(NULL, threadInfos[0]);
             if(threadInfos[0] - sp > 0){
                 AccessIndex ai(sp, (threadInfos[0] - sp));
                 initializedMemory->insert(ai);
+                *out << "INSERTING 0x" << std::hex << sp << " - " << std::dec << threadInfos[0] - sp << endl << endl;
             }
         }
-        // Always refer to an address in the .text section of the executable, never follow libraries addresses
+        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
+        // to track where a library function has been called or jumped to
         lastExecutedInstruction = ip - loadOffset;
-        // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
-        lastSp = sp;
-
-        REG regBasePtr;
-        if(REG_Size(REG_STACK_PTR) == 8){
-            regBasePtr = REG_GBP;
-        }
-        else{
-            regBasePtr = REG_EBP;
-        }
-
-        lastBp = PIN_GetContextReg(ctxt, regBasePtr);
     }
+    // This probably is a library function, or, in general, code outside .text section
     else{
+        // If lastExecutedInstruction is 0, the entry point has not been called yet
+        // TODO: verify if without this return other instructions are executed
         if(lastExecutedInstruction == 0){
             return;
         }
@@ -416,37 +402,32 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
     OPCODE* opcode_ptr = static_cast<OPCODE*>(opcode);
 
-    // Only keep track of accesses on the stack
-    //ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+    // Only keep track of accesses on the stack, so if it is an access to any other memory
+    // section, return immediately.
     if(!isStackAddress(tid, addr, sp, opcode_ptr, type)){
         return;
     }
 
     bool isWrite = type == AccessType::WRITE;
-    // fprintf(trace, "0x%lx: %s => %c %u B %s 0x%lx\n", lastExecutedInstruction, ins_disasm->c_str(), isWrite ? 'W' : 'R', size, isWrite ? "to" : "from", addr);
+    // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
     int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - sp;
     int bpOffset = addr - bp;
 
     MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
-    bool overlapSetAlreadyExists = fullOverlaps.find(ai) != fullOverlaps.end();
-    std::pair<int, int> uninitializedInterval;
-
     if(isWrite){
         initializedMemory->insert(ai);
     }
     else{
-        uninitializedInterval = getUninitializedInterval(ai);
+        std::pair<int, int> uninitializedInterval = getUninitializedInterval(ai);
         if(uninitializedInterval.first != -1){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
         }
     }
  
-    PIN_MutexLock(&lock);
-
-    if(overlapSetAlreadyExists){
+    if(fullOverlaps.find(ai) != fullOverlaps.end()){
         set<MemoryAccess> &lst = fullOverlaps[ai];
         lst.insert(ma);
     }
@@ -455,118 +436,61 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         v.insert(ma);
         fullOverlaps[ai] = v;
     }
-
-    PIN_MutexUnlock(&lock);
 }
 
-VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size, ADDRINT targetAddr, ...)
+// Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
+// for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
+
+// TODO: call memtrace to insert the call instruction in the fullOverlaps map, otherwise it won't be written in the reports
+// if any uninitialized read access reads it (correctly or due to a vulnerability)
+VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size)
 {
-    //ADDRINT effectiveIp = ip - loadOffset;
-
-    // This trick is needed as procedure calls write the return address into stack.
-    // Normally, the tool set as initialized the cell for the caller, but that's actually used by the callee on return, so,
-    // ,n procedure call, insert the written memory area into the initialized memory of the callee.
-    // On return, the tool will see the cell containing the return address as initialized, thus removing 
-    // "ret" instructions from the results (as they are false positives)
-    if(mainCalled){
-
-        ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-
-        if(ip >= textStart && ip <= textEnd){
-            // Always refer to an address in the .text section of the executable, never follow libraries addresses
-            lastExecutedInstruction = ip - loadOffset;
-            // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
-            lastSp = sp;
-
-            REG regBasePtr;
-            if(REG_Size(REG_STACK_PTR) == 8){
-                regBasePtr = REG_GBP;
-            }
-            else{
-                regBasePtr = REG_EBP;
-            }
-
-            lastBp = PIN_GetContextReg(ctxt, regBasePtr);
-        }
-
-        // Insert the address containing function return address as initialized memory
-        AccessIndex ai(addr, size);
-        retAddrLocationStack.push_back(ai);
-
-        // Push initializedMemory only if the target function is inside the .text section
-        // e.g. avoid pushing if library function are called
-        //if(targetAddr >= textStart && targetAddr <= textEnd){
-            //initializedStack.push_back(initializedMemory);
-            initializedMemory = new InitializedMemory(initializedMemory, addr);
-            // Avoid clearing initialized memory on procedure calls:
-            // every memory cell initialized by a caller, is considered initialized also by the callee.
-            //initializedMemory.clear();
-        //}
-
-        initializedMemory->insert(ai);
-
+    if(ip >= textStart && ip <= textEnd){
+        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
+        // to track where a library function has been called or jumped to
+        lastExecutedInstruction = ip - loadOffset;
     }
 
-    if(!mainCalled && targetAddr >= textStart && targetAddr <= textEnd){
-        if(calledFunctions == 2){
-            ++calledFunctions;
-            mainCalled = true;
-            initializedMemory = new InitializedMemory(initializedMemory, addr);
-            *out << "****************" << endl;
-            *out << "Main entry point: 0x" << std::hex << targetAddr << endl;
-        }
-        else{
-            ++calledFunctions;
-        }
-    }
+    AccessIndex ai(addr, size);
+    retAddrLocationStack.push_back(ai);
+
+    // Initialized a new frame and insert the saved return address in its context
+    initializedMemory = new InitializedMemory(initializedMemory, addr);
+    initializedMemory->insert(ai);
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 VOID* opcode, bool isFirstVisit)
 {
+    // If there are no other frames to return to, we are returning from the entry point, so there's anything
+    // else to do.
+
+    // NOTE: usually the entry point performs jumps to other functions.
+    // E.g. on Linux, it's __libc_start_main who calls function main, and __libc_start_main is the first function
+    // that can be seen in the call stack by using a debugger. This means that __libc_start_main has been executed by
+    // a sequence of jumps from the entry point (_start).
+    // However, if __libc_start_main returns, there's nothing else to do.
+    if(retAddrLocationStack.empty())
+        return;
+
     if(ip >= textStart && ip <= textEnd){
-        // Always refer to an address in the .text section of the executable, never follow libraries addresses
+        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
+        // to track where a library function has been called or jumped to
         lastExecutedInstruction = ip - loadOffset;
-        // Always refer to the stack created by the executable, ignore accesses to the frames of library functions
-        lastSp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-
-        REG regBasePtr;
-        if(REG_Size(REG_STACK_PTR) == 8){
-            regBasePtr = REG_GBP;
-        }
-        else{
-            regBasePtr = REG_EBP;
-        }
-
-        lastBp = PIN_GetContextReg(ctxt, regBasePtr);
     }
-
-    if(mainCalled && retAddrLocationStack.empty()){
-            mainCalled = false;
-    }
-
-    // Second check necessary because previous block may have changed 'mainCalled' value
-    if(mainCalled){
-
-        //if(ip >= textStart && ip <= textEnd){
-            // Restore initializedMemory set as it was before the call of this function
-            //initializedMemory.clear();
-            //set<AccessIndex> &toRestore = initializedStack.back();
-            //initializedMemory.insert(toRestore.begin(), toRestore.end());
-            //initializedStack.pop_back();
-            initializedMemory = initializedMemory->deleteFrame();
-        //}
-
-        AccessIndex &retAddrLocation = retAddrLocationStack.back();
-        initializedMemory->insert(retAddrLocation);
-        retAddrLocationStack.pop_back();
         
-    }
-
+    // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
+    // memory area. Call memtrace to analyze the read access.
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
+
+    initializedMemory = initializedMemory->deleteFrame();
+
+    retAddrLocationStack.pop_back();
 }
 
 
+// Given a set of SyscallMemAccess objects, generated by the SyscallHandler on system calls,
+// add them to the recorded memory accesses
 void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v){
     #ifdef DEBUG
         string* disasm = new string("syscall");
@@ -579,7 +503,6 @@ void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v)
     // does not make any difference
     *opcode = XED_ICLASS_SYSCALL_AMD;
     for(auto i = v.begin(); i != v.end(); ++i){
-        // isFirstVisit always set to false. Probably this bool flag is going to be removed in the next future
         memtrace(tid, ctxt, i->getType(), syscallIP, i->getAddress(), i->getSize(), disasm, opcode, false);    
     }
 }
@@ -594,19 +517,21 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     ADDRINT actualIp = PIN_GetContextReg(ctxt, REG_INST_PTR);
     syscallIP = actualIp;
     ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
-    //*out << "Entering syscall " << std::dec << sysNum << endl;
     unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
     vector<ADDRINT> actualArgs;
     for(int i = 0; i < argsCount; ++i){
         ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, i);
         actualArgs.push_back(arg);
     }
-    bool lastSyscallReturned = !SyscallHandler::getInstance().init();
     #ifdef DEBUG
+        bool lastSyscallReturned = !SyscallHandler::getInstance().init();
         if(!lastSyscallReturned)
             *out << "Current state: " << SyscallHandler::getInstance().getStateName() << "; Reinitializing handler..." << endl << endl;
         *out << endl << "Setting arguments for syscall number " << std::dec << sysNum << endl;
+    #else
+        SyscallHandler::getInstance().init();
     #endif
+
     SyscallHandler::getInstance().setSysArgs((unsigned short) sysNum, actualArgs);
 }
 
@@ -647,41 +572,19 @@ VOID Image(IMG img, VOID* v){
         }
 
         loadOffset = IMG_LoadOffset(img);
-
-        // Saves content of /proc/<PID>/maps to file (For debugging) purposes
-        /*
-        std::ifstream mapping;
-        std::ofstream savedMapping("mapBefore.log");
-
-        INT pid = PIN_GetPid();
-        std::stringstream mapPath;
-        mapPath << "/proc/" << pid << "/maps";
-        mapping.open(mapPath.str().c_str());
-        std::string cont((std::istreambuf_iterator<char>(mapping)), (std::istreambuf_iterator<char>()));
-        savedMapping << cont << endl;
-        */
     }
+
     *out << IMG_Name(img) << " loaded @ 0x" << std::hex << IMG_LoadOffset(img) << endl;
 }
 
 VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     ADDRINT stackBase = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-    *out << "Stack base of thread " << tid << " is 0x" << std::hex << stackBase << endl;
-    *out << "Stack ptr: 0x" << std::hex << PIN_GetContextReg(ctxt, REG_STACK_PTR) << endl;
     threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
+    // Initialize first function frame
     initializedMemory = new InitializedMemory(NULL, stackBase);
 }
 
-VOID OnThreadEnd(THREADID tid, CONTEXT* ctxt, INT32 code, VOID* v){
-
-}
-
-/*VOID Routine(RTN rtn, VOID* v){
-    routines << RTN_Name(rtn) << " @ " << std::hex << RTN_Address(rtn) << endl;
-}*/
-
 VOID Instruction(INS ins, VOID* v){
-    std::stringstream call_str;
 
     // Prefetch instruction is used to simply trigger memory areas in order to
     // move them to processor's cache. It does not affect program behaviour,
@@ -691,31 +594,12 @@ VOID Instruction(INS ins, VOID* v){
         return;
 
     
-    ADDRINT ins_addr = INS_Address(ins);
-    
-    if(ins_addr >= textStart && ins_addr <= textEnd){
-        // This block can be used to check if it is a dynamic call to a register, to be added in the CFG
-
-        // Used for debug purposes. It creates a file with instructions which are call instructions
-        /*
-        if(INS_IsCall(ins)){
-            call_str << std::hex << "0x" << ins_addr << " is a call instruction";
-            if(!INS_IsProcedureCall(ins)){
-                call_str << ", but is not a procedure call";
-            }
-            call_str << endl;
-        }
-
-        calls << call_str.str();
-        */
-        
-    }
-
     bool isProcedureCall = INS_IsProcedureCall(ins);
     bool isRet = INS_IsRet(ins);
-
     UINT32 memoperands = INS_MemoryOperandCount(ins);
 
+    // If it is not an instruction accessing memory, it is of no interest.
+    // Return without doing anything else.
     if(memoperands == 0){
         return;
     }
@@ -731,12 +615,10 @@ VOID Instruction(INS ins, VOID* v){
         *opcode = INS_Opcode(ins);
 
         for(UINT32 memop = 0; memop < memoperands; memop++){
+            // Write memory access
             if(INS_MemoryOperandIsWritten(ins, memop) ){
+                // Procedure call instruction
                 if(isProcedureCall){
-                    IARGLIST args = IARGLIST_Alloc();
-                    for(int i = 0; i < 10; ++i){
-                        IARGLIST_AddArguments(args, IARG_FUNCARG_CALLSITE_VALUE, i, IARG_END);
-                    }
                     INS_InsertPredicatedCall(
                         ins,
                         IPOINT_BEFORE,
@@ -745,8 +627,6 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_INST_PTR,
                         IARG_MEMORYWRITE_EA,
                         IARG_MEMORYWRITE_SIZE,
-                        IARG_BRANCH_TARGET_ADDR,
-                        IARG_IARGLIST, args,
                         IARG_END
                     );
                 }
@@ -769,7 +649,9 @@ VOID Instruction(INS ins, VOID* v){
                 }          
             }
 
+            // Read memory access
             if(INS_MemoryOperandIsRead(ins, memop)){
+                // It is a ret instruction
                 if(isRet){
                     INS_InsertPredicatedCall(
                         ins,
@@ -810,29 +692,24 @@ VOID Instruction(INS ins, VOID* v){
 }
 
 /*!
- * Print out analysis results.
+ * Generate overlap reports.
  * This function is called when the application exits.
- * @param[in]   code            exit code of the application
- * @param[in]   v               value specified by the tool in the 
- *                              PIN_AddFiniFunction function call
  */
 VOID Fini(INT32 code, VOID *v)
 {   
-    /* 
-    fprintf(trace, "\n===============================================\n");
-    fprintf(trace, "MEMORY TRACE END\n");
-    fprintf(trace, "===============================================\n\n");
-    */
+    std::ofstream memOverlaps("overlaps.bin", std::ios_base::binary);
+    #ifdef DEBUG
+        std::ofstream partialOverlapsLog("partialOverlaps.dbg");
+    #endif
 
     dumpMemTrace();
-    std::ofstream t("reverse.log");
 
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
     memOverlaps << regSize << ";";
 
     /*
-    The following iterator, and the boolean flag right inside the next for loop scope, are
+    The following iterator, and the boolean flag right inside the next "for" loop scope, are
     used in order to optimize the search of partially overlapping accesses happening at an address lower than the
     address of an access set (denoted as "it" in the loop). Without using these 2 values, we would have
     needed to restart the search from fullOverlaps.begin(), which may require more time.
@@ -843,19 +720,19 @@ VOID Fini(INT32 code, VOID *v)
         // Copy all elements in another set ordered by execution order
         set<MemoryAccess, MemoryAccess::ExecutionComparator> v(it->second.begin(), it->second.end());
 
-        if(containsReadIns(v) && v.size() > 0){
+        // If the set contains at least 1 uninitialized read, write it into the binary report
 
+        // NOTE: the report is written in a binary format, as it should be faster than writing a well formatted
+        // textual report. Textual human-readable reports are generated from the binary reports
+        // through an external parser.
+        if(containsReadIns(v)){
+            // |tmp| is used as a temporary ADDRINT copy of ADDRINT values we need to copy in the binary report.
+            // This is needed because we need to pass a pointer to the write method.
             ADDRINT tmp = it->first.getFirst();
             memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
             memOverlaps << it->first.getSecond() << ";";
 
-            /*memOverlaps << "===============================================" << endl;
-            memOverlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
-            memOverlaps << "===============================================" << endl << endl;*/
             for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
-                //int spOffset = v_it->getSPOffset();
-                //int bpOffset = v_it->getBPOffset();
-
                 memOverlaps.write((v_it->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
                 tmp = v_it->getIP();
                 memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
@@ -871,31 +748,14 @@ VOID Fini(INT32 code, VOID *v)
                     memOverlaps << interval.first << ";";
                     memOverlaps << interval.second << ";";
                 }
-
-
-                /*
-                memOverlaps 
-                    << (v_it->getIsUninitializedRead() ? "*" : "") 
-                    << "0x" << std::hex << v_it->getIP() 
-                    << " (0x" << v_it->getActualIP() << ")"
-                    << ": " << v_it->getDisasm() << "\t" 
-                    << (v_it->getType() == AccessType::WRITE ? "W " : "R ") 
-                    << std::dec << v_it->getSize() 
-                    << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ") 
-                    << std::dec << llabs(v_it->getSPOffset()) << ");"
-                    << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ")"
-                    << endl;
-                    */
             }
 
             // End of full overlap entries
             memOverlaps.write("\x00\x00\x00\x01", 4);
-
-            //memOverlaps << "===============================================" << endl;
-            //memOverlaps << "===============================================" << endl << endl << endl << endl << endl;
         }
 
         // Fill the partial overlaps map
+
         // Always create a set to any set in the fullOverlaps map. We will add to the set at least all the
         // instructions contained in the fullOverlaps[it->first] set
         set<MemoryAccess>& vect = partialOverlaps[it->first];
@@ -931,13 +791,12 @@ VOID Fini(INT32 code, VOID *v)
     // End of full overlaps
     memOverlaps.write("\x00\x00\x00\x02", 4);
 
-    std::ofstream overlaps("partialOverlaps.log");
-    // Write text file with partial overlaps
+    // Write binary report for partial overlaps
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = partialOverlaps.begin(); it != partialOverlaps.end(); ++it){
         set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
         PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
 
-        if(v.size() < 1 || !containsUninitializedPartialOverlap(it->first, v)){
+        if(!containsUninitializedPartialOverlap(it->first, v)){
             continue;
         }
 
@@ -946,51 +805,13 @@ VOID Fini(INT32 code, VOID *v)
         memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
         memOverlaps << it->first.getSecond() << ";";
 
-        overlapLog << "===============================================" << endl;
-        overlapLog << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
-        overlapLog << "===============================================" << endl;
-
-        /*
-        overlaps << "===============================================" << endl;
-        overlaps << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
-        overlaps << "===============================================" << endl;
-        
-        overlaps << "Accessing instructions: " << endl << endl;
-        */
-        /*for(set<MemoryAccess>::iterator i = fullOverlapsSet.begin(); i != fullOverlapsSet.end(); ++i){
-            memOverlaps.write((i->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
-            tmp = i->getIP();
-            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
-            tmp = i->getActualIP();
-            memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
-            memOverlaps << i->getDisasm() << ";";
-            memOverlaps.write((i->getType() == AccessType::WRITE ? "\x1a" : "\x1b"), 1);
-            memOverlaps << i->getSize() << ";";
-            memOverlaps << i->getSPOffset() << ";";
-            memOverlaps << i->getBPOffset() << ";";*/
-
-
-
-            /*overlaps 
-                << "0x" << std::hex << i->getIP() 
-                << " (0x" << i->getActualIP() << ")"
-                << ": " << i->getDisasm() << "\t"
-                << (i->getType() == AccessType::WRITE ? "W " : "R ") 
-                << std::dec << i->getSize() 
-                << std::hex << " B @ (sp " << (spOffset >= 0 ? "+ " : "- ")
-                << std::dec << llabs(i->getSPOffset()) << ");"
-                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(i->getBPOffset()) << ")"
-                << endl;
-        }*/
-        //overlaps << "===============================================" << endl;
-        
-        //overlaps << "Partiallly overlapping instructions: " << endl << endl;
-
-        //memOverlaps.write("\x00\x00\x00\x02", 4);
+        #ifdef DEBUG
+            partialOverlapsLog << "===============================================" << endl;
+            partialOverlapsLog << "0x" << std::hex << it->first.getFirst() << " - " << std::dec << it->first.getSecond() << endl;
+            partialOverlapsLog << "===============================================" << endl;
+        #endif
         
         for(set<PartialOverlapAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
-            //int spOffset = v_it->getSPOffset();
-            //int bpOffset = v_it->getBPOffset();
 
             std::pair<unsigned int, unsigned int>* uninitializedOverlap = NULL;
             int overlapBeginning = v_it->getAddress() - it->first.getFirst();
@@ -1017,29 +838,30 @@ VOID Fini(INT32 code, VOID *v)
             }
 
 
-            if(v_it->getIsPartialOverlap())
-                overlapLog << "=> ";
-            else
-                overlapLog << "   ";
+            #ifdef DEBUG
+                if(v_it->getIsPartialOverlap())
+                    partialOverlapsLog << "=> ";
+                else
+                    partialOverlapsLog << "   ";
 
-            if(v_it->getIsUninitializedRead())
-                overlapLog << "*";
+                if(v_it->getIsUninitializedRead())
+                    partialOverlapsLog << "*";
 
-            overlapLog    
-                << "0x" << std::hex << v_it->getIP() 
-                << " (0x" << v_it->getActualIP() << ")"
-                << ": " << v_it->getDisasm() << "\t" 
-                << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << " B "
-                << "@ 0x" << std::hex << v_it->getAddress() << "; (sp " << (v_it->getSPOffset() >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
-                << "(bp " << (v_it->getBPOffset() >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") ";
-            if(uninitializedOverlap != NULL)
-                overlapLog << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]";
-            else
-                overlapLog << " {NULL interval} ";
-            overlapLog << endl;
+                partialOverlapsLog    
+                    << "0x" << std::hex << v_it->getIP() 
+                    << " (0x" << v_it->getActualIP() << ")"
+                    << ": " << v_it->getDisasm() << "\t" 
+                    << (v_it->getType() == AccessType::WRITE ? "W " : "R ") << std::dec << v_it->getSize() << " B "
+                    << "@ 0x" << std::hex << v_it->getAddress() << "; (sp " << (v_it->getSPOffset() >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
+                    << "(bp " << (v_it->getBPOffset() >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") ";
+                if(uninitializedOverlap != NULL)
+                    partialOverlapsLog << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]";
+                else
+                    partialOverlapsLog << " {NULL interval} ";
+                partialOverlapsLog << endl;
+            #endif
 
-
-
+            // It's of no interest in this table. If it is an uninitialized read, it will have its own table.
             if(uninitializedOverlap == NULL)
                 continue;
             
@@ -1073,32 +895,22 @@ VOID Fini(INT32 code, VOID *v)
                 memOverlaps << uninitializedOverlap->first << ";";
                 memOverlaps << uninitializedOverlap->second << ";";
             }
-            
-            /*
-            overlaps    
-                << "0x" << std::hex << v_it->getIP() 
-                << " (0x" << v_it->getActualIP() << ")"
-                << ": " << v_it->getDisasm() << "\t" 
-                << (v_it->getType() == AccessType::WRITE ? "W " : "R ")
-                << "@ (sp " << (spOffset >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
-                << "(bp " << (bpOffset >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") "
-                << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]" << endl;
-            */
         }
 
         memOverlaps.write("\x00\x00\x00\x03", 4);
 
-        overlapLog << "===============================================" << endl;
-        overlapLog << "===============================================" << endl << endl << endl << endl << endl;
-        
+        #ifdef DEBUG
+            partialOverlapsLog << "===============================================" << endl;
+            partialOverlapsLog << "===============================================" << endl << endl << endl << endl << endl;
+        #endif
     }
-
     memOverlaps.write("\x00\x00\x00\x04", 4);
 
-    
-    // fclose(trace);
-    // routines.close();
-    
+    memOverlaps.close();
+    #ifdef DEBUG
+        partialOverlapsLog.close();
+        isReadLogger.close();
+    #endif
 }
 
 /*!
@@ -1117,82 +929,26 @@ int main(int argc, char *argv[])
     {
         return Usage();
     }
-
-    PIN_MutexInit(&lock);
     
-    string filename = KnobOutputFile.Value();
-
-    if (filename.empty()){
-        filename = "memtrace.log";
-    }
-
-    // trace = fopen(filename.c_str(), "w");
-    // routines.open("routines.log");
-    //calls.open("calls.log");
-    memOverlaps.open("overlaps.bin", std::ios_base::binary);
-    //stackAddress.open("stackAddress.log");
-    /*
-    std::ifstream functions("funcs.lst");
-
-    ADDRINT addr;
-    std::string addr_str;
-    std::string name;
-    while(functions >> addr_str >> name){
-        addr_str = addr_str.substr(2);
-        addr = strtoul(addr_str.c_str(), NULL, 16);
-        funcsAddresses.insert(addr);
-        if(!name.compare("main") || !name.compare("dbg.main")){
-            mainStartAddr = addr;
-            name.assign("main");
-        }
-        funcs[addr] = name;
-    }
-
-    functions.close();
-    functions.open("main_ret.addr");
-    functions >> addr_str;
-    addr_str = addr_str.substr(2);
-    addr = strtoul(addr_str.c_str(), NULL, 16);
-    mainRetAddr = addr;
-
-    functions.close();
-
-    for(set<ADDRINT>::iterator i = funcsAddresses.begin(); i != funcsAddresses.end(); ++i){
-        *out << "Function detected @ 0x" << std::hex << *i << endl;
-    }
-
-    *out << "Main start address: 0x" << std::hex << mainStartAddr << endl;
-    *out << "Main return address: 0x" << std::hex << mainRetAddr << endl;
-    */
-    
+    // Add required instrumentation routines
     IMG_AddInstrumentFunction(Image, 0);
     PIN_AddThreadStartFunction(OnThreadStart, 0);
-    //RTN_AddInstrumentFunction(Routine, 0);
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
 
-    // Manage syscalls
+    // Add system call handling routines
     PIN_AddSyscallEntryFunction(onSyscallEntry, NULL);
     PIN_AddSyscallExitFunction(onSyscallExit, NULL);
     
     cerr <<  "===============================================" << endl;
-    cerr <<  "This application is instrumented by MemTrace" << endl;
-    cerr << "See file " << filename << " for analysis results" << endl;
+    cerr <<  "This application is instrumented by MemTrace." << endl;
+    cerr <<  "This tools produces a binary file. Launch script binOverlapParser.py to generate\
+              the final human-readable reports.";
+    cerr <<  "See files overlaps.log and partialOverlaps.log for analysis results" << endl;
     cerr <<  "===============================================" << endl;
-
-    /*
-    fprintf(trace, "===============================================\n");
-    fprintf(trace, "MEMORY TRACE START\n");
-    fprintf(trace, "===============================================\n\n");
-    fprintf(trace, "<Program Counter>: <Instruction_Disasm> => R/W <Address>\n\n");
-    */
 
     // Start the program, never returns
     PIN_StartProgram();
-    
+
     return 0;
 }
-
-/* ===================================================================== */
-/* eof */
-/* ===================================================================== */
