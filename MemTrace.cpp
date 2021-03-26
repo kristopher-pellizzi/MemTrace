@@ -167,24 +167,11 @@ std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned i
 
 // Returns true if the set |s| contains at least a full overlap for AccessIndex |targetAI| which is also an
 // uninitialized read access.
-
-// TODO: check if possible to replace with containsReadIns
-bool containsUninitializedPartialOverlap(AccessIndex targetAI, set<PartialOverlapAccess>& s){
+bool containsUninitializedPartialOverlap(set<PartialOverlapAccess>& s){
     for(auto i = s.begin(); i != s.end(); ++i){
-        // In the first case, it is a partially overlapping access.
-        // It is of no interest here, it will have its own set, if needed.
-        // Also read accesses which are completely initialized are not interesting.
-
         // NOTE: write accesses can't have the |isUninitializedRead| flag set to true, so
         // the second part of the predicate also skips write accesses.
-        if(i->getIsPartialOverlap() || !i->getIsUninitializedRead())
-            continue;
-        std::pair<int, int> uninitializedInterval = i->getUninitializedInterval();
-        int overlapBeginning = i->getAddress() - targetAI.getFirst();
-        int overlapEnd = min(i->getAddress() + i->getSize() - 1 - targetAI.getFirst(), targetAI.getSecond() - 1);
-        int overlapSize = overlapEnd - overlapBeginning;
-        
-        if(intervalIntersection(std::pair<int, int>(0, overlapSize), uninitializedInterval) != NULL)
+        if(!i->getIsPartialOverlap() && i->getIsUninitializedRead())
             return true;
         
     }
@@ -360,6 +347,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
 
     REG regBasePtr;
+
     // If the stack pointer register is 64 bits long, than we are on an x86-64 architecture,
     // otherwise (size is 32 bits), we are on x86 architecture.
 
@@ -388,9 +376,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
     // This probably is a library function, or, in general, code outside .text section
     else{
-        // If lastExecutedInstruction is 0, the entry point has not been called yet
-        // TODO: verify if without this return other instructions are executed
-        if(lastExecutedInstruction == 0){
+        // If the entry point has not been executed yet, ignore any memory access that is performed,
+        // as it is not performed by the application, but by the runtime bootstrap
+        if(!entryPointExecuted){
             return;
         }
     }
@@ -799,7 +787,7 @@ VOID Fini(INT32 code, VOID *v)
         set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
         PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
 
-        if(!containsUninitializedPartialOverlap(it->first, v)){
+        if(!containsUninitializedPartialOverlap(v)){
             continue;
         }
 
