@@ -46,6 +46,8 @@ map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 // defined as a future extension of the tool to support multi-threaded applications.
 map<THREADID, ADDRINT> threadInfos;
 
+ADDRINT libc_base;
+
 InitializedMemory* initializedMemory = NULL;
 std::vector<AccessIndex> retAddrLocationStack;
 
@@ -74,25 +76,19 @@ ADDRINT syscallIP;
  */
 INT32 Usage()
 {
-    cerr << "This tool generates 2 overlap reports:" << endl;
-    cerr << 
-        "The first is overlaps.log, and contains a set of tables (one for each memory access)\
-         containing all the instructions accessing the address reported in the table header, with the size\
-         reported in the header as well." << endl;
-    cerr << 
-        "The reported instructions are in execution order" << endl;
-    cerr << 
-        "Note that the table is reported only if there is at least an instruction reading uninitialized memory area." 
-         << endl << endl;
-    cerr <<
-        "The second report is partialOverlaps.log." << endl;
-    cerr << 
-        "Again, the file contains a set of tables. This time, the tables contain all the read accesses performed\
-         at the address and size specified in the table header and all the write instructions of which the aforementioned\
-         read accesses read at least 1 byte." << endl;
-    cerr << 
-        "This allows the user to determine from where each byte (initialized or uninitialized) of read accesses\
-         come from by simply inspecting the tables in the report" << endl << endl;
+    cerr    << "This tool generates 2 overlap reports:" << endl;
+    cerr    << "The first is overlaps.log, and contains a set of tables (one for each memory access) "
+            << "containing all the instructions accessing the address reported in the table header, with the size "
+            << "reported in the header as well." << endl;
+    cerr    << "The reported instructions are in execution order" << endl;
+    cerr    << "Note that the table is reported only if there is at least an instruction reading uninitialized " 
+            << "memory area." << endl << endl; 
+    cerr    << "The second report is partialOverlaps.log." << endl;
+    cerr    << "Again, the file contains a set of tables. This time, the tables contain all the read accesses performed "
+            << "at the address and size specified in the table header and all the write instructions of which the "
+            << "aforementioned read accesses read at least 1 byte." << endl;
+    cerr    << "This allows the user to determine from where each byte (initialized or uninitialized) of read accesses "
+            << "come from by simply inspecting the tables in the report" << endl << endl;
 
     cerr << KNOB_BASE::StringKnobSummary() << endl;
 
@@ -574,7 +570,12 @@ VOID Image(IMG img, VOID* v){
         loadOffset = IMG_LoadOffset(img);
     }
 
-    *out << IMG_Name(img) << " loaded @ 0x" << std::hex << IMG_LoadOffset(img) << endl;
+    const std::string& name = IMG_Name(img);
+    ADDRINT offset = IMG_LoadOffset(img);
+    *out << name << " loaded @ 0x" << std::hex << offset << endl;
+
+    if(name.find("libc") != name.npos)
+        libc_base = offset;
 }
 
 VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
@@ -707,6 +708,8 @@ VOID Fini(INT32 code, VOID *v)
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
     memOverlaps << regSize << ";";
+    memOverlaps.write(reinterpret_cast<const char*>(&libc_base), regSize);
+    memOverlaps.write(reinterpret_cast<const char*>(&threadInfos[0]), regSize);
 
     /*
     The following iterator, and the boolean flag right inside the next "for" loop scope, are
@@ -940,12 +943,12 @@ int main(int argc, char *argv[])
     PIN_AddSyscallEntryFunction(onSyscallEntry, NULL);
     PIN_AddSyscallExitFunction(onSyscallExit, NULL);
     
-    cerr <<  "===============================================" << endl;
-    cerr <<  "This application is instrumented by MemTrace." << endl;
-    cerr <<  "This tools produces a binary file. Launch script binOverlapParser.py to generate\
-              the final human-readable reports.";
-    cerr <<  "See files overlaps.log and partialOverlaps.log for analysis results" << endl;
-    cerr <<  "===============================================" << endl;
+    cerr    <<  "===============================================" << endl;
+    cerr    <<  "This application is instrumented by MemTrace." << endl;
+    cerr    <<  "This tool produces a binary file. Launch script binOverlapParser.py to generate "
+            <<  "the final human-readable reports.";
+    cerr    <<  "See files overlaps.log and partialOverlaps.log for analysis results" << endl;
+    cerr    <<  "===============================================" << endl;
 
     // Start the program, never returns
     PIN_StartProgram();

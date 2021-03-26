@@ -296,7 +296,13 @@ with open("overlaps.bin", "rb") as f:
     
     reg_size = parse_integer(f)
 
+    libc_base = parse_address(f, reg_size)
+    stack_base = parse_address(f, reg_size)
+
     fo.writelines([get_fo_legend(), "\n"])
+
+    fo.writelines(["Libc base address: " + libc_base])
+    fo.writelines(["Stack base address: " + stack_base, "\n"])
 
     # While there are full overlaps...
     while not accept(f, b"\x00\x00\x00\x02"):
