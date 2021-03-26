@@ -218,11 +218,20 @@ std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessI
 
 // Returns true if the write access pointed to by |writeAccess| writes at least 1 byte that is later read
 // by any uninitialized read access overlapping the access represented by |ai|
-
-// TODO: optimize write access overwriting condition to return immediately if the whole overlapping section is overwritten
 bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
     ADDRINT writeStart = writeAccess->getAddress();
     UINT32 writeSize = writeAccess->getSize();
+
+    // Determine the portion of the write access that overlaps with the considered set
+    int overlapBeginning = ai.getFirst() - writeStart;
+    if(overlapBeginning < 0)
+        overlapBeginning = 0;
+    int overlapEnd = min(ai.getFirst() + ai.getSecond() - 1 - writeStart, writeSize - 1);
+
+    // Update writeStart, writeEnd and writeSize to consider only the portion of the write that
+    // overlaps the considered set
+    writeStart += overlapBeginning;
+    writeSize = overlapEnd - overlapBeginning + 1;
     ADDRINT writeEnd = writeStart + writeSize - 1;
 
     #ifdef DEBUG
@@ -251,15 +260,15 @@ bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess,
             continue;
         }
 
-        int overlapBeginning = folStart - writeStart;
+        overlapBeginning = folStart - writeStart;
         if(overlapBeginning < 0)
             overlapBeginning = 0;
 
-        int overlapEnd = min(folEnd - writeStart, writeSize - 1);
+        overlapEnd = min(folEnd - writeStart, writeSize - 1);
 
         // If |following| is an uninitialized read access, check if it reads at least a not overwritten byte of 
         // |writeAccess|
-        if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && folStart >= ai.getFirst()){
+        if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && !following->getIsPartialOverlap()){
             std::pair<unsigned, unsigned>* uninitializedOverlap = getOverlappingUninitializedInterval(ai, following);
             // If the uninitialized read access does not overlap |ai| access, it can overlap |writeAccess|, but it is 
             // of no interest now.
