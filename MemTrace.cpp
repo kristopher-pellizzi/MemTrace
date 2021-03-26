@@ -167,7 +167,10 @@ std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned i
 
 // Returns true if the set |s| contains at least a full overlap for AccessIndex |targetAI| which is also an
 // uninitialized read access.
-bool containsUninitializedPartialOverlap(set<PartialOverlapAccess>& s){
+// NOTE: this differs from function "containsReadIns" as here the set passed as argument may contain also
+// uninitialized read accesses which are only partial overlaps, so we need to explicitly
+// check whether they are full or partial overlaps.
+bool containsUninitializedFullOverlap(set<PartialOverlapAccess>& s){
     for(auto i = s.begin(); i != s.end(); ++i){
         // NOTE: write accesses can't have the |isUninitializedRead| flag set to true, so
         // the second part of the predicate also skips write accesses.
@@ -427,7 +430,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
 // TODO: call memtrace to insert the call instruction in the fullOverlaps map, otherwise it won't be written in the reports
 // if any uninitialized read access reads it (correctly or due to a vulnerability)
-VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size)
+VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
+                    VOID* opcode, bool isFirstVisit)
 {
     if(ip >= textStart && ip <= textEnd){
         // Compute the last executed application ip. This is useless when application code is executed, but may be useful
@@ -441,6 +445,8 @@ VOID procCallTrace(CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size)
     // Initialized a new frame and insert the saved return address in its context
     initializedMemory = new InitializedMemory(initializedMemory, addr);
     initializedMemory->insert(ai);
+
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
@@ -612,10 +618,15 @@ VOID Instruction(INS ins, VOID* v){
                         ins,
                         IPOINT_BEFORE,
                         (AFUNPTR) procCallTrace,
-                        IARG_CONTEXT,
-                        IARG_INST_PTR,
-                        IARG_MEMORYWRITE_EA,
+                        IARG_THREAD_ID, 
+                        IARG_CONTEXT, 
+                        IARG_UINT32, AccessType::WRITE, 
+                        IARG_INST_PTR, 
+                        IARG_MEMORYWRITE_EA, 
                         IARG_MEMORYWRITE_SIZE,
+                        IARG_PTR, disassembly, 
+                        IARG_PTR, opcode, 
+                        IARG_BOOL, memop == 0,
                         IARG_END
                     );
                 }
@@ -787,7 +798,7 @@ VOID Fini(INT32 code, VOID *v)
         set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
         PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
 
-        if(!containsUninitializedPartialOverlap(v)){
+        if(!containsUninitializedFullOverlap(v)){
             continue;
         }
 
