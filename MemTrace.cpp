@@ -427,9 +427,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
 // for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
-
-// TODO: call memtrace to insert the call instruction in the fullOverlaps map, otherwise it won't be written in the reports
-// if any uninitialized read access reads it (correctly or due to a vulnerability)
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                     VOID* opcode, bool isFirstVisit)
 {
