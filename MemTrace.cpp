@@ -821,6 +821,12 @@ VOID Fini(INT32 code, VOID *v)
         
         for(set<PartialOverlapAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
 
+            // We do not care about partially overlapping read accesses. 
+            // They will have their own set where they will be reported together with the write accesses
+            // they read bytes from
+            if(v_it->getType() == AccessType::READ && v_it->getIsPartialOverlap())
+                continue;
+
             std::pair<unsigned int, unsigned int>* uninitializedOverlap = NULL;
             int overlapBeginning = v_it->getAddress() - it->first.getFirst();
             if(overlapBeginning < 0)
@@ -829,20 +835,10 @@ VOID Fini(INT32 code, VOID *v)
             if(v_it->getType() == AccessType::WRITE && isReadByUninitializedRead(v_it, v, it->first))
                 uninitializedOverlap = getOverlappingWriteInterval(it->first, v_it);
                     
+            // If it is a READ access and it is uninitialized and execution reaches this branch,
+            // it surely is an uninitialized read fully overlapping with the considered set
             if(v_it->getType() == AccessType::READ && v_it->getIsUninitializedRead()){
-                if(v_it->getIsPartialOverlap()){
-                    uninitializedOverlap = getOverlappingUninitializedInterval(it->first, v_it);
-                }
-                else{
-                    // It is a full overlap, but it is an uninitialized read
-                    uninitializedOverlap = new std::pair<unsigned, unsigned>(v_it->getUninitializedInterval());
-                }
-
-                // The overlap beginning may not be the start of the uninitialized access itself.
-                if(uninitializedOverlap != NULL){
-                    uninitializedOverlap->first += overlapBeginning;
-                    uninitializedOverlap->second += overlapBeginning;
-                }
+                uninitializedOverlap = new std::pair<unsigned, unsigned>(v_it->getUninitializedInterval());
             }
 
 
@@ -951,7 +947,7 @@ int main(int argc, char *argv[])
     cerr    <<  "===============================================" << endl;
     cerr    <<  "This application is instrumented by MemTrace." << endl;
     cerr    <<  "This tool produces a binary file. Launch script binOverlapParser.py to generate "
-            <<  "the final human-readable reports.";
+            <<  "the final human-readable reports." << endl;
     cerr    <<  "See files overlaps.log and partialOverlaps.log for analysis results" << endl;
     cerr    <<  "===============================================" << endl;
 
