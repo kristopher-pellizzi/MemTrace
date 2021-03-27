@@ -587,6 +587,11 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     // Insert current stack pointer entry as initialized.
     // This should be pushed by the loader, and the entry point reads it (through pop).
     // Set it as initialized to avoid a false positive to be reported.
+    // NOTE: actually, if we are on a 32 bit architecture, the stack entry is 4 bytes long,
+    // but it is not important here, as the whole portion from the current stack pointer to the
+    // highest address of the stack address range can be considered initialized.
+    // However, entries stored at an higher address than the last pushed value are never read after the
+    // entry point is started, so they won't generate any false positive.
     AccessIndex ai(stackBase, 8);
     initializedMemory->insert(ai);
 }
