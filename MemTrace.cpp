@@ -9,10 +9,13 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <map>
 #include <vector>
 #include <set>
 #include <cstdarg>
+
+#include <ctime>
 
 #include "InitializedMemory.h"
 #include "SyscallHandler.h"
@@ -60,6 +63,8 @@ ADDRINT syscallIP;
 
 #ifdef DEBUG
     std::ofstream isReadLogger("isReadLog.log");
+    std::ofstream analysisProfiling("MemTrace.profile");
+    std::ofstream applicationTiming("appTiming.profile");
 #endif
 
 /* ===================================================================== */
@@ -349,6 +354,17 @@ void dumpMemTrace(){
     trace.close();
 }
 
+void print_profile(std::ofstream& stream, const char* msg){
+    time_t timestamp;
+    struct tm* currentTime;
+
+    timestamp = time(NULL);
+    currentTime = localtime(&timestamp);
+    stream 
+        << currentTime->tm_hour << ":" << currentTime->tm_min << ":" << currentTime->tm_sec 
+        << " - " << msg << endl;
+}
+
 /* ===================================================================== */
 // Analysis routines
 /* ===================================================================== */
@@ -594,6 +610,9 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     // entry point is started, so they won't generate any false positive.
     AccessIndex ai(stackBase, 8);
     initializedMemory->insert(ai);
+    #ifdef DEBUG
+        print_profile(applicationTiming, "Application started");
+    #endif
 }
 
 VOID Instruction(INS ins, VOID* v){
@@ -706,7 +725,7 @@ VOID Instruction(INS ins, VOID* v){
             }
         }
     }
-}
+}   
 
 /*!
  * Generate overlap reports.
@@ -716,6 +735,7 @@ VOID Fini(INT32 code, VOID *v)
 {   
     std::ofstream memOverlaps("overlaps.bin", std::ios_base::binary);
     #ifdef DEBUG
+        print_profile(applicationTiming, "Application exited");
         std::ofstream partialOverlapsLog("partialOverlaps.dbg");
     #endif
 
@@ -727,6 +747,10 @@ VOID Fini(INT32 code, VOID *v)
     memOverlaps.write(reinterpret_cast<const char*>(&libc_base), regSize);
     memOverlaps.write(reinterpret_cast<const char*>(&threadInfos[0]), regSize);
 
+    #ifdef DEBUG
+        print_profile(analysisProfiling, "Starting writing full overlaps report");
+    #endif
+
     /*
     The following iterator, and the boolean flag right inside the next "for" loop scope, are
     used in order to optimize the search of partially overlapping accesses happening at an address lower than the
@@ -735,6 +759,10 @@ VOID Fini(INT32 code, VOID *v)
     */
     std::map<AccessIndex, set<MemoryAccess>>::iterator firstPartiallyOverlappingIterator = fullOverlaps.begin();
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = fullOverlaps.begin(); it != fullOverlaps.end(); ++it){
+        #ifdef DEBUG
+            print_profile(analysisProfiling, "\tConsidering new set");
+        #endif
+
         bool firstPartiallyOverlappingIteratorUpdated = false;
         // Copy all elements in another set ordered by execution order
         set<MemoryAccess, MemoryAccess::ExecutionComparator> v(it->second.begin(), it->second.end());
@@ -773,6 +801,10 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps.write("\x00\x00\x00\x01", 4);
         }
 
+        #ifdef DEBUG
+            print_profile(analysisProfiling, "\tFilling set's partial overlaps");
+        #endif
+
         // Fill the partial overlaps map
 
         // Always create a set to any set in the fullOverlaps map. We will add to the set at least all the
@@ -810,8 +842,16 @@ VOID Fini(INT32 code, VOID *v)
     // End of full overlaps
     memOverlaps.write("\x00\x00\x00\x02", 4);
 
+    #ifdef DEBUG
+        print_profile(analysisProfiling, "Starting writing partial overlaps report");
+    #endif
+
     // Write binary report for partial overlaps
     for(std::map<AccessIndex, set<MemoryAccess>>::iterator it = partialOverlaps.begin(); it != partialOverlaps.end(); ++it){
+        #ifdef DEBUG
+            print_profile(analysisProfiling, "\tNew set considered");
+        #endif
+        
         set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
         PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
 
@@ -919,6 +959,12 @@ VOID Fini(INT32 code, VOID *v)
             partialOverlapsLog << "===============================================" << endl << endl << endl << endl << endl;
         #endif
     }
+
+    #ifdef DEBUG
+        print_profile(analysisProfiling, "Finished");
+        analysisProfiling.close();
+    #endif
+
     memOverlaps.write("\x00\x00\x00\x04", 4);
 
     memOverlaps.close();
