@@ -85,6 +85,9 @@ TOOL_CXXFLAGS += -std=c++11 -MMD
 $(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
+$(OBJDIR)NullTool$(OBJ_SUFFIX): NullTool.cpp
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
 # Build the intermediate object file.
 $(OBJDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h
 	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
@@ -102,6 +105,9 @@ $(OBJDIR)MemTrace$(PINTOOL_SUFFIX): $(OBJDIR)MemTrace$(OBJ_SUFFIX) \
 $(OBJDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
 $(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
 $(OBJDIR)InitializedMemory$(OBJ_SUFFIX) InitializedMemory.h
+	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
+
+$(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)	
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 launcher: toolLauncher.cpp
