@@ -583,6 +583,12 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
     // Initialize first function frame
     initializedMemory = new InitializedMemory(NULL, stackBase);
+
+    // Insert current stack pointer entry as initialized.
+    // This should be pushed by the loader, and the entry point reads it (through pop).
+    // Set it as initialized to avoid a false positive to be reported.
+    AccessIndex ai(stackBase, 8);
+    initializedMemory->insert(ai);
 }
 
 VOID Instruction(INS ins, VOID* v){
