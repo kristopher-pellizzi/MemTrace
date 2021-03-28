@@ -802,45 +802,44 @@ VOID Fini(INT32 code, VOID *v)
 
             // End of full overlap entries
             memOverlaps.write("\x00\x00\x00\x01", 4);
-        }
 
-        #ifdef DEBUG
-            print_profile(analysisProfiling, "\tFilling set's partial overlaps");
-        #endif
+            #ifdef DEBUG
+                print_profile(analysisProfiling, "\tFilling set's partial overlaps");
+            #endif
 
-        // Fill the partial overlaps map
+            // Fill the partial overlaps map
 
-        // Always create a set to any set in the fullOverlaps map. We will add to the set at least all the
-        // instructions contained in the fullOverlaps[it->first] set
-        set<MemoryAccess>& vect = partialOverlaps[it->first];
+            // Always create a set to any set in the fullOverlaps map. We will add to the set at least all the
+            // instructions contained in the fullOverlaps[it->first] set
+            set<MemoryAccess>& vect = partialOverlaps[it->first];
 
-        // Insert backward AccessIndex partially overlapping
-        std::map<AccessIndex, set<MemoryAccess>>::iterator partialOverlapIterator = firstPartiallyOverlappingIterator;
-        ADDRINT accessedAddress = it->first.getFirst();
-        ADDRINT lastAccessedByte = partialOverlapIterator->first.getFirst() + partialOverlapIterator->first.getSecond() - 1;
-        while(partialOverlapIterator->first != it->first){
-            if(lastAccessedByte >= accessedAddress){
-                vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
-                if(!firstPartiallyOverlappingIteratorUpdated){
-                    firstPartiallyOverlappingIteratorUpdated = true;
-                    firstPartiallyOverlappingIterator = partialOverlapIterator;
+            // Insert backward AccessIndex partially overlapping
+            std::map<AccessIndex, set<MemoryAccess>>::iterator partialOverlapIterator = firstPartiallyOverlappingIterator;
+            ADDRINT accessedAddress = it->first.getFirst();
+            ADDRINT lastAccessedByte = partialOverlapIterator->first.getFirst() + partialOverlapIterator->first.getSecond() - 1;
+            while(partialOverlapIterator->first != it->first){
+                if(lastAccessedByte >= accessedAddress){
+                    vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
+                    if(!firstPartiallyOverlappingIteratorUpdated){
+                        firstPartiallyOverlappingIteratorUpdated = true;
+                        firstPartiallyOverlappingIterator = partialOverlapIterator;
+                    }
                 }
+                ++partialOverlapIterator;
+                lastAccessedByte = partialOverlapIterator->first.getFirst() + partialOverlapIterator->first.getSecond() - 1;
             }
-            ++partialOverlapIterator;
-            lastAccessedByte = partialOverlapIterator->first.getFirst() + partialOverlapIterator->first.getSecond() - 1;
-        }
 
-        // Insert forward AccessIndex partially overlapping
-        ++partialOverlapIterator;
-        accessedAddress = partialOverlapIterator->first.getFirst();
-        lastAccessedByte = it->first.getFirst() + it->first.getSecond() - 1;
-        while(partialOverlapIterator != fullOverlaps.end() && accessedAddress <= lastAccessedByte){
-            vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
-
+            // Insert forward AccessIndex partially overlapping
             ++partialOverlapIterator;
             accessedAddress = partialOverlapIterator->first.getFirst();
-        }
+            lastAccessedByte = it->first.getFirst() + it->first.getSecond() - 1;
+            while(partialOverlapIterator != fullOverlaps.end() && accessedAddress <= lastAccessedByte){
+                vect.insert(partialOverlapIterator->second.begin(), partialOverlapIterator->second.end());
 
+                ++partialOverlapIterator;
+                accessedAddress = partialOverlapIterator->first.getFirst();
+            }
+        }
     }
     // End of full overlaps
     memOverlaps.write("\x00\x00\x00\x02", 4);
@@ -1015,7 +1014,7 @@ int main(int argc, char *argv[])
     // of rehashing during analysis, as it is an expensive operation
     // NOTE: it is not impossible that rehash is however triggered during the analysis,
     // but doing it now should prevent to do that very early
-    containsUninitializedRead.rehash(100);
+    containsUninitializedRead.rehash(1 << 20);
 
     // Start the program, never returns
     PIN_StartProgram();
