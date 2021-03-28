@@ -22,4 +22,14 @@ class AccessIndex{
         bool operator==(const AccessIndex &other) const;
 
         bool operator!=(const AccessIndex &other) const;
+
+        struct AIHasher{
+            size_t operator()(const AccessIndex& ai) const{
+                int size = sizeof(size_t);
+                size_t firstHash = std::hash<ADDRINT>()(ai.getFirst());
+
+                return 
+                    firstHash ^ ((firstHash << ai.getSecond()) | (unsigned)firstHash >> (size - ai.getSecond()));
+            }
+        };
 };

@@ -14,6 +14,7 @@
 #include <vector>
 #include <set>
 #include <cstdarg>
+#include <unordered_set>
 
 #include <ctime>
 
@@ -24,6 +25,7 @@ using std::cerr;
 using std::string;
 using std::endl;
 using std::map;
+using std::tr1::unordered_set;
 using std::vector;
 using std::set;
 
@@ -42,6 +44,10 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 map<AccessIndex, set<MemoryAccess>> fullOverlaps;
+// The following set is needed in order to optimize queries about sets containing
+// uninitialized read accesses. If a set contains at least 1 uninitialized read,
+// the correspondin AccessIndex object is inserted in the set (implemented as an hash table).
+unordered_set<AccessIndex, AccessIndex::AIHasher> containsUninitializedRead;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 
 // NOTE: this map is useful only in case of a multi-process/multi-threaded application.
@@ -186,12 +192,8 @@ bool containsUninitializedFullOverlap(set<PartialOverlapAccess>& s){
     return false;
 }
 
-bool containsReadIns(set<MemoryAccess, MemoryAccess::ExecutionComparator>& s){
-    for(set<MemoryAccess>::iterator i = s.begin(); i != s.end(); ++i){
-        if(i->getIsUninitializedRead())
-            return true;
-    }
-    return false;
+bool containsReadIns(const AccessIndex& ai){
+    return containsUninitializedRead.find(ai) != containsUninitializedRead.end();
 }
 
 // Similar to getUninitializedInterval, but the returned pair contains the bounds of the interval of bytes written
@@ -436,6 +438,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         if(uninitializedInterval.first != -1){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
+            containsUninitializedRead.insert(ai);
         }
     }
  
@@ -772,7 +775,7 @@ VOID Fini(INT32 code, VOID *v)
         // NOTE: the report is written in a binary format, as it should be faster than writing a well formatted
         // textual report. Textual human-readable reports are generated from the binary reports
         // through an external parser.
-        if(containsReadIns(v)){
+        if(containsReadIns(it->first)){
             // |tmp| is used as a temporary ADDRINT copy of ADDRINT values we need to copy in the binary report.
             // This is needed because we need to pass a pointer to the write method.
             ADDRINT tmp = it->first.getFirst();
@@ -855,7 +858,7 @@ VOID Fini(INT32 code, VOID *v)
         set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
         PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
 
-        if(!containsUninitializedFullOverlap(v)){
+        if(!containsReadIns(it->first)){
             continue;
         }
 
@@ -1007,6 +1010,12 @@ int main(int argc, char *argv[])
             <<  "the final human-readable reports." << endl;
     cerr    <<  "See files overlaps.log and partialOverlaps.log for analysis results" << endl;
     cerr    <<  "===============================================" << endl;
+
+    // Trigger unordered_map rehash in order to reduce probability
+    // of rehashing during analysis, as it is an expensive operation
+    // NOTE: it is not impossible that rehash is however triggered during the analysis,
+    // but doing it now should prevent to do that very early
+    containsUninitializedRead.rehash(100);
 
     // Start the program, never returns
     PIN_StartProgram();
