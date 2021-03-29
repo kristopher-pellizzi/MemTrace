@@ -458,9 +458,10 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     #ifdef DEBUG
         print_profile(applicationTiming, "Inserting access to map");
     #endif
-    if(fullOverlaps.find(ai) != fullOverlaps.end()){
-        set<MemoryAccess> &lst = fullOverlaps[ai];
-        lst.insert(ma);
+
+    const auto& overlapSet = fullOverlaps.find(ai);
+    if(overlapSet != fullOverlaps.end()){
+        overlapSet->second.insert(ma);
     }
     else{
         set<MemoryAccess> v;
