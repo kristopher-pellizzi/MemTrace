@@ -390,7 +390,7 @@ $EXE_PATH/sort ./test2.iso -o ./test2.sorted
 orig_duration=$(expr $end_orig - $start_orig)
 instrumented_duration=$(expr $end_instrumented - $start_instrumented)
 null_duration=$(expr $end_null - $start_null)
-utility="expand"
+utility="sort"
 
 echo
 echo "Original program execution time: $orig_duration ms"
@@ -3202,7 +3202,6 @@ echo
 echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
 
 
-rm ./test.iso
 rm ./test2.iso
 rm ./test.sorted
 rm ./test2.sorted
