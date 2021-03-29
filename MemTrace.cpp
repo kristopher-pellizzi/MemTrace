@@ -374,6 +374,10 @@ void print_profile(std::ofstream& stream, const char* msg){
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 VOID* opcode, bool isFirstVisit)
 {
+    #ifdef DEBUG
+        print_profile(applicationTiming, "Tracing new memory access");
+    #endif
+
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
 
     REG regBasePtr;
@@ -431,17 +435,29 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     AccessIndex ai(addr, size);
 
     if(isWrite){
+        #ifdef DEBUG
+            print_profile(applicationTiming, "\tTracing write access");
+        #endif
         initializedMemory->insert(ai);
     }
     else{
+        #ifdef DEBUG
+            print_profile(applicationTiming, "\tTracing read access");
+        #endif
         std::pair<int, int> uninitializedInterval = getUninitializedInterval(ai);
+        #ifdef DEBUG
+            print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
+        #endif
         if(uninitializedInterval.first != -1){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
             containsUninitializedRead.insert(ai);
         }
     }
- 
+    
+    #ifdef DEBUG
+        print_profile(applicationTiming, "Inserting access to map");
+    #endif
     if(fullOverlaps.find(ai) != fullOverlaps.end()){
         set<MemoryAccess> &lst = fullOverlaps[ai];
         lst.insert(ma);
