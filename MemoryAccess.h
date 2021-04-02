@@ -1,6 +1,9 @@
 #include "pin.H"
 #include <set>
 
+#ifndef MEMORYACCESS
+#define MEMORYACCESS
+
 using std::set;
 
 enum class AccessType{
@@ -133,3 +136,5 @@ class PartialOverlapAccess{
 
         std::pair<int, int> getUninitializedInterval() const;
 };
+
+#endif // MEMORYACCESS
