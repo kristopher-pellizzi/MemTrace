@@ -15,14 +15,13 @@
 #include <set>
 #include <cstdarg>
 #include <unordered_set>
-#include <sys/mman.h>
-#include <unistd.h>
 #include <cstring>
-#include <errno.h>
 
 #include <ctime>
 
-#include "InitializedMemory.h"
+#include "ShadowMemory.h"
+#include "AccessIndex.h"
+#include "MemoryAccess.h"
 #include "SyscallHandler.h"
 
 using std::cerr;
@@ -54,17 +53,19 @@ map<AccessIndex, set<MemoryAccess>> fullOverlaps;
 unordered_set<AccessIndex, AccessIndex::AIHasher> containsUninitializedRead;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 
+ADDRINT libc_base;
+
+//InitializedMemory* initializedMemory = NULL;
+std::vector<AccessIndex> retAddrLocationStack;
+
+unsigned long SHADOW_ALLOCATION;
+std::vector<uint8_t*> shadow;
+uint8_t* highestShadowAddr;
+
 // NOTE: this map is useful only in case of a multi-process/multi-threaded application.
 // However, the pintool currently supports only single threaded applications; this map has been
 // defined as a future extension of the tool to support multi-threaded applications.
 map<THREADID, ADDRINT> threadInfos;
-
-ADDRINT libc_base;
-
-InitializedMemory* initializedMemory = NULL;
-std::vector<AccessIndex> retAddrLocationStack;
-std::vector<uint8_t*> shadow;
-unsigned long SHADOW_ALLOCATION;
 
 bool entryPointExecuted = false;
 
@@ -72,8 +73,6 @@ bool entryPointExecuted = false;
 // entry point, but it is required at syscall exit point to be added to the
 // application's memory accesses.
 ADDRINT syscallIP;
-
-uint8_t* highestShadowAddr;
 
 #ifdef DEBUG
     std::ofstream isReadLogger("isReadLog.log");
@@ -177,9 +176,7 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
 //  [*] This function is quite expensive, as it essentially scans the recorded memory accesses looking for 
 //      write accesses who wrote a certain byte. In order to try and reduce its cost, the function returns as soon
 //      as it detects an uninitialized byte.
-std::pair<int, int> getUninitializedInterval(AccessIndex& ai){
-    return initializedMemory->getUninitializedInterval(ai);
-}
+
 
 // Utility function to compute the intersection of 2 intervals.
 std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned int, unsigned int> int1, std::pair<unsigned int, unsigned int> int2){
@@ -386,24 +383,6 @@ void print_profile(std::ofstream& stream, const char* msg){
         << " - " << msg << endl;
 }
 
-uint8_t* getShadowAddr(ADDRINT addr){
-    unsigned offset = (unsigned) (threadInfos[0] - addr);
-    bool needsCeiling = offset % 8 != 0;
-    offset >>= 3;
-    unsigned shadowIdx = offset / SHADOW_ALLOCATION;
-    // If the requested address does not have a shadow location yet, allocate it
-    while(shadowIdx >= shadow.size()){
-        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) - 1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        shadow.push_back(newMap);
-    }
-    uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
-    return needsCeiling ? ret + 1 : ret;
-}
-
 /* ===================================================================== */
 // Analysis routines
 /* ===================================================================== */
@@ -424,13 +403,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         return;
     }
 
-    uint8_t* shadowAddr = getShadowAddr(addr);
-
     // This is an application instruction
     if(ip >= textStart && ip <= textEnd){
         if(!entryPointExecuted){
             entryPointExecuted = true;
-            highestShadowAddr = shadowAddr;
+            highestShadowAddr = getShadowAddr(addr);
         }
 
         // Compute the last executed application ip. This is useless when application code is executed, but may be useful
@@ -475,70 +452,17 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             print_profile(applicationTiming, "\tTracing write access");
         #endif
         //initializedMemory->insert(ai);
-        if(shadowAddr > highestShadowAddr)
-            highestShadowAddr = shadowAddr;
-        // The address associated to shadowAddr is an 8-bytes aligned address.
-        // However, addr may not be 8-bytes aligned. Consider the 8-bytes aligned address
-        // represented by shadowAddr, and adjust operations with the offset of the first considered byte
-        // from the beginning of that address.
-        unsigned offset = addr % 8;
-        UINT32 leftSize;
-        for(leftSize = size + offset; leftSize >= 8; leftSize -= 8, --shadowAddr){
-            *shadowAddr |= 0xff << offset;
-            offset = 0;
-        }
-        if(leftSize > 0){
-            uint8_t val = (1 << (leftSize - offset)) - 1;
-            val <<= offset;
-            *shadowAddr |= val;
-        }
+        set_as_initialized(addr, size);
     }
     else{
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing read access");
         #endif
-        //std::pair<int, int> uninitializedInterval = getUninitializedInterval(ai);
-
-        bool isUninitialized = false;
-        uint8_t* initialShadowAddr = shadowAddr;
-        unsigned offset = addr % 8;
-        unsigned initialOffset = offset;
-        UINT32 leftSize;
-        uint8_t val;
-        for(leftSize = size + offset; leftSize >= 8 && !isUninitialized; leftSize -= 8, --shadowAddr){
-            val = *shadowAddr;
-            val |= ((1 << offset) - 1);
-            if(val != 0xff){
-                isUninitialized = true;
-            }
-            offset = 0;
-        }
-        if(!isUninitialized && leftSize > 0){
-            val = *shadowAddr;
-            // Change val to put 1 to every bit not considered by this access
-            val |= ((1 << offset) - 1);
-            val |= (0xff << leftSize);
-            if(val != 0xff){
-                isUninitialized = true;
-            }
-        }
-        else{
-            // For loop exited after having increased it. In order to compute the uninitialized interval,
-            // we need to restore the last address that we checked
-            ++shadowAddr;
-        }
-
-        if(isUninitialized){
-            val >>= initialOffset;
-            offset = 0;
-            while(val % 2 != 0){
-                ++offset;
-                val >>= 1;
-            }
-            std::pair<int, int> uninitializedInterval((initialShadowAddr - shadowAddr) * 8 + offset, size - 1);
-            #ifdef DEBUG
-                print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
-            #endif
+        std::pair<int, int> uninitializedInterval = getUninitializedInterval(addr, size);
+        #ifdef DEBUG
+            print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
+        #endif
+        if(uninitializedInterval.first != -1){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
             containsUninitializedRead.insert(ai);
@@ -614,13 +538,7 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     //initializedMemory = initializedMemory->deleteFrame();
 
-    uint8_t* shadowAddr = getShadowAddr(addr);
-    for(unsigned long i = 0; i < shadow.size(); ++i){
-        if(shadow[i] <= highestShadowAddr && shadow[i] > shadowAddr){
-            memset(shadow[i], 0, SHADOW_ALLOCATION);
-        }
-    }
-    memset(shadowAddr, 0, (unsigned long) highestShadowAddr - (unsigned long) shadowAddr + 1);
+    reset(addr);
     
     //retAddrLocationStack.pop_back();
 }
@@ -723,7 +641,7 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     ADDRINT stackBase = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
     // Initialize first function frame
-    initializedMemory = new InitializedMemory(NULL, stackBase);
+    //initializedMemory = new InitializedMemory(NULL, stackBase);
 
     // Insert current stack pointer entry as initialized.
     // This should be pushed by the loader, and the entry point reads it (through pop).
@@ -734,7 +652,7 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     // However, entries stored at an higher address than the last pushed value are never read after the
     // entry point is started, so they won't generate any false positive.
     AccessIndex ai(stackBase, 8);
-    initializedMemory->insert(ai);
+    //initializedMemory->insert(ai);
     #ifdef DEBUG
         print_profile(applicationTiming, "Application started");
     #endif
