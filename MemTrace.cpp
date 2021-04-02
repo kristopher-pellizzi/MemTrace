@@ -15,6 +15,10 @@
 #include <set>
 #include <cstdarg>
 #include <unordered_set>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <cstring>
+#include <errno.h>
 
 #include <ctime>
 
@@ -59,6 +63,8 @@ ADDRINT libc_base;
 
 InitializedMemory* initializedMemory = NULL;
 std::vector<AccessIndex> retAddrLocationStack;
+std::vector<uint8_t*> shadow;
+unsigned long SHADOW_ALLOCATION;
 
 bool entryPointExecuted = false;
 
@@ -66,6 +72,8 @@ bool entryPointExecuted = false;
 // entry point, but it is required at syscall exit point to be added to the
 // application's memory accesses.
 ADDRINT syscallIP;
+
+uint8_t* highestShadowAddr;
 
 #ifdef DEBUG
     std::ofstream isReadLogger("isReadLog.log");
@@ -125,6 +133,12 @@ bool isPushInstruction(OPCODE opcode){
         opcode == XED_ICLASS_PUSHFQ;
 }
 
+bool isCallInstruction(OPCODE opcode){
+    return
+        opcode == XED_ICLASS_CALL_FAR ||
+        opcode == XED_ICLASS_CALL_NEAR;
+}
+
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcode_ptr, AccessType type){
     // If the thread ID is not found, there's something wrong.
     if(threadInfos.find(tid) == threadInfos.end()){
@@ -134,11 +148,16 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
 
     OPCODE opcode = *opcode_ptr;
 
-    // NOTE: check on the access type in the predicate is required because a push instruction may also 
+    // NOTE: check on the access type in the predicate is required because a push/call instruction may also 
     // read from a memory area, which can be from any memory section (e.g. stack, heap, global variables...)
-    if(type == AccessType::WRITE && isPushInstruction(opcode)){
-        // If it is a push instruction, it surely writes a stack address
-        return true;
+    if(type == AccessType::WRITE){
+        if(isPushInstruction(opcode)){
+            // If it is a push instruction, it surely writes a stack address
+            return true;
+        }
+
+        if(isCallInstruction(opcode))
+            return true;
     }
 
     return addr >= currentSp && addr <= threadInfos[tid];
@@ -367,6 +386,24 @@ void print_profile(std::ofstream& stream, const char* msg){
         << " - " << msg << endl;
 }
 
+uint8_t* getShadowAddr(ADDRINT addr){
+    unsigned offset = (unsigned) (threadInfos[0] - addr);
+    bool needsCeiling = offset % 8 != 0;
+    offset >>= 3;
+    unsigned shadowIdx = offset / SHADOW_ALLOCATION;
+    // If the requested address does not have a shadow location yet, allocate it
+    while(shadowIdx >= shadow.size()){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) - 1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        shadow.push_back(newMap);
+    }
+    uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
+    return needsCeiling ? ret + 1 : ret;
+}
+
 /* ===================================================================== */
 // Analysis routines
 /* ===================================================================== */
@@ -379,6 +416,35 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     #endif
 
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+    OPCODE* opcode_ptr = static_cast<OPCODE*>(opcode);
+
+    // Only keep track of accesses on the stack, so if it is an access to any other memory
+    // section, return immediately.
+    if(!isStackAddress(tid, addr, sp, opcode_ptr, type)){
+        return;
+    }
+
+    uint8_t* shadowAddr = getShadowAddr(addr);
+
+    // This is an application instruction
+    if(ip >= textStart && ip <= textEnd){
+        if(!entryPointExecuted){
+            entryPointExecuted = true;
+            highestShadowAddr = shadowAddr;
+        }
+
+        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
+        // to track where a library function has been called or jumped to
+        lastExecutedInstruction = ip - loadOffset;
+    }
+    // This probably is a library function, or, in general, code outside .text section
+    else{
+        // If the entry point has not been executed yet, ignore any memory access that is performed,
+        // as it is not performed by the application, but by the runtime bootstrap
+        if(!entryPointExecuted){
+            return;
+        }
+    }
 
     REG regBasePtr;
 
@@ -394,37 +460,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
     ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
-    // This is an application instruction
-    if(ip >= textStart && ip <= textEnd){
-        if(!entryPointExecuted){
-            entryPointExecuted = true;
-            if(threadInfos[0] - sp > 0){
-                AccessIndex ai(sp, (threadInfos[0] - sp));
-                initializedMemory->insert(ai);
-                *out << "INSERTING 0x" << std::hex << sp << " - " << std::dec << threadInfos[0] - sp << endl << endl;
-            }
-        }
-        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
-        // to track where a library function has been called or jumped to
-        lastExecutedInstruction = ip - loadOffset;
-    }
-    // This probably is a library function, or, in general, code outside .text section
-    else{
-        // If the entry point has not been executed yet, ignore any memory access that is performed,
-        // as it is not performed by the application, but by the runtime bootstrap
-        if(!entryPointExecuted){
-            return;
-        }
-    }
-
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
-    OPCODE* opcode_ptr = static_cast<OPCODE*>(opcode);
-
-    // Only keep track of accesses on the stack, so if it is an access to any other memory
-    // section, return immediately.
-    if(!isStackAddress(tid, addr, sp, opcode_ptr, type)){
-        return;
-    }
 
     bool isWrite = type == AccessType::WRITE;
     // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
@@ -438,17 +474,71 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing write access");
         #endif
-        initializedMemory->insert(ai);
+        //initializedMemory->insert(ai);
+        if(shadowAddr > highestShadowAddr)
+            highestShadowAddr = shadowAddr;
+        // The address associated to shadowAddr is an 8-bytes aligned address.
+        // However, addr may not be 8-bytes aligned. Consider the 8-bytes aligned address
+        // represented by shadowAddr, and adjust operations with the offset of the first considered byte
+        // from the beginning of that address.
+        unsigned offset = addr % 8;
+        UINT32 leftSize;
+        for(leftSize = size + offset; leftSize >= 8; leftSize -= 8, --shadowAddr){
+            *shadowAddr |= 0xff << offset;
+            offset = 0;
+        }
+        if(leftSize > 0){
+            uint8_t val = (1 << (leftSize - offset)) - 1;
+            val <<= offset;
+            *shadowAddr |= val;
+        }
     }
     else{
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing read access");
         #endif
-        std::pair<int, int> uninitializedInterval = getUninitializedInterval(ai);
-        #ifdef DEBUG
-            print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
-        #endif
-        if(uninitializedInterval.first != -1){
+        //std::pair<int, int> uninitializedInterval = getUninitializedInterval(ai);
+
+        bool isUninitialized = false;
+        uint8_t* initialShadowAddr = shadowAddr;
+        unsigned offset = addr % 8;
+        unsigned initialOffset = offset;
+        UINT32 leftSize;
+        uint8_t val;
+        for(leftSize = size + offset; leftSize >= 8 && !isUninitialized; leftSize -= 8, --shadowAddr){
+            val = *shadowAddr;
+            val |= ((1 << offset) - 1);
+            if(val != 0xff){
+                isUninitialized = true;
+            }
+            offset = 0;
+        }
+        if(!isUninitialized && leftSize > 0){
+            val = *shadowAddr;
+            // Change val to put 1 to every bit not considered by this access
+            val |= ((1 << offset) - 1);
+            val |= (0xff << leftSize);
+            if(val != 0xff){
+                isUninitialized = true;
+            }
+        }
+        else{
+            // For loop exited after having increased it. In order to compute the uninitialized interval,
+            // we need to restore the last address that we checked
+            ++shadowAddr;
+        }
+
+        if(isUninitialized){
+            val >>= initialOffset;
+            offset = 0;
+            while(val % 2 != 0){
+                ++offset;
+                val >>= 1;
+            }
+            std::pair<int, int> uninitializedInterval((initialShadowAddr - shadowAddr) * 8 + offset, size - 1);
+            #ifdef DEBUG
+                print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
+            #endif
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
             containsUninitializedRead.insert(ai);
@@ -475,18 +565,22 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                     VOID* opcode, bool isFirstVisit)
 {
+    if(!entryPointExecuted)
+        return;
+    /*
     if(ip >= textStart && ip <= textEnd){
         // Compute the last executed application ip. This is useless when application code is executed, but may be useful
         // to track where a library function has been called or jumped to
         lastExecutedInstruction = ip - loadOffset;
-    }
+    }*/
 
     AccessIndex ai(addr, size);
-    retAddrLocationStack.push_back(ai);
+    //retAddrLocationStack.push_back(ai);
 
     // Initialized a new frame and insert the saved return address in its context
-    initializedMemory = new InitializedMemory(initializedMemory, addr);
-    initializedMemory->insert(ai);
+    //initializedMemory = new InitializedMemory(initializedMemory, addr);
+    //initializedMemory->insert(ai);
+
 
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 }
@@ -494,6 +588,8 @@ VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, AD
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 VOID* opcode, bool isFirstVisit)
 {
+    if(!entryPointExecuted)
+        return;
     // If there are no other frames to return to, we are returning from the entry point, so there's anything
     // else to do.
 
@@ -502,22 +598,31 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // that can be seen in the call stack by using a debugger. This means that __libc_start_main has been executed by
     // a sequence of jumps from the entry point (_start).
     // However, if __libc_start_main returns, there's nothing else to do.
-    if(retAddrLocationStack.empty())
-        return;
+    /*if(retAddrLocationStack.empty())
+        return;*/
 
+    /*
     if(ip >= textStart && ip <= textEnd){
         // Compute the last executed application ip. This is useless when application code is executed, but may be useful
         // to track where a library function has been called or jumped to
         lastExecutedInstruction = ip - loadOffset;
-    }
+    }*/
         
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 
-    initializedMemory = initializedMemory->deleteFrame();
+    //initializedMemory = initializedMemory->deleteFrame();
 
-    retAddrLocationStack.pop_back();
+    uint8_t* shadowAddr = getShadowAddr(addr);
+    for(unsigned long i = 0; i < shadow.size(); ++i){
+        if(shadow[i] <= highestShadowAddr && shadow[i] > shadowAddr){
+            memset(shadow[i], 0, SHADOW_ALLOCATION);
+        }
+    }
+    memset(shadowAddr, 0, (unsigned long) highestShadowAddr - (unsigned long) shadowAddr + 1);
+    
+    //retAddrLocationStack.pop_back();
 }
 
 
@@ -636,7 +741,6 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
 }
 
 VOID Instruction(INS ins, VOID* v){
-
     // Prefetch instruction is used to simply trigger memory areas in order to
     // move them to processor's cache. It does not affect program behaviour,
     // but PIN detects it as a memory read operation, thus producing
@@ -1009,6 +1113,19 @@ int main(int argc, char *argv[])
     {
         return Usage();
     }
+
+    shadow.reserve(25);
+    long pagesize = sysconf(_SC_PAGESIZE);
+    SHADOW_ALLOCATION = pagesize;
+    for(int i = 0; i < 5; ++i){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        shadow.push_back(newMap);
+    }
+    *shadow[0] = 0xff;
     
     // Add required instrumentation routines
     IMG_AddInstrumentFunction(Image, 0);
