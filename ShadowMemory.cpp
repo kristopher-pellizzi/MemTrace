@@ -28,6 +28,7 @@ static uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
             exit(1);
         }
         shadow.push_back(newMap);
+        dirtyPages.push_back(false);
     }
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
