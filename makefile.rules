@@ -144,4 +144,4 @@ launchDebug: toolLauncher.cpp
 # Syscall handling code is provided as simple header files. In order to enable re-compilation
 # on header files modifications, include the dependencies files in the makefile.
 -include ./debug/*.d
--include *.d
+-include ./obj-intel64/*.d
