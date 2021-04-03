@@ -25,11 +25,13 @@ class AccessIndex{
 
         struct AIHasher{
             size_t operator()(const AccessIndex& ai) const{
-                int size = sizeof(size_t);
-                size_t firstHash = std::hash<ADDRINT>()(ai.getFirst());
+                int size = sizeof(size_t) * 8;
+                size_t firstHash = ai.getFirst();
+                size_t shiftAmount = ai.getSecond() % (size > 4 ? (size - 4) : size);
 
+                firstHash = firstHash ^ ((firstHash & ~((size_t) -1 << (size >> 1))) << (size - (size >> 1)));
                 return 
-                    firstHash ^ ((firstHash << ai.getSecond()) | (unsigned)firstHash >> (size - ai.getSecond()));
+                    ai.getFirst() + (((firstHash << shiftAmount) ^ (firstHash + ai.getSecond() - 1) << (size - shiftAmount)) | (firstHash >> (size - shiftAmount)));
             }
         };
 };

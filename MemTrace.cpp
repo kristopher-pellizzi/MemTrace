@@ -15,6 +15,7 @@
 #include <set>
 #include <cstdarg>
 #include <unordered_set>
+#include <unordered_map>
 #include <cstring>
 
 #include <ctime>
@@ -29,6 +30,7 @@ using std::string;
 using std::endl;
 using std::map;
 using std::tr1::unordered_set;
+using std::unordered_map;
 using std::vector;
 using std::set;
 
@@ -46,7 +48,7 @@ ADDRINT loadOffset;
 ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
-map<AccessIndex, set<MemoryAccess>> fullOverlaps;
+unordered_map<AccessIndex, set<MemoryAccess>, AccessIndex::AIHasher> memAccesses;
 // The following set is needed in order to optimize queries about sets containing
 // uninitialized read accesses. If a set contains at least 1 uninitialized read,
 // the correspondin AccessIndex object is inserted in the set (implemented as an hash table).
@@ -348,7 +350,7 @@ bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess,
 
 // Utility function that dumps all the memory accesses recorded during application's execution
 // to a file named memtrace.log
-void dumpMemTrace(){
+void dumpMemTrace(map<AccessIndex, set<MemoryAccess>> fullOverlaps){
     std::ofstream trace("memtrace.log");
     set<MemoryAccess, MemoryAccess::ExecutionComparator> v;
 
@@ -471,14 +473,14 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         print_profile(applicationTiming, "Inserting access to map");
     #endif
 
-    const auto& overlapSet = fullOverlaps.find(ai);
-    if(overlapSet != fullOverlaps.end()){
+    const auto& overlapSet = memAccesses.find(ai);
+    if(overlapSet != memAccesses.end()){
         overlapSet->second.insert(ma);
     }
     else{
         set<MemoryAccess> v;
         v.insert(ma);
-        fullOverlaps[ai] = v;
+        memAccesses[ai] = v;
     }
 }
 
@@ -774,12 +776,15 @@ VOID Instruction(INS ins, VOID* v){
 VOID Fini(INT32 code, VOID *v)
 {   
     std::ofstream memOverlaps("overlaps.bin", std::ios_base::binary);
+    map<AccessIndex, set<MemoryAccess>> fullOverlaps;
+    fullOverlaps.insert(memAccesses.begin(), memAccesses.end());
+
     #ifdef DEBUG
         print_profile(applicationTiming, "Application exited");
         std::ofstream partialOverlapsLog("partialOverlaps.dbg");
     #endif
 
-    dumpMemTrace();
+    dumpMemTrace(fullOverlaps);
 
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
@@ -1053,7 +1058,8 @@ int main(int argc, char *argv[])
     // of rehashing during analysis, as it is an expensive operation
     // NOTE: it is not impossible that rehash is however triggered during the analysis,
     // but doing it now should prevent to do that very early
-    containsUninitializedRead.rehash(1 << 20);
+    containsUninitializedRead.rehash(1 << 15);
+    memAccesses.rehash(1 << 15);
 
     // Start the program, never returns
     PIN_StartProgram();
