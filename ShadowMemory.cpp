@@ -1,4 +1,12 @@
+#include <vector>
+
 #include "ShadowMemory.h"
+
+using std::vector;
+
+static vector<bool> dirtyPages;
+static unsigned long SHADOW_ALLOCATION;
+static std::vector<uint8_t*> shadow;
 
 static std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr){
     unsigned retOffset = (unsigned) (threadInfos[0] - addr);
@@ -42,6 +50,8 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
+    dirtyPages[shadowIdx] = true;
+
     if(shadowAddr > highestShadowAddr)
         highestShadowAddr = shadowAddr;
 
@@ -60,6 +70,7 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
         } 
         else if(shadowIdx != 0){
             shadowAddr = shadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
+            dirtyPages[shadowIdx] = true;
         }
         else{
             leftSize = 0;
@@ -146,8 +157,27 @@ void reset(ADDRINT addr){
     memset(shadowAddr, 0, bottom - (unsigned long) shadowAddr + 1);
 
     for(unsigned i = shadowIdx + 1; i < shadow.size(); ++i){
-        if(shadow[i] <= highestShadowAddr && shadow[i] > shadowAddr){
+        if(dirtyPages[i]){
             memset(shadow[i], 0, SHADOW_ALLOCATION);
+            dirtyPages[i] = false;
         }
     }
+}
+
+void shadowInit(){
+    shadow.reserve(25);
+    dirtyPages.reserve(25);
+    long pagesize = sysconf(_SC_PAGESIZE);
+    SHADOW_ALLOCATION = pagesize;
+    for(int i = 0; i < 5; ++i){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        shadow.push_back(newMap);
+        dirtyPages[i] = false;
+    }
+    *shadow[0] = 0xff;
+    dirtyPages[0] = true;
 }

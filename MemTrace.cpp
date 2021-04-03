@@ -58,8 +58,6 @@ ADDRINT libc_base;
 //InitializedMemory* initializedMemory = NULL;
 std::vector<AccessIndex> retAddrLocationStack;
 
-unsigned long SHADOW_ALLOCATION;
-std::vector<uint8_t*> shadow;
 uint8_t* highestShadowAddr;
 
 // NOTE: this map is useful only in case of a multi-process/multi-threaded application.
@@ -1032,18 +1030,7 @@ int main(int argc, char *argv[])
         return Usage();
     }
 
-    shadow.reserve(25);
-    long pagesize = sysconf(_SC_PAGESIZE);
-    SHADOW_ALLOCATION = pagesize;
-    for(int i = 0; i < 5; ++i){
-        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) -1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        shadow.push_back(newMap);
-    }
-    *shadow[0] = 0xff;
+    shadowInit();
     
     // Add required instrumentation routines
     IMG_AddInstrumentFunction(Image, 0);
