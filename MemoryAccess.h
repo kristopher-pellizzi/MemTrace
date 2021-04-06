@@ -70,6 +70,8 @@ class MemoryAccess{
 
         bool operator< (const MemoryAccess &other) const;
 
+        bool operator== (const MemoryAccess& other) const;
+
         friend struct ExecutionComparator;
 
 
@@ -77,6 +79,64 @@ class MemoryAccess{
         // Define a functor class which allows to order MemoryAccess objects according to their execution order
         struct ExecutionComparator{
             bool operator()(const MemoryAccess& ma1, const MemoryAccess& ma2);
+        };
+
+
+
+        class MAHasher{
+            private:
+                int size;
+
+                size_t lrot(size_t val, unsigned amount) const{
+                    return (val << amount) | (val >> (size - amount));
+                }
+
+                size_t rrot(size_t val, unsigned amount) const{
+                    return (val >> amount) | (val << (size - amount));
+                }
+
+            public:
+                MAHasher(){
+                    size = sizeof(size_t) * 8;
+                }
+
+                size_t operator()(const MemoryAccess& ma) const{
+                    size_t addresses = ma.getIP() ^ lrot(ma.getActualIP(), (size > 1));
+                    long long spOffset = ma.getSPOffset();
+                    long long bpOffset = ma.getBPOffset();
+                    unsigned long accessSize = ma.getSize();
+                    size_t shiftAmount = (spOffset + bpOffset + accessSize) % (size - 4);
+
+                    addresses = lrot(addresses, shiftAmount);
+                    addresses ^= lrot(ma.getAddress(), (size >> 1));
+                    size_t mask = -1 >> (size - 4);
+                    size_t hash = 0;
+
+                    for(int i = 0; i < size; i += 12){
+                        size_t partial = (accessSize & mask) | ((spOffset & mask) << 4) | ((bpOffset & mask) << 8);
+                        partial <<= i;
+                        hash ^= partial;
+                    }
+
+                    hash ^= addresses;
+
+                    hash = ma.getType() == AccessType::READ ? lrot(hash, 8) : rrot(hash, 8);
+
+                    if(ma.getIsUninitializedRead()){
+                        hash = lrot(hash, (size >> 1));
+                        std::pair<int, int> interval = ma.getUninitializedInterval();
+                        mask = -1 >> (size - 10);
+                        size_t intervalHash = 0;
+                        for(int i=0; i < size; i += 20){
+                            size_t partial = (interval.first & mask) | ((interval.second & mask) << 10);
+                            partial <<= i;
+                            intervalHash |= partial;
+                        }
+                        hash ^= intervalHash;
+                    }
+
+                    return rrot(hash, 16);
+                }
         };
 };
 

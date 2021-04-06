@@ -69,6 +69,20 @@ bool MemoryAccess::operator<(const MemoryAccess &other) const{
     return false;
 }
 
+bool MemoryAccess::operator==(const MemoryAccess& other) const{
+    return  
+        this->instructionPointer == other.instructionPointer &&
+        this->actualInstructionPointer ==  other.actualInstructionPointer &&
+        this->accessAddress == other.accessAddress &&
+        this->spOffset == other.spOffset &&
+        this->bpOffset == other.bpOffset &&
+        this->accessSize == other.accessSize &&
+        this->type == other.type &&
+        this->isUninitializedRead == other.isUninitializedRead &&
+        this->uninitializedInterval.first == other.uninitializedInterval.first &&
+        this->uninitializedInterval.second == other.uninitializedInterval.second;
+}
+
 bool MemoryAccess::ExecutionComparator::operator()(const MemoryAccess& ma1, const MemoryAccess& ma2){
     return ma1.executionOrder < ma2.executionOrder;
 }
