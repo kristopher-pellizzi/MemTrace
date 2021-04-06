@@ -102,20 +102,17 @@ class MemoryAccess{
 
                 size_t operator()(const MemoryAccess& ma) const{
                     size_t addresses = ma.getIP() ^ lrot(ma.getActualIP(), (size > 1));
-                    long long spOffset = ma.getSPOffset();
-                    long long bpOffset = ma.getBPOffset();
                     unsigned long accessSize = ma.getSize();
-                    size_t shiftAmount = (spOffset + bpOffset + accessSize) % (size - 4);
+                    size_t shiftAmount = accessSize % (size - 4);
 
                     addresses = lrot(addresses, shiftAmount);
                     addresses ^= lrot(ma.getAddress(), (size >> 1));
                     size_t mask = -1 >> (size - 4);
-                    size_t hash = 0;
+                    size_t partial = accessSize & mask;
+                    size_t hash = partial;
 
-                    for(int i = 0; i < size; i += 12){
-                        size_t partial = (accessSize & mask) | ((spOffset & mask) << 4) | ((bpOffset & mask) << 8);
-                        partial <<= i;
-                        hash ^= partial;
+                    for(int i = 4; i < size; i += 4){
+                        hash = (hash << 4) | partial;
                     }
 
                     hash ^= addresses;
