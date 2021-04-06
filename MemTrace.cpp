@@ -48,7 +48,7 @@ ADDRINT loadOffset;
 ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
-unordered_map<AccessIndex, set<MemoryAccess>, AccessIndex::AIHasher> memAccesses;
+unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
 // The following set is needed in order to optimize queries about sets containing
 // uninitialized read accesses. If a set contains at least 1 uninitialized read,
 // the correspondin AccessIndex object is inserted in the set (implemented as an hash table).
@@ -478,7 +478,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         overlapSet->second.insert(ma);
     }
     else{
-        set<MemoryAccess> v;
+        unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
         v.insert(ma);
         memAccesses[ai] = v;
     }
@@ -767,7 +767,19 @@ VOID Instruction(INS ins, VOID* v){
             }
         }
     }
-}   
+}
+
+map<AccessIndex, set<MemoryAccess>> getOrderedCopy(unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> unorderedMap){
+    map<AccessIndex, set<MemoryAccess>> ret;
+
+    for(auto iter = unorderedMap.begin(); iter != unorderedMap.end(); ++iter){
+        set<MemoryAccess> orderedSet;
+        orderedSet.insert(iter->second.begin(), iter->second.end());
+        ret[iter->first] = orderedSet;
+    }
+
+    return ret;
+}
 
 /*!
  * Generate overlap reports.
@@ -776,8 +788,8 @@ VOID Instruction(INS ins, VOID* v){
 VOID Fini(INT32 code, VOID *v)
 {   
     std::ofstream memOverlaps("overlaps.bin", std::ios_base::binary);
-    map<AccessIndex, set<MemoryAccess>> fullOverlaps;
-    fullOverlaps.insert(memAccesses.begin(), memAccesses.end());
+    map<AccessIndex, set<MemoryAccess>> fullOverlaps = getOrderedCopy(memAccesses);
+    //fullOverlaps.insert(memAccesses.begin(), memAccesses.end());
 
     #ifdef DEBUG
         print_profile(applicationTiming, "Application exited");
@@ -1053,13 +1065,6 @@ int main(int argc, char *argv[])
             <<  "the final human-readable reports." << endl;
     cerr    <<  "See files overlaps.log and partialOverlaps.log for analysis results" << endl;
     cerr    <<  "===============================================" << endl;
-
-    // Trigger unordered_map rehash in order to reduce probability
-    // of rehashing during analysis, as it is an expensive operation
-    // NOTE: it is not impossible that rehash is however triggered during the analysis,
-    // but doing it now should prevent to do that very early
-    containsUninitializedRead.rehash(1 << 15);
-    memAccesses.rehash(1 << 15);
 
     // Start the program, never returns
     PIN_StartProgram();
