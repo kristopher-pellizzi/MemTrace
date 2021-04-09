@@ -17,6 +17,7 @@
 #include <sys/sysinfo.h>
 #include <ustat.h>
 #include <sys/statfs.h>
+#include <signal.h>
 
 #include "SyscallMemAccess.h"
 
@@ -989,6 +990,48 @@ RETTYPE sys_time_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_rt_sigaction_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+    
+    struct sigaction* act = (struct sigaction*) args[1];
+    struct sigaction* oldact = (struct sigaction*) args[2];
+
+    if(act != NULL){
+        SyscallMemAccess actMA(args[1], sizeof(struct sigaction), AccessType::READ);
+        ret.insert(actMA);
+    }
+
+    if(oldact != NULL){
+        SyscallMemAccess oldactMA(args[2], sizeof(struct sigaction), AccessType::WRITE);
+        ret.insert(oldactMA);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_rt_sigprocmask_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal < 0)
+        return ret;
+
+    sigset_t* set = (sigset_t*) args[1];
+    sigset_t* oldset = (sigset_t*) args[2];
+
+    if(set != NULL){
+        SyscallMemAccess setMA(args[1], sizeof(sigset_t), AccessType::READ);
+        ret.insert(setMA);
+    }
+
+    if(oldset != NULL){
+        SyscallMemAccess oldsetMA(args[2], sizeof(sigset_t), AccessType::WRITE);
+        ret.insert(oldsetMA);
+    }
+
+    return ret;
+}
+
 
 
 //////////////////////////////////////////////////////////////////
@@ -1022,6 +1065,8 @@ class HandlerSelector{
             SYSCALL_ENTRY(4, 2, sys_stat_handler);
             SYSCALL_ENTRY(5, 2, sys_fstat_handler);
             SYSCALL_ENTRY(6, 2, sys_lstat_handler);
+            SYSCALL_ENTRY(13, 4, sys_rt_sigaction_handler);
+            SYSCALL_ENTRY(14, 4, sys_rt_sigprocmask_handler);
             SYSCALL_ENTRY(17, 4, sys_pread_handler);
             SYSCALL_ENTRY(18, 4, sys_pwrite_handler);
             SYSCALL_ENTRY(19, 3, sys_readv_handler);
