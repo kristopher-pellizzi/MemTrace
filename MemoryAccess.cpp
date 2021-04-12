@@ -1,4 +1,5 @@
 #include "MemoryAccess.h"
+#include <iostream>
 
 ADDRINT MemoryAccess::getIP() const{
     return instructionPointer;
@@ -66,11 +67,13 @@ bool MemoryAccess::operator<(const MemoryAccess &other) const{
         if(uninitializedInterval.second != other.uninitializedInterval.second)
             return uninitializedInterval.second < other.uninitializedInterval.second;
     }
+    if(executionOrder != other.executionOrder)
+        return executionOrder < other.executionOrder;
     return false;
 }
 
 bool MemoryAccess::operator==(const MemoryAccess& other) const{
-    return  
+    return
         this->instructionPointer == other.instructionPointer &&
         this->actualInstructionPointer ==  other.actualInstructionPointer &&
         this->accessAddress == other.accessAddress &&
@@ -79,6 +82,10 @@ bool MemoryAccess::operator==(const MemoryAccess& other) const{
         this->isUninitializedRead == other.isUninitializedRead &&
         this->uninitializedInterval.first == other.uninitializedInterval.first &&
         this->uninitializedInterval.second == other.uninitializedInterval.second;
+}
+
+bool MemoryAccess::operator!=(const MemoryAccess& other) const{
+    return !operator==(other);
 }
 
 

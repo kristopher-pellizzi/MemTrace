@@ -49,6 +49,8 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
+unordered_map<AccessIndex, MemoryAccess, AccessIndex::AIHasher> lastWriteInstruction;
+
 // The following set is needed in order to optimize queries about sets containing
 // uninitialized read accesses. If a set contains at least 1 uninitialized read,
 // the correspondin AccessIndex object is inserted in the set (implemented as an hash table).
@@ -68,6 +70,8 @@ uint8_t* highestShadowAddr;
 map<THREADID, ADDRINT> threadInfos;
 
 bool entryPointExecuted = false;
+
+unordered_set<MemoryAccess, MemoryAccess::MAHasher> hashTable;
 
 // Global variable required as the syscall IP is only retrievable at syscall
 // entry point, but it is required at syscall exit point to be added to the
@@ -239,113 +243,115 @@ std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessI
     return intervalIntersection(std::pair<unsigned int, unsigned int>(0, overlapSize), v_it->getUninitializedInterval());
 }
 
-// Returns true if the write access pointed to by |writeAccess| writes at least 1 byte that is later read
-// by any uninitialized read access overlapping the access represented by |ai|
-bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
-    ADDRINT writeStart = writeAccess->getAddress();
-    UINT32 writeSize = writeAccess->getSize();
+namespace tracer{
+    // Returns true if the write access pointed to by |writeAccess| writes at least 1 byte that is later read
+    // by any uninitialized read access overlapping the access represented by |ai|
+    bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
+        ADDRINT writeStart = writeAccess->getAddress();
+        UINT32 writeSize = writeAccess->getSize();
 
-    // Determine the portion of the write access that overlaps with the considered set
-    int overlapBeginning = ai.getFirst() - writeStart;
-    if(overlapBeginning < 0)
-        overlapBeginning = 0;
-    int overlapEnd = min(ai.getFirst() + ai.getSecond() - 1 - writeStart, writeSize - 1);
-
-    // Update writeStart, writeEnd and writeSize to consider only the portion of the write that
-    // overlaps the considered set
-    writeStart += overlapBeginning;
-    writeSize = overlapEnd - overlapBeginning + 1;
-    ADDRINT writeEnd = writeStart + writeSize - 1;
-
-    #ifdef DEBUG
-        isReadLogger << "[LOG]: 0x" << std::hex << ai.getFirst() << " - " << std::dec << ai.getSecond() << endl;
-        isReadLogger << "[LOG]: " << std::hex << writeAccess->getDisasm() << " writes " << std::dec << writeSize << " B @ 0x" << std::hex << writeStart << endl;
-    #endif
-
-    set<PartialOverlapAccess>::iterator following = writeAccess;
-    ++following;
-
-    unsigned int numOverwrittenBytes = 0;
-    bool* overwrittenBytes = new bool[writeSize];
-
-    for(UINT32 i = 0; i < writeSize; ++i){
-        overwrittenBytes[i] = false;
-    }
-
-    while(following != s.end()){
-
-        ADDRINT folStart = following->getAddress();
-        ADDRINT folEnd = folStart + following->getSize() - 1;
-
-        // Following access bounds are outside write access bounds. It can't overlap, skip it.
-        if(folStart > writeEnd || folEnd < writeStart){
-            ++following;
-            continue;
-        }
-
-        overlapBeginning = folStart - writeStart;
+        // Determine the portion of the write access that overlaps with the considered set
+        int overlapBeginning = ai.getFirst() - writeStart;
         if(overlapBeginning < 0)
             overlapBeginning = 0;
+        int overlapEnd = min(ai.getFirst() + ai.getSecond() - 1 - writeStart, writeSize - 1);
 
-        overlapEnd = min(folEnd - writeStart, writeSize - 1);
+        // Update writeStart, writeEnd and writeSize to consider only the portion of the write that
+        // overlaps the considered set
+        writeStart += overlapBeginning;
+        writeSize = overlapEnd - overlapBeginning + 1;
+        ADDRINT writeEnd = writeStart + writeSize - 1;
 
-        // If |following| is an uninitialized read access, check if it reads at least a not overwritten byte of 
-        // |writeAccess|
-        if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && !following->getIsPartialOverlap()){
-            std::pair<unsigned, unsigned>* uninitializedOverlap = getOverlappingUninitializedInterval(ai, following);
-            // If the uninitialized read access does not overlap |ai| access, it can overlap |writeAccess|, but it is 
-            // of no interest now.
-            if(uninitializedOverlap == NULL){
+        #ifdef DEBUG
+            isReadLogger << "[LOG]: 0x" << std::hex << ai.getFirst() << " - " << std::dec << ai.getSecond() << endl;
+            isReadLogger << "[LOG]: " << std::hex << writeAccess->getDisasm() << " writes " << std::dec << writeSize << " B @ 0x" << std::hex << writeStart << endl;
+        #endif
+
+        set<PartialOverlapAccess>::iterator following = writeAccess;
+        ++following;
+
+        unsigned int numOverwrittenBytes = 0;
+        bool* overwrittenBytes = new bool[writeSize];
+
+        for(UINT32 i = 0; i < writeSize; ++i){
+            overwrittenBytes[i] = false;
+        }
+
+        while(following != s.end()){
+
+            ADDRINT folStart = following->getAddress();
+            ADDRINT folEnd = folStart + following->getSize() - 1;
+
+            // Following access bounds are outside write access bounds. It can't overlap, skip it.
+            if(folStart > writeEnd || folEnd < writeStart){
                 ++following;
                 continue;
             }
 
-            #ifdef DEBUG
-                isReadLogger << "[LOG]: " << following->getDisasm() << " reads bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
-            #endif
+            overlapBeginning = folStart - writeStart;
+            if(overlapBeginning < 0)
+                overlapBeginning = 0;
 
-            // Check if the read access reads any byte that is not overwritten
-            // by any other write access
-            for(int i = overlapBeginning; i <= overlapEnd; ++i){
-                if(!overwrittenBytes[i]){
-                    #ifdef DEBUG
-                        isReadLogger << "[LOG]: " << following->getDisasm() << " reads a byte of the write" << endl;
-                    #endif
-                    // Read access reads a not overwritten byte.
-                    return true;
+            overlapEnd = min(folEnd - writeStart, writeSize - 1);
+
+            // If |following| is an uninitialized read access, check if it reads at least a not overwritten byte of 
+            // |writeAccess|
+            if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && !following->getIsPartialOverlap()){
+                std::pair<unsigned, unsigned>* uninitializedOverlap = getOverlappingUninitializedInterval(ai, following);
+                // If the uninitialized read access does not overlap |ai| access, it can overlap |writeAccess|, but it is 
+                // of no interest now.
+                if(uninitializedOverlap == NULL){
+                    ++following;
+                    continue;
+                }
+
+                #ifdef DEBUG
+                    isReadLogger << "[LOG]: " << following->getDisasm() << " reads bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
+                #endif
+
+                // Check if the read access reads any byte that is not overwritten
+                // by any other write access
+                for(int i = overlapBeginning; i <= overlapEnd; ++i){
+                    if(!overwrittenBytes[i]){
+                        #ifdef DEBUG
+                            isReadLogger << "[LOG]: " << following->getDisasm() << " reads a byte of the write" << endl;
+                        #endif
+                        // Read access reads a not overwritten byte.
+                        return true;
+                    }
                 }
             }
-        }
 
-        // If |following| is a write access, update the byte map overwrittenBytes to true where needed.
-        // If |writeAccess| has been completely overwritten, it can't be read by any other access, so return false.
-        if(following->getType() == AccessType::WRITE){
-            #ifdef DEBUG
-                isReadLogger << "[LOG]: " << following->getDisasm() << " overwrites bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
-            #endif
-
-            for(int i = overlapBeginning; i <= overlapEnd; ++i){
-                if(!overwrittenBytes[i])
-                    ++numOverwrittenBytes;
-                overwrittenBytes[i] = true;
-            }
-            // The write access bytes have been completely overwritten by another write access
-            // before any read access could read them.
-            if(numOverwrittenBytes == writeSize){
+            // If |following| is a write access, update the byte map overwrittenBytes to true where needed.
+            // If |writeAccess| has been completely overwritten, it can't be read by any other access, so return false.
+            if(following->getType() == AccessType::WRITE){
                 #ifdef DEBUG
-                    isReadLogger << "[LOG]: write access completely overwritten" << endl << endl << endl;
+                    isReadLogger << "[LOG]: " << following->getDisasm() << " overwrites bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
                 #endif
-                return false;
+
+                for(int i = overlapBeginning; i <= overlapEnd; ++i){
+                    if(!overwrittenBytes[i])
+                        ++numOverwrittenBytes;
+                    overwrittenBytes[i] = true;
+                }
+                // The write access bytes have been completely overwritten by another write access
+                // before any read access could read them.
+                if(numOverwrittenBytes == writeSize){
+                    #ifdef DEBUG
+                        isReadLogger << "[LOG]: write access completely overwritten" << endl << endl << endl;
+                    #endif
+                    return false;
+                }
             }
+            
+            ++ following;
         }
-        
-        ++ following;
+        // |writeAccess| has not been completely overwritten, but no uninitialized read access reads its bytes.
+        #ifdef DEBUG
+            isReadLogger << "[LOG]: write access not completely overwritten, but never read" << endl << endl << endl;
+        #endif
+        return false;
     }
-    // |writeAccess| has not been completely overwritten, but no uninitialized read access reads its bytes.
-    #ifdef DEBUG
-        isReadLogger << "[LOG]: write access not completely overwritten, but never read" << endl << endl << endl;
-    #endif
-    return false;
 }
 
 // Utility function that dumps all the memory accesses recorded during application's execution
@@ -383,6 +389,26 @@ void print_profile(std::ofstream& stream, const char* msg){
         << " - " << msg << endl;
 }
 
+void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
+    static MemoryAccess::MAHasher hasher;
+    const auto& overlapSet = memAccesses.find(ai);
+    if(overlapSet != memAccesses.end()){
+        bool inserted = (overlapSet->second.insert(ma)).second;
+        if(ma.getActualIP() == 0x555555557b14 && ma.getAddress() == 0x7fffffffdb71){
+            *out << "ACTUALLY " << (inserted ? "" : "NOT ") << "INSERTED: " << std::dec << ma.getOrder() << endl;
+            *out << "HASH: 0x" << std::hex << ((unsigned long long) (hasher(ma))) << endl;
+        }
+    }
+    else{
+        unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
+        v.insert(ma);
+        if(ma.getActualIP() == 0x555555557b14 && ma.getAddress() == 0x7fffffffdb71){
+            *out << "HASH: 0x" << std::hex << ((unsigned long long) (hasher(ma))) << endl;
+        }
+        memAccesses[ai] = v;
+    }
+}
+
 /* ===================================================================== */
 // Analysis routines
 /* ===================================================================== */
@@ -390,7 +416,11 @@ void print_profile(std::ofstream& stream, const char* msg){
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 VOID* opcode, bool isFirstVisit)
 {
+    static unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher> reportedGroups;
+    static MemoryAccess::NoOrderHasher maHasher;
+
     #ifdef DEBUG
+        static std::ofstream mtrace("mtrace.log");
         print_profile(applicationTiming, "Tracing new memory access");
     #endif
 
@@ -447,12 +477,27 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
     AccessIndex ai(addr, size);
 
+    #ifdef DEBUG
+        mtrace <<
+            "0x" << std::hex << ma.getIP() <<
+            "(0x" << ma.getActualIP() << "): " <<
+            ma.getDisasm() << " " <<
+            (ma.getType() == AccessType::READ ? "R " : "W ") <<
+            std::dec << ma.getSize() << " B @ " << std::hex <<
+            "0x" << ma.getAddress() << endl;
+    #endif
+
+    static bool loopDetected = false;
+    static MemoryAccess loopingRead;
+
     if(isWrite){
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing write access");
         #endif
-        //initializedMemory->insert(ai);
+
+        lastWriteInstruction[ai] = ma;
         set_as_initialized(addr, size);
+        loopDetected = false;
     }
     else{
         #ifdef DEBUG
@@ -462,10 +507,65 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #ifdef DEBUG
             print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
         #endif
+
+        if(ma != loopingRead)
+            loopDetected = false;
+        
         if(uninitializedInterval.first != -1){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
             containsUninitializedRead.insert(ai);
+
+            size_t hash = maHasher(ma);
+            auto overlapGroup = reportedGroups.find(ma);
+            if(!loopDetected && overlapGroup == reportedGroups.end()){
+                storeMemoryAccess(ai, ma);
+
+                for(auto iter = lastWriteInstruction.begin(); iter != lastWriteInstruction.end(); ++iter){
+
+                    const auto& lastWrite = iter->second;
+
+                    storeMemoryAccess(iter->first, iter->second);
+                    if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
+                        hash ^= maHasher(lastWrite);
+                    }
+                }
+                lastWriteInstruction.clear();
+
+                unordered_set<size_t> s;
+                s.insert(hash);
+                reportedGroups[ma] = s;
+            }
+            else{
+                vector<std::pair<AccessIndex, MemoryAccess>> writes;
+
+                for(auto iter = lastWriteInstruction.begin(); iter != lastWriteInstruction.end(); ++iter){
+
+                    const auto& lastWrite = iter->second;
+
+                    writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
+                    if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
+                        hash ^= maHasher(lastWrite);
+                    }
+                }
+                lastWriteInstruction.clear();
+
+                unordered_set<size_t>&  reportedHashes = overlapGroup->second;
+                if(reportedHashes.find(hash) == reportedHashes.end()){
+                    storeMemoryAccess(ai, ma);
+                    for(std::pair<AccessIndex, MemoryAccess>& obj : writes){
+                        if(obj.second.getActualIP() == 0x555555557b14 && obj.second.getAddress() == 0x7fffffffdb71){
+                            *out << "INSERTING INTO 17" << endl;
+                        }
+                        storeMemoryAccess(obj.first, obj.second);
+                    }
+                    reportedHashes.insert(hash);
+                }
+                else{
+                    loopDetected = true;
+                    loopingRead = ma;
+                }
+            }
         }
     }
     
@@ -473,15 +573,13 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         print_profile(applicationTiming, "Inserting access to map");
     #endif
 
-    const auto& overlapSet = memAccesses.find(ai);
-    if(overlapSet != memAccesses.end()){
-        overlapSet->second.insert(ma);
-    }
-    else{
-        unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
-        v.insert(ma);
-        memAccesses[ai] = v;
-    }
+    /*bool inserted = (hashTable.insert(ma)).second;
+    size_t bucket = hashTable.bucket(ma);
+    size_t bucket_size = hashTable.bucket_size(bucket);
+    if(inserted && bucket_size > 10){
+        *out << "HASH: 0x" << std::hex << MemoryAccess::MAHasher()(ma) << endl;
+        *out << "BUCKET: " << std::dec << bucket << "; SIZE: " << bucket_size << endl << endl;
+    }*/
 }
 
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
@@ -790,6 +888,16 @@ VOID Fini(INT32 code, VOID *v)
     std::ofstream memOverlaps("overlaps.bin", std::ios_base::binary);
     map<AccessIndex, set<MemoryAccess>> fullOverlaps = getOrderedCopy(memAccesses);
     //fullOverlaps.insert(memAccesses.begin(), memAccesses.end());
+    for(auto it = memAccesses.begin(); it != memAccesses.end(); ++it){
+        if(it->first.getFirst() == 0x7fffffffdb71 && it->first.getSecond() == 1){
+            std::ofstream l("test.log");
+            for(auto x = it->second.begin(); x != it->second.end(); ++x){
+                if(x->getActualIP() == 0x555555557b14 && x->getAddress() == 0x7fffffffdb71){
+                    l << "FOUND: " << std::dec << x->getOrder() << endl;
+                }
+            }
+        }
+    }
 
     #ifdef DEBUG
         print_profile(applicationTiming, "Application exited");
@@ -939,7 +1047,7 @@ VOID Fini(INT32 code, VOID *v)
             if(overlapBeginning < 0)
                 overlapBeginning = 0;
 
-            if(v_it->getType() == AccessType::WRITE && isReadByUninitializedRead(v_it, v, it->first))
+            if(v_it->getType() == AccessType::WRITE && tracer::isReadByUninitializedRead(v_it, v, it->first))
                 uninitializedOverlap = getOverlappingWriteInterval(it->first, v_it);
                     
             // If it is a READ access and it is uninitialized and execution reaches this branch,

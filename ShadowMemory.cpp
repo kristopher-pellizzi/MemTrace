@@ -7,6 +7,9 @@ using std::vector;
 static vector<bool> dirtyPages;
 static unsigned long SHADOW_ALLOCATION;
 static std::vector<uint8_t*> shadow;
+// This second shadow memory keeps 1 additional bit for each byte of application memory,
+// telling if that byte has been read by a read access considered uninitialized
+static std::vector<uint8_t*> readShadow;
 
 static std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr){
     unsigned retOffset = (unsigned) (threadInfos[0] - addr);
@@ -46,10 +49,26 @@ uint8_t* getShadowAddr(ADDRINT addr){
     return ret;
 }
 
+static uint8_t* getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
+    unsigned offset = shadowAddr - shadow[shadowIdx];
+
+    while(shadowIdx >= readShadow.size()){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) - 1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        readShadow.push_back(newMap);
+    }
+
+    return readShadow[shadowIdx] + offset;
+}
+
 void set_as_initialized(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
 
     dirtyPages[shadowIdx] = true;
 
@@ -64,13 +83,16 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
     UINT32 leftSize = size + offset;
     while(leftSize >= 8){
         *shadowAddr |= 0xff << offset;
+        *readShadowAddr &= (1 << offset) - 1;
         offset = 0;
 
         if(shadowAddr != shadow[shadowIdx]){
             --shadowAddr;
+            --readShadowAddr;
         } 
         else if(shadowIdx != 0){
             shadowAddr = shadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
+            readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
             dirtyPages[shadowIdx] = true;
         }
         else{
@@ -84,7 +106,40 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
         uint8_t val = (1 << (leftSize - offset)) - 1;
         val <<= offset;
         *shadowAddr |= val;
+
+        val = (uint8_t) 0xff << leftSize;
+        val |= (1 << offset) - 1;
+        *readShadowAddr &= val;
     }
+}
+
+static void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx){
+    uint8_t* readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
+
+    UINT32 leftSize = size + offset;
+    while(leftSize >= 8){
+        *readShadowAddr |= 0xff << offset;
+        offset = 0;
+
+        if(readShadowAddr != readShadow[shadowIdx]){
+            --readShadowAddr;
+        } 
+        else if(shadowIdx != 0){
+            readShadowAddr = readShadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
+        }
+        else{
+            leftSize = 0;
+            break;
+        }
+
+        leftSize -= 8;
+    }
+    if(leftSize > 0){
+        uint8_t val = (1 << (leftSize - offset)) - 1;
+        val <<= offset;
+        *readShadowAddr |= val;
+    }
+
 }
 
 std::pair<int, int> getUninitializedInterval(ADDRINT addr, UINT32 size){
@@ -136,6 +191,8 @@ std::pair<int, int> getUninitializedInterval(ADDRINT addr, UINT32 size){
     }
 
     if(isUninitialized){
+        set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
+
         val >>= initialOffset;
         offset = 0;
         while(val % 2 != 0){
@@ -147,6 +204,50 @@ std::pair<int, int> getUninitializedInterval(ADDRINT addr, UINT32 size){
     }
     else
         return std::pair<int, int>(-1, -1);
+}
+
+bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
+    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
+
+    bool isRead = false;
+    unsigned offset = addr % 8;
+    UINT32 leftSize = size + offset;
+    uint8_t val;
+
+    while(leftSize >= 8 && !isRead){
+        val = *readShadowAddr;
+        val &= 0xff << offset;
+        if(val != 0){
+            isRead = true;
+        }
+        offset = 0;
+
+        if(readShadowAddr != readShadow[shadowIdx]){
+            --readShadowAddr;
+        }
+        else if(shadowIdx != 0){
+            readShadowAddr = readShadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
+        }
+        else{
+            leftSize = 0;
+            break;
+        }
+
+        leftSize -= 8;
+    }
+    if(!isRead && leftSize > 0){
+        val = *readShadowAddr;
+        val &= 0xff << offset;
+        val &= (1 << leftSize) - 1;
+        if(val != 0){
+            isRead = true;
+        }
+    }
+
+    return isRead;
 }
 
 void reset(ADDRINT addr){
@@ -167,10 +268,11 @@ void reset(ADDRINT addr){
 
 void shadowInit(){
     shadow.reserve(25);
+    readShadow.reserve(25);
     dirtyPages.reserve(25);
     long pagesize = sysconf(_SC_PAGESIZE);
     SHADOW_ALLOCATION = pagesize;
-    for(int i = 0; i < 5; ++i){
+    for(int i = 0; i < 3; ++i){
         uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if(newMap == (void*) -1){
             printf("mmap failed: %s\n", strerror(errno));
@@ -178,6 +280,13 @@ void shadowInit(){
         }
         shadow.push_back(newMap);
         dirtyPages[i] = false;
+
+        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        readShadow.push_back(newMap);
     }
     *shadow[0] = 0xff;
     dirtyPages[0] = true;
