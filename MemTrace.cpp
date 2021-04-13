@@ -475,7 +475,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // The following static variables are used in order to verify if a read access has already been tracked with the same
     // conditions (the same writes precedes it in an already tracked read accesses).
     // If that's the case, we probably are inside a loop performing the very same read access more than once.
-    static unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher> reportedGroups;
+    static unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher, MemoryAccess::Comparator> reportedGroups;
     static MemoryAccess::NoOrderHasher maHasher;
 
     if(isWrite){
@@ -496,7 +496,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
         #endif
 
-        if(ma != loopingRead)
+        if(!ma.compare(loopingRead))
             loopDetected = false;
         
         if(uninitializedInterval.first != -1){
@@ -520,7 +520,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     // If the considered uninitialized read access reads any byte of this write,
                     // use it to compute the hash representing the context where the read is happening
                     if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
-                        hash ^= maHasher(lastWrite);
+                        hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
                     }
                 }
 
@@ -543,7 +543,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                     // Compute the context hash
                     if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
-                        hash ^= maHasher(lastWrite);
+                        hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
                     }
                 }
 
