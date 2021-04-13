@@ -74,6 +74,8 @@ class MemoryAccess{
 
         bool operator== (const MemoryAccess& other) const;
 
+        bool compare(const MemoryAccess& other) const;
+
         bool operator!= (const MemoryAccess& other) const;
 
         unsigned long long getOrder() const{
@@ -83,6 +85,13 @@ class MemoryAccess{
         friend struct ExecutionComparator;
         friend class MAHasher;
 
+
+
+        struct Comparator{
+            bool operator()(const MemoryAccess& ma1, const MemoryAccess& ma2) const{
+                return ma1.compare(ma2);
+            }
+        };
 
 
         // Define a functor class which allows to order MemoryAccess objects according to their execution order
@@ -153,10 +162,6 @@ class MemoryAccess{
             private:
                 int size;
 
-                size_t lrot(size_t val, unsigned amount) const{
-                    return (val << amount) | (val >> (size - amount));
-                }
-
                 size_t rrot(size_t val, unsigned amount) const{
                     return (val >> amount) | (val << (size - amount));
                 }
@@ -164,6 +169,10 @@ class MemoryAccess{
             public:
                 NoOrderHasher(){
                     size = sizeof(size_t) * 8;
+                }
+
+                size_t lrot(size_t val, unsigned amount) const{
+                    return (val << amount) | (val >> (size - amount));
                 }
 
                 size_t operator()(const MemoryAccess& ma) const{

@@ -74,6 +74,14 @@ bool MemoryAccess::operator<(const MemoryAccess &other) const{
 
 bool MemoryAccess::operator==(const MemoryAccess& other) const{
     return
+        compare(other) &&
+        this->executionOrder == other.executionOrder;
+}
+
+// Returns true if the memory accesses access the very same memory area. 
+// NOTE: it does not consider execution order
+bool MemoryAccess::compare(const MemoryAccess& other) const{
+    return 
         this->instructionPointer == other.instructionPointer &&
         this->actualInstructionPointer ==  other.actualInstructionPointer &&
         this->accessAddress == other.accessAddress &&
