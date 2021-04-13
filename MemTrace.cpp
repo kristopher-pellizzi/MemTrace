@@ -49,6 +49,13 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
+
+// The following map is used as a temporary storage for write accesses: instead of 
+// directly insert them inside |memAccesses|, we insert them here (only 1 for each AccessIndex). Every 
+// write access contained here is eventually copied inside |memAccesses| when an uninitialized read is found.
+// This way, we avoid storing write accesses that are overwritten by another write to the same address and the same size
+// and that have not been read by an uninitialized read, thus saving memory space and execution time when we need to
+// find the writes whose content is read by uninitialized reads.
 unordered_map<AccessIndex, MemoryAccess, AccessIndex::AIHasher> lastWriteInstruction;
 
 // The following set is needed in order to optimize queries about sets containing
@@ -59,9 +66,9 @@ map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 
 ADDRINT libc_base;
 
-//InitializedMemory* initializedMemory = NULL;
-std::vector<AccessIndex> retAddrLocationStack;
-
+// Global variable shared with |SharedMemory| module. This is used to keep track of the highest used shadow memory
+// address (mirroring the lowest accessed stack address) in order to optimize the reset operation of the shadow memory
+// (it allows us to avoid resetting the whole shadow memory to 0, but to do that up to the address stored in this variable)
 uint8_t* highestShadowAddr;
 
 // NOTE: this map is useful only in case of a multi-process/multi-threaded application.
@@ -70,8 +77,6 @@ uint8_t* highestShadowAddr;
 map<THREADID, ADDRINT> threadInfos;
 
 bool entryPointExecuted = false;
-
-unordered_set<MemoryAccess, MemoryAccess::MAHasher> hashTable;
 
 // Global variable required as the syscall IP is only retrievable at syscall
 // entry point, but it is required at syscall exit point to be added to the
@@ -136,6 +141,8 @@ bool isPushInstruction(OPCODE opcode){
         opcode == XED_ICLASS_PUSHFQ;
 }
 
+// Similarly to the previous functions, the following returns true if the considered instruction
+// is a call instruction, which pushes on the stack the return address
 bool isCallInstruction(OPCODE opcode){
     return
         opcode == XED_ICLASS_CALL_FAR ||
@@ -154,8 +161,8 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
     // NOTE: check on the access type in the predicate is required because a push/call instruction may also 
     // read from a memory area, which can be from any memory section (e.g. stack, heap, global variables...)
     if(type == AccessType::WRITE){
+        // If it is a push or call instruction, it surely writes a stack address
         if(isPushInstruction(opcode)){
-            // If it is a push instruction, it surely writes a stack address
             return true;
         }
 
@@ -165,22 +172,6 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
 
     return addr >= currentSp && addr <= threadInfos[tid];
 }
-
-// Function to retrieve the bytes of the given Access Index object which are considered not initialized.
-// The interval contains the offset of the bytes from the beginning of the access represented by
-// the given AccessIndex object.
-// For instance, if a write already initialized bytes [0x0, 0xa] of memory and the given access index accesses 
-// [0x0, 0xf], the returned pair would be (11, 15).
-
-// NOTE: this is not a precise result. If the access represented by |ai| is fully initialized except 1 byte,
-// the returned pair will report as uninitialized the whole interval from the uninitialized byte to the end of the
-// access.
-// This has been done because:
-//  [*] It shouldn't be very frequent that an access to an area of the stack has an uninitialized "hole"
-//  [*] This function is quite expensive, as it essentially scans the recorded memory accesses looking for 
-//      write accesses who wrote a certain byte. In order to try and reduce its cost, the function returns as soon
-//      as it detects an uninitialized byte.
-
 
 // Utility function to compute the intersection of 2 intervals.
 std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned int, unsigned int> int1, std::pair<unsigned int, unsigned int> int2){
@@ -216,7 +207,7 @@ bool containsReadIns(const AccessIndex& ai){
     return containsUninitializedRead.find(ai) != containsUninitializedRead.end();
 }
 
-// Similar to getUninitializedInterval, but the returned pair contains the bounds of the interval of bytes written
+// The returned pair contains the bounds of the interval of bytes written
 // by the access pointed to by |v_it| which overlap with the access represented by |currentSetAI|
 std::pair<unsigned, unsigned>* getOverlappingWriteInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it){
     int overlapBeginning = v_it->getAddress() - currentSetAI.getFirst();
@@ -226,10 +217,9 @@ std::pair<unsigned, unsigned>* getOverlappingWriteInterval(const AccessIndex& cu
     return new pair<unsigned, unsigned>(overlapBeginning, overlapEnd);
 }
 
-// Similar to getUninitializedInterval, but the returned pair contains the bounds of the interval of bytes
+// Similar to getOverlappingWriteInterval, but the returned pair contains the bounds of the interval of bytes
 // read by the access pointed to by |v_it| which are also considered not initialized and overlap with
 // the access represented by |currentSetAI|.
-
 std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it){
     // If the read access happens at an address lower that the set address, it is of no interest
     if(v_it->getAddress() < currentSetAI.getFirst())
@@ -393,18 +383,11 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
     static MemoryAccess::MAHasher hasher;
     const auto& overlapSet = memAccesses.find(ai);
     if(overlapSet != memAccesses.end()){
-        bool inserted = (overlapSet->second.insert(ma)).second;
-        if(ma.getActualIP() == 0x555555557b14 && ma.getAddress() == 0x7fffffffdb71){
-            *out << "ACTUALLY " << (inserted ? "" : "NOT ") << "INSERTED: " << std::dec << ma.getOrder() << endl;
-            *out << "HASH: 0x" << std::hex << ((unsigned long long) (hasher(ma))) << endl;
-        }
+        overlapSet->second.insert(ma);
     }
     else{
         unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
         v.insert(ma);
-        if(ma.getActualIP() == 0x555555557b14 && ma.getAddress() == 0x7fffffffdb71){
-            *out << "HASH: 0x" << std::hex << ((unsigned long long) (hasher(ma))) << endl;
-        }
         memAccesses[ai] = v;
     }
 }
@@ -416,9 +399,6 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 VOID* opcode, bool isFirstVisit)
 {
-    static unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher> reportedGroups;
-    static MemoryAccess::NoOrderHasher maHasher;
-
     #ifdef DEBUG
         static std::ofstream mtrace("mtrace.log");
         print_profile(applicationTiming, "Tracing new memory access");
@@ -487,8 +467,16 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             "0x" << ma.getAddress() << endl;
     #endif
 
+    // The following static variables are used in order to try and detect a loop and avoid tracing
+    // the same accesses again and again, unless some condition is changes (e.g. function's entry point)
     static bool loopDetected = false;
     static MemoryAccess loopingRead;
+
+    // The following static variables are used in order to verify if a read access has already been tracked with the same
+    // conditions (the same writes precedes it in an already tracked read accesses).
+    // If that's the case, we probably are inside a loop performing the very same read access more than once.
+    static unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher> reportedGroups;
+    static MemoryAccess::NoOrderHasher maHasher;
 
     if(isWrite){
         #ifdef DEBUG
@@ -519,17 +507,23 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
             if(!loopDetected && overlapGroup == reportedGroups.end()){
+                // Store the read access
                 storeMemoryAccess(ai, ma);
 
                 for(auto iter = lastWriteInstruction.begin(); iter != lastWriteInstruction.end(); ++iter){
 
                     const auto& lastWrite = iter->second;
-
+                    
+                    // Store the write accesses permanently
                     storeMemoryAccess(iter->first, iter->second);
+
+                    // If the considered uninitialized read access reads any byte of this write,
+                    // use it to compute the hash representing the context where the read is happening
                     if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
                         hash ^= maHasher(lastWrite);
                     }
                 }
+
                 lastWriteInstruction.clear();
 
                 unordered_set<size_t> s;
@@ -543,24 +537,34 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                     const auto& lastWrite = iter->second;
 
+                    // It is not sure yet we need to insert these write accesses, we must verify if 
+                    // this access has already been stored with the same context
                     writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
+
+                    // Compute the context hash
                     if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
                         hash ^= maHasher(lastWrite);
                     }
                 }
+
                 lastWriteInstruction.clear();
 
                 unordered_set<size_t>&  reportedHashes = overlapGroup->second;
+
+                // If this is the first time this read access is happening within this context, store it
                 if(reportedHashes.find(hash) == reportedHashes.end()){
+                    // Store read access
                     storeMemoryAccess(ai, ma);
+
+                    // Permanently store write accesses
                     for(std::pair<AccessIndex, MemoryAccess>& obj : writes){
-                        if(obj.second.getActualIP() == 0x555555557b14 && obj.second.getAddress() == 0x7fffffffdb71){
-                            *out << "INSERTING INTO 17" << endl;
-                        }
                         storeMemoryAccess(obj.first, obj.second);
                     }
+
                     reportedHashes.insert(hash);
                 }
+                // If the same context has been found inside the set of all the contexes this
+                // read access has happened within, we probably are inside a loop
                 else{
                     loopDetected = true;
                     loopingRead = ma;
@@ -572,14 +576,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     #ifdef DEBUG
         print_profile(applicationTiming, "Inserting access to map");
     #endif
-
-    /*bool inserted = (hashTable.insert(ma)).second;
-    size_t bucket = hashTable.bucket(ma);
-    size_t bucket_size = hashTable.bucket_size(bucket);
-    if(inserted && bucket_size > 10){
-        *out << "HASH: 0x" << std::hex << MemoryAccess::MAHasher()(ma) << endl;
-        *out << "BUCKET: " << std::dec << bucket << "; SIZE: " << bucket_size << endl << endl;
-    }*/
 }
 
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
@@ -589,20 +585,6 @@ VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, AD
 {
     if(!entryPointExecuted)
         return;
-    /*
-    if(ip >= textStart && ip <= textEnd){
-        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
-        // to track where a library function has been called or jumped to
-        lastExecutedInstruction = ip - loadOffset;
-    }*/
-
-    AccessIndex ai(addr, size);
-    //retAddrLocationStack.push_back(ai);
-
-    // Initialized a new frame and insert the saved return address in its context
-    //initializedMemory = new InitializedMemory(initializedMemory, addr);
-    //initializedMemory->insert(ai);
-
 
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 }
@@ -612,33 +594,13 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 {
     if(!entryPointExecuted)
         return;
-    // If there are no other frames to return to, we are returning from the entry point, so there's anything
-    // else to do.
-
-    // NOTE: usually the entry point performs jumps to other functions.
-    // E.g. on Linux, it's __libc_start_main who calls function main, and __libc_start_main is the first function
-    // that can be seen in the call stack by using a debugger. This means that __libc_start_main has been executed by
-    // a sequence of jumps from the entry point (_start).
-    // However, if __libc_start_main returns, there's nothing else to do.
-    /*if(retAddrLocationStack.empty())
-        return;*/
-
-    /*
-    if(ip >= textStart && ip <= textEnd){
-        // Compute the last executed application ip. This is useless when application code is executed, but may be useful
-        // to track where a library function has been called or jumped to
-        lastExecutedInstruction = ip - loadOffset;
-    }*/
         
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 
-    //initializedMemory = initializedMemory->deleteFrame();
-
-    reset(addr);
-    
-    //retAddrLocationStack.pop_back();
+    // Reset the shadow memory of the "freed" stack frame
+    reset(addr);    
 }
 
 
@@ -738,19 +700,7 @@ VOID Image(IMG img, VOID* v){
 VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     ADDRINT stackBase = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
-    // Initialize first function frame
-    //initializedMemory = new InitializedMemory(NULL, stackBase);
 
-    // Insert current stack pointer entry as initialized.
-    // This should be pushed by the loader, and the entry point reads it (through pop).
-    // Set it as initialized to avoid a false positive to be reported.
-    // NOTE: actually, if we are on a 32 bit architecture, the stack entry is 4 bytes long,
-    // but it is not important here, as the whole portion from the current stack pointer to the
-    // highest address of the stack address range can be considered initialized.
-    // However, entries stored at an higher address than the last pushed value are never read after the
-    // entry point is started, so they won't generate any false positive.
-    AccessIndex ai(stackBase, 8);
-    //initializedMemory->insert(ai);
     #ifdef DEBUG
         print_profile(applicationTiming, "Application started");
     #endif
@@ -867,6 +817,8 @@ VOID Instruction(INS ins, VOID* v){
     }
 }
 
+// Given an unordered_map containing all the traced memory accesses, obtain an ordered copy whose order is useful
+// to detect partial overlaps
 map<AccessIndex, set<MemoryAccess>> getOrderedCopy(unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> unorderedMap){
     map<AccessIndex, set<MemoryAccess>> ret;
 
@@ -886,18 +838,8 @@ map<AccessIndex, set<MemoryAccess>> getOrderedCopy(unordered_map<AccessIndex, un
 VOID Fini(INT32 code, VOID *v)
 {   
     std::ofstream memOverlaps("overlaps.bin", std::ios_base::binary);
+
     map<AccessIndex, set<MemoryAccess>> fullOverlaps = getOrderedCopy(memAccesses);
-    //fullOverlaps.insert(memAccesses.begin(), memAccesses.end());
-    for(auto it = memAccesses.begin(); it != memAccesses.end(); ++it){
-        if(it->first.getFirst() == 0x7fffffffdb71 && it->first.getSecond() == 1){
-            std::ofstream l("test.log");
-            for(auto x = it->second.begin(); x != it->second.end(); ++x){
-                if(x->getActualIP() == 0x555555557b14 && x->getAddress() == 0x7fffffffdb71){
-                    l << "FOUND: " << std::dec << x->getOrder() << endl;
-                }
-            }
-        }
-    }
 
     #ifdef DEBUG
         print_profile(applicationTiming, "Application exited");
@@ -1155,6 +1097,7 @@ int main(int argc, char *argv[])
         return Usage();
     }
 
+    // Initialize shadow memory
     shadowInit();
     
     // Add required instrumentation routines
