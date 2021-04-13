@@ -82,6 +82,7 @@ bool entryPointExecuted = false;
 // entry point, but it is required at syscall exit point to be added to the
 // application's memory accesses.
 ADDRINT syscallIP;
+bool argIsStackAddr;
 
 #ifdef DEBUG
     std::ofstream isReadLogger("isReadLog.log");
@@ -467,11 +468,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             "0x" << ma.getAddress() << endl;
     #endif
 
-    // The following static variables are used in order to try and detect a loop and avoid tracing
-    // the same accesses again and again, unless some condition is changes (e.g. function's entry point)
-    static bool loopDetected = false;
-    static MemoryAccess loopingRead;
-
     // The following static variables are used in order to verify if a read access has already been tracked with the same
     // conditions (the same writes precedes it in an already tracked read accesses).
     // If that's the case, we probably are inside a loop performing the very same read access more than once.
@@ -485,7 +481,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         lastWriteInstruction[ai] = ma;
         set_as_initialized(addr, size);
-        loopDetected = false;
     }
     else{
         #ifdef DEBUG
@@ -495,9 +490,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #ifdef DEBUG
             print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
         #endif
-
-        if(!ma.compare(loopingRead))
-            loopDetected = false;
         
         if(uninitializedInterval.first != -1){
             ma.setUninitializedRead();
@@ -506,7 +498,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
-            if(!loopDetected && overlapGroup == reportedGroups.end()){
+            if(overlapGroup == reportedGroups.end()){
                 // Store the read access
                 storeMemoryAccess(ai, ma);
 
@@ -563,19 +555,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                     reportedHashes.insert(hash);
                 }
-                // If the same context has been found inside the set of all the contexes this
-                // read access has happened within, we probably are inside a loop
-                else{
-                    loopDetected = true;
-                    loopingRead = ma;
-                }
             }
         }
-    }
-    
-    #ifdef DEBUG
-        print_profile(applicationTiming, "Inserting access to map");
-    #endif
+    }    
 }
 
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
@@ -638,6 +620,7 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
         ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, i);
         actualArgs.push_back(arg);
     }
+
     #ifdef DEBUG
         bool lastSyscallReturned = !SyscallHandler::getInstance().init();
         if(!lastSyscallReturned)
