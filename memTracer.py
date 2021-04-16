@@ -58,6 +58,28 @@ def launchTracer(exec_cmd, fuzz_dir, fuzz_int_event: t.Event):
         time.sleep(10)
 
 
+def move_directory(src, dst_dir, new_name = None):
+    if not os.path.exists(dst_dir):
+        os.makedirs(dst_dir)
+
+    if not new_name is None:
+        dirname = os.path.dirname(src)
+        new_path = os.path.join(dirname, new_name)
+        os.rename(src, new_path)
+        src = new_path
+
+    basename = os.path.basename(src)
+    su.move(src, os.path.join(dst_dir, basename))
+
+
+def count_dir_content(dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+        return 0
+
+    return len(os.listdir(dir_path))
+
+
 def main():
     global PROGRESS
     global PROGRESS_UNIT
@@ -107,21 +129,20 @@ def main():
     FUZZ_IN = os.path.join(FUZZ_DIR, "in")
     FUZZ_OLDS = os.path.join(FUZZ_DIR, "olds")
 
-    tracer_out = os.path.join(FUZZ_DIR, "tracer_out")
-    print(tracer_out)
-    if os.path.exists(tracer_out):
-        raise IOError("Directory {0} already exists. Please move or remove it before running the tracer.".format(tracer_out))
-
-    # If folder "out" already exists in the fuzzing directory,
-    # copy it in a subfolder "olds" so that a new one can be created
+    # If out (and therefore tracer_out) exists in the fuzzer folder, we need to move them away.
+    # First, we need to update last_count value
     if os.path.exists(FUZZ_OUT):
         last_old = os.path.join(FUZZ_DIR, "last_old")
         last_count = None
 
+        # If file last_old does not exist, create it. last_count value will be 0
         if not os.path.exists(last_old):
                 last_count = 0
                 with open(last_old, "w") as f:
                     f.write(str(last_count))
+        # otherwise, read the value stored in the file last_old. If it is a number, set last_count to that 
+        # value, otherwise, the file is malformed, so we need to actually count the folders already stored in
+        # FUZZ_OLDS
         else:
             with open(last_old, "r+") as f:
                 content = f.readline()
@@ -132,15 +153,23 @@ def main():
                         last_count = int(content)
                         last_count += 1
                     except ValueError:
-                        last_count = 0
+                        last_count = count_dir_content(FUZZ_OLDS)
 
                 f.seek(0)
                 f.write(str(last_count))
                 f.truncate()
 
-        new_path = os.path.join(FUZZ_DIR, str(last_count))
-        os.rename(FUZZ_OUT, new_path)
-        su.move(new_path, os.path.join(FUZZ_OLDS, str(last_count)))
+        backup_dir = os.path.join(FUZZ_OLDS, str(last_count))
+        tracer_out = os.path.join(FUZZ_DIR, "tracer_out")
+        move_directory(FUZZ_OUT, backup_dir)
+        move_directory(tracer_out, backup_dir)
+
+        if os.path.exists(tracer_out):
+            raise IOError("Directory {0} already exists. Please move or remove it before running the tracer.".format(tracer_out))
+        
+        if os.path.exists(FUZZ_OUT):
+            raise IOError("Directory {0} already exists. Please move or remove it before running the tracer.".format(FUZZ_OUT))
+
 
     # Start AFL fuzzer
     executable = os.path.join(WORKING_DIR, "Tests", "coreutils", "src", "od")
