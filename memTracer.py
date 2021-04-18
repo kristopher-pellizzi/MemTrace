@@ -10,11 +10,30 @@ import time
 import argparse as ap
 import re
 
+
+class MissingExecutableError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
 PROGRESS_UNIT = 0
 PROGRESS_LEN = 30
 PROGRESS = 0
 LAST_PROGRESS_TASK = None
 LOCK = t.Lock()
+
+
+def parse_executable(exec_str):
+    splitted_exec = exec_str.split(" ")
+    exec_path = splitted_exec[0]
+    exec_path = adjust_exec_path(exec_path)
+    executable = [exec_path] + splitted_exec[1:]
+    executable = " ".join(executable)
+
+    if not os.path.exists(exec_path):
+        raise IOError("Executable {0} does not exist. Check the executable path and try again".format(exec_path))
+
+    return executable
 
 
 def parse_args(args):
@@ -162,6 +181,13 @@ def count_dir_content(dir_path):
     return len(os.listdir(dir_path))
 
 
+def adjust_exec_path(path):
+    if(os.path.isabs(path)):
+        return path
+
+    return os.path.realpath(path)
+
+
 def main():
     global PROGRESS
     global PROGRESS_UNIT
@@ -219,10 +245,31 @@ def main():
     # sys_args contains the command-line arguments divided in 2 parts:
     # the first element contains a string representing the arguments for this script;
     # the second element contains a string representing the executable and its command-line arguments
-    sys_args = " ".join(sys.argv).split(" -- ")
-    
+    argv_str = " ".join(sys.argv)
+    pat = r"(\s)(--)([\s\n]|$)"
+    match = re.search(pat, argv_str)
+
+    # If there's no '--' in the list of command line arguments, the script can't say which is the executable
+    if match is None:
+        raise MissingExecutableError(
+            "Executable path is missing. Provide an executable path and its arguments after '--'.\n"
+            "Example: ./memTracer.py -- /path/to/executable arg1 arg2 -opt1"
+        )
+
+    sys_args = argv_str.split(match[0])
+
+    # If no executable is provided, raise an error
+    if len(sys_args[1]) == 0:
+        raise MissingExecutableError(
+            "Executable path is missing. Provide an executable path and its arguments after '--'.\n"
+            "Example: ./memTracer.py -- /path/to/executable arg1 arg2 -opt1"
+        )
+
     # args is a Namespace object, containing the arguments parsed by parse_args
     args = parse_args(sys_args[0].split(" ")[1:])
+
+    # executable is a string specifying the executable path followed by the arguments to be passed to it
+    executable = parse_executable(sys_args[1])
 
     WORKING_DIR = os.getcwd()
     FUZZ_DIR = os.path.join(WORKING_DIR, args.fuzz_dir)
@@ -279,7 +326,6 @@ def main():
 
 
     # Start AFL fuzzer
-    executable = os.path.join(WORKING_DIR, "Tests", "coreutils", "src", "od")
     if(args.admin_priv):
         p = subp.Popen(["sudo", "afl-system-config"])
         p.wait()
