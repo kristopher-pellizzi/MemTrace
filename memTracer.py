@@ -170,7 +170,7 @@ def main():
         process.send_signal(sig.SIGINT)
 
 
-    def print_empty_progress():
+    def print_empty_progress(fuzz_int_ev: t.Event):
         global PROGRESS_LEN
         global LAST_PROGRESS_TASK
         global LOCK
@@ -181,12 +181,16 @@ def main():
         print("".join(out))
 
         LOCK.acquire()
-        LAST_PROGRESS_TASK = t.Timer(10, print_progress)
+        LAST_PROGRESS_TASK = t.Timer(10, print_progress, [fuzz_int_ev])
         LAST_PROGRESS_TASK.start()
         LOCK.release()
 
 
-    def print_progress(finished = False):
+    # |fuzz_int_event| is required because 2 different threads may be running |print_progress|,
+    # one with the |finished| flag enabled, and one with the flag disabled.
+    # If in that situation the flag-enabled thread acquires the lock first, the flag-disabled
+    # thread will acquire it later, setting a new timer, thus never ending setting new timers
+    def print_progress(fuzz_int_ev: t.Event, finished = False):
         global PROGRESS
         global PROGRESS_LEN
         global LAST_PROGRESS_TASK
@@ -204,8 +208,8 @@ def main():
         print("".join(out))
 
         LOCK.acquire()
-        if not finished:
-            LAST_PROGRESS_TASK = t.Timer(10, print_progress)
+        if not finished and not fuzz_int_ev.is_set:
+            LAST_PROGRESS_TASK = t.Timer(10, print_progress, [fuzz_int_ev])
             LAST_PROGRESS_TASK.start()
         elif not LAST_PROGRESS_TASK is None:
             LAST_PROGRESS_TASK.cancel()
@@ -288,18 +292,20 @@ def main():
     print()
     print("Fuzzer will be interrupted in {0} seconds...".format(stop_after_seconds))
 
+    fuzzer_interrupted_event = t.Event()
     int_timer = t.Timer(stop_after_seconds, send_int, [p])
     int_timer.start()
-    print_empty_progress()
+    print_empty_progress(fuzzer_interrupted_event)
 
-    fuzzer_interrupted_event = t.Event()
     tracerThread = t.Thread(target = launchTracer, args = [executable, args, fuzzer_interrupted_event])
     tracerThread.start()
 
     # Wait for the fuzzer to be interrupted
     p.wait()
     fuzzer_interrupted_event.set()
-    print_progress(True)
+    print_progress(fuzzer_interrupted_event, True)
+    # If the fuzzer terminates before the requested time (e.g. if there are no initial testcases)
+    # it is not necessary to wait the whole time to send a SIGINT
     int_timer.cancel()
     print("Fuzzer interrupted")
     print()
