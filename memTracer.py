@@ -122,6 +122,34 @@ def parse_args(args):
         type = parse_exec_time
     )
 
+    parser.add_argument("--slaves", "-s",
+        default = 0,
+        help =  "Specify the number of slave fuzzer instances to run. The fuzzer always launches at least the main instance. " 
+                "Launching more instances uses more resources, but allows to find more inputs in a smaller time span."
+                "It is advisable to use this option combined with -p, if possible. Note that the total amount of launched processes won't be "
+                "higher than the total number of available cpus, unless --ignore-cpu-count flag is enabled.",
+        dest = "slaves",
+        type = int
+    )
+
+    parser.add_argument("--processes", "-p",
+        default = 1,
+        help =  "Specify the number of processes executing the tracer. Using more processes allows to launch the tracer with more inputs in the same time span. "
+                "It is useless to use many processes for the tracer if the fuzzer finds new inputs very slowly."
+                "If there are few resources available, it is therefore advisable to dedicate them to fuzzer instances rather then to tracer processes."
+                "Note that the total amount of launched processes won't be higher than the total number of available cpus, unless --ignore-cpu-count "
+                "flag is enabled.",
+        dest = "processes",
+        type = int
+    )
+
+    parser.add_argument("--ignore-cpu-count",
+        action = "store_true",
+        help =  "Flag used to ignore the number of available cpus and force the number of processes specified with -s and -p to be launched even if"
+                "they are more than that.",
+        dest = "ignore_cpu_count"
+    )
+
     parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it, "\
                     "except the file it reads from, if any.\n"\
                     "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1\n"\
