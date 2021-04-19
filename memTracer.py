@@ -9,11 +9,13 @@ import signal as sig
 import time
 import argparse as ap
 import re
-
+import random
 
 class MissingExecutableError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
+    pass
+
+class TooManyProcessesError(Exception):
+    pass
 
 
 PROGRESS_UNIT = 0
@@ -21,6 +23,10 @@ PROGRESS_LEN = 30
 PROGRESS = 0
 LAST_PROGRESS_TASK = None
 LOCK = t.Lock()
+
+POWER_SHED = {"explore", "fast", "coe", "quad", "lin", "exploit"}
+EXPERIMENTAL_POWER_SCHED = {"mmopt", "rare", "seek"}
+ALREADY_LAUNCHED_SCHED = set()
 
 
 def parse_help_flag(argv_str):
@@ -122,21 +128,25 @@ def parse_args(args):
         type = parse_exec_time
     )
 
+    default_slaves_nr = 0
+    default_processes_nr = 1
+
     parser.add_argument("--slaves", "-s",
-        default = 0,
+        default = default_slaves_nr,
         help =  "Specify the number of slave fuzzer instances to run. The fuzzer always launches at least the main instance. " 
-                "Launching more instances uses more resources, but allows to find more inputs in a smaller time span."
+                "Launching more instances uses more resources, but allows to find more inputs in a smaller time span. "
                 "It is advisable to use this option combined with -p, if possible. Note that the total amount of launched processes won't be "
-                "higher than the total number of available cpus, unless --ignore-cpu-count flag is enabled.",
+                "higher than the total number of available cpus, unless --ignore-cpu-count flag is enabled. "
+                "However, it is very advisable to launch at least 1 slave instance.",
         dest = "slaves",
         type = int
     )
 
     parser.add_argument("--processes", "-p",
-        default = 1,
+        default = default_processes_nr,
         help =  "Specify the number of processes executing the tracer. Using more processes allows to launch the tracer with more inputs in the same time span. "
-                "It is useless to use many processes for the tracer if the fuzzer finds new inputs very slowly."
-                "If there are few resources available, it is therefore advisable to dedicate them to fuzzer instances rather then to tracer processes."
+                "It is useless to use many processes for the tracer if the fuzzer finds new inputs very slowly. "
+                "If there are few resources available, it is therefore advisable to dedicate them to fuzzer instances rather then to tracer processes. "
                 "Note that the total amount of launched processes won't be higher than the total number of available cpus, unless --ignore-cpu-count "
                 "flag is enabled.",
         dest = "processes",
@@ -151,12 +161,24 @@ def parse_args(args):
     )
 
     parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it, "\
-                    "except the file it reads from, if any.\n"\
-                    "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1\n"\
+                    "except the file it reads from, if any.\n\n"\
+                    "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1\n\n"\
                     "Remember to NOT PASS the input file as an argument for the executable, as it will be automatically passed by the fuzzer starting "\
-                    "from the initial testcases and followed by the generated inputs"
+                    "from the initial testcases and followed by the generated inputs."
 
-    return parser.parse_args(args)
+    ret = parser.parse_args(args)
+
+    if ret.slaves < default_slaves_nr:
+        print(  "WARNING: The number of slave fuzzer instances must be greater or equal to {0}. "
+                "Falling back to default value: {0} slave instances will be launched".format(default_slaves_nr))
+        ret.slaves = default_slaves_nr
+
+    if ret.processes < default_processes_nr:
+        print(  "WARNING: The number of slave fuzzer instances must be greater or equal to {0}. "
+                "Falling back to default value: {0} tracer process will be launched".format(default_processes_nr))
+        ret.processes = default_processes_nr
+
+    return ret
 
 
 def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
@@ -238,7 +260,31 @@ def main():
     global PROGRESS
     global PROGRESS_UNIT
 
-    def send_int(process: subp.Popen):
+    def build_slave_cmd(slave_id, fuzz_in, fuzz_out, executable):
+        global POWER_SHED
+        global EXPERIMENTAL_POWER_SCHED
+        global ALREADY_LAUNCHED_SCHED
+
+        if(len(ALREADY_LAUNCHED_SCHED) == 0):
+            selected = "fast"
+        else:
+            r = random.random()
+            sched_set = POWER_SHED if r <= 0.90 else EXPERIMENTAL_POWER_SCHED
+            diff = sched_set.difference(ALREADY_LAUNCHED_SCHED)
+            if(len(diff) != 0):
+                sched_set = diff
+            selected = random.choice(list(sched_set))
+
+        ALREADY_LAUNCHED_SCHED.update({selected})
+
+        print("Launching slave instance nr {0} with power schedule {1}".format(slave_id, selected))
+        cmd = ["afl-fuzz", "-Q", "-S", "Slave_{0}".format(slave_id), "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--", executable, "@@"]
+        return cmd
+        
+
+    def send_int(process: subp.Popen, slaves):
+        for slave in slaves:
+            slave.send_signal(sig.SIGINT)
         process.send_signal(sig.SIGINT)
 
 
@@ -280,7 +326,7 @@ def main():
         print("".join(out))
 
         LOCK.acquire()
-        if not finished and not fuzz_int_ev.is_set:
+        if not finished and not fuzz_int_ev.is_set():
             LAST_PROGRESS_TASK = t.Timer(10, print_progress, [fuzz_int_ev])
             LAST_PROGRESS_TASK.start()
         elif not LAST_PROGRESS_TASK is None:
@@ -383,16 +429,35 @@ def main():
         p = subp.Popen(["sudo", "afl-system-config"])
         p.wait()
     fuzz_cmd = ["afl-fuzz", "-Q", "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--", executable, "@@"]
+
+    cpus = os.cpu_count()
+    if cpus is None:
+        print("Warning: cpu count cannot be determined and will be ignored.")
+        args.ignore_cpu_count = True
+
+    if not args.ignore_cpu_count:
+        # +1 is required because args.slaves contains only the additional fuzzer instances. The +1 counts the main instance
+        p = args.slaves + args.processes + 1
+        if p > cpus:
+            raise TooManyProcessesError("Available cpus ({0}) are less than the number of processes to be launched ({1})".format(cpus, p))
+
     stop_after_seconds = args.exec_time
     PROGRESS_UNIT = stop_after_seconds // PROGRESS_LEN
     if PROGRESS_UNIT <= 0:
         PROGRESS_UNIT = PROGRESS_LEN
-    p = subp.Popen(fuzz_cmd, stdout = subp.PIPE, stderr = subp.PIPE)
+
+    print("Launching Main fuzzer instance...")
+    p = subp.Popen(fuzz_cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
+    slaves = list()
+    for i in range(args.slaves):
+        cmd = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, executable)
+        slaves.append(subp.Popen(cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+
     print()
     print("Fuzzer will be interrupted in {0} seconds...".format(stop_after_seconds))
 
     fuzzer_interrupted_event = t.Event()
-    int_timer = t.Timer(stop_after_seconds, send_int, [p])
+    int_timer = t.Timer(stop_after_seconds, send_int, [p, slaves])
     int_timer.start()
     print_empty_progress(fuzzer_interrupted_event)
 
@@ -400,6 +465,8 @@ def main():
     tracerThread.start()
 
     # Wait for the fuzzer to be interrupted
+    for slave in slaves:
+        slave.wait()
     p.wait()
     fuzzer_interrupted_event.set()
     print_progress(fuzzer_interrupted_event, True)
