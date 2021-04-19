@@ -23,6 +23,11 @@ LAST_PROGRESS_TASK = None
 LOCK = t.Lock()
 
 
+def parse_help_flag(argv_str):
+    pat = r"(\s-h)($|\s)"
+    match = re.search(pat, argv_str)
+    return match is not None
+
 def parse_executable(exec_str):
     splitted_exec = exec_str.split(" ")
     exec_path = splitted_exec[0]
@@ -37,6 +42,13 @@ def parse_executable(exec_str):
 
 
 def parse_args(args):
+    
+    class HelpFormatter(ap.ArgumentDefaultsHelpFormatter, ap.RawDescriptionHelpFormatter):
+        def _format_usage(self, usage, actions, groups, prefix):
+            ret_usage = super()._format_usage(usage, actions, groups, prefix).split("\n\n")[0]
+            ret_usage += " -- /path/to/executable <executable args>\n\n"
+            return ret_usage
+
 
     def parse_exec_time(s):
         pat = r"([1-9][0-9]*)([smh])?$"
@@ -60,7 +72,7 @@ def parse_args(args):
 
 
 
-    parser = ap.ArgumentParser()
+    parser = ap.ArgumentParser(formatter_class = HelpFormatter)
 
     parser.add_argument("--fuzz-out", "-f", 
         default = "out", 
@@ -109,6 +121,12 @@ def parse_args(args):
         dest = "exec_time",
         type = parse_exec_time
     )
+
+    parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it, "\
+                    "except the file it reads from, if any.\n"\
+                    "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1\n"\
+                    "Remember to NOT PASS the input file as an argument for the executable, as it will be automatically passed by the fuzzer starting "\
+                    "from the initial testcases and followed by the generated inputs"
 
     return parser.parse_args(args)
 
@@ -246,6 +264,13 @@ def main():
     # the first element contains a string representing the arguments for this script;
     # the second element contains a string representing the executable and its command-line arguments
     argv_str = " ".join(sys.argv)
+
+    # Check if -h is passed as an argument
+    help_requested = parse_help_flag(argv_str)
+    if help_requested:
+        # Since -h is passed as an argument, parse_args will simply print the help text and return
+        parse_args(sys.argv)
+
     pat = r"(\s)(--)([\s\n]|$)"
     match = re.search(pat, argv_str)
 
