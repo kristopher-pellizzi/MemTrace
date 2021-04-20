@@ -10,22 +10,24 @@ char* build_cmd(const char* prefix, char* arg){
 	return cmd;
 }
 
-char* append_args(char* cmd, char** args){
+char* append_args(const char* cmd, char** args){
 	char** args_index = args;
 	bool requiresQuotes = false;
 	size_t len = strlen(cmd) + 1;
 	while(*args_index != NULL){
 		len += strlen(*args_index) + 1;
-		if(strstr(*args_index, " ") != NULL){
-			len += 2;
-			requiresQuotes = true;
-		}
 		++args_index;
 	}
+
 	char* ret = (char*) malloc(sizeof(char) * len);
 	snprintf(ret, len, "%s", cmd);
 	args_index = args;
 	while(*args_index != NULL){
+		if(strstr(*args_index, " ") != NULL){
+			len += 2;
+			requiresQuotes = true;
+		}
+
 		strcat(ret, " ");
 		if(requiresQuotes){
 			strcat(ret, "\"");
@@ -49,13 +51,11 @@ int main(int argc, char** argv) {
 	}
 
 	#ifdef DEBUG
-		const char* pin_prefix = "/opt/pin/pin -t debug/MemTrace.so -- ";
+		const char* pin_prefix = "/opt/pin/pin -t debug/MemTrace.so";
 	#else
-		const char* pin_prefix = "/opt/pin/pin -t obj-intel64/MemTrace.so -- ";
+		const char* pin_prefix = "/opt/pin/pin -t obj-intel64/MemTrace.so";
 	#endif
-	char* tmp = build_cmd(pin_prefix, argv[1]);
-	char* cmd = append_args(tmp, &argv[2]);
-	free(tmp);
+	char* cmd = append_args(pin_prefix, &argv[1]);
 
 	system(cmd);
 	return 0;
