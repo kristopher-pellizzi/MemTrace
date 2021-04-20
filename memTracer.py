@@ -24,7 +24,7 @@ PROGRESS = 0
 LAST_PROGRESS_TASK = None
 LOCK = t.Lock()
 
-POWER_SHED = {"explore", "fast", "coe", "quad", "lin", "exploit"}
+POWER_SCHED = {"explore", "fast", "coe", "quad", "lin", "exploit"}
 EXPERIMENTAL_POWER_SCHED = {"mmopt", "rare", "seek"}
 ALREADY_LAUNCHED_SCHED = set()
 
@@ -160,6 +160,12 @@ def parse_args(args):
         dest = "ignore_cpu_count"
     )
 
+    parser.add_argument("--experimental", "-e", 
+        action = "store_true",
+        help = "Flag used to specify whether to use or not experimental power schedules",
+        dest = "experimental"
+    )
+
     parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it, "\
                     "except the file it reads from, if any.\n\n"\
                     "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1\n\n"\
@@ -291,16 +297,21 @@ def main():
     global PROGRESS
     global PROGRESS_UNIT
 
-    def build_slave_cmd(slave_id, fuzz_in, fuzz_out, executable):
-        global POWER_SHED
+    ### MAIN HELPER FUNCTIONS ###
+
+    def build_slave_cmd(slave_id, fuzz_in, fuzz_out, experimental_enabled, executable):
+        global POWER_SCHED
         global EXPERIMENTAL_POWER_SCHED
         global ALREADY_LAUNCHED_SCHED
 
         if(len(ALREADY_LAUNCHED_SCHED) == 0):
             selected = "fast"
         else:
-            r = random.random()
-            sched_set = POWER_SHED if r <= 0.90 else EXPERIMENTAL_POWER_SCHED
+            if experimental_enabled:
+                r = random.random()
+                sched_set = POWER_SCHED if r <= 0.90 else EXPERIMENTAL_POWER_SCHED
+            else:
+                sched_set = POWER_SCHED
             diff = sched_set.difference(ALREADY_LAUNCHED_SCHED)
             if(len(diff) != 0):
                 sched_set = diff
@@ -364,6 +375,10 @@ def main():
             LAST_PROGRESS_TASK.cancel()
         LOCK.release()
 
+
+    ### MAIN BEGINNING ###
+    # The RNG is used in order to select a random power schedule if more than 1 slave fuzzer instance is launched
+    random.seed()
 
     # sys_args contains the command-line arguments divided in 2 parts:
     # the first element contains a string representing the arguments for this script;
@@ -486,7 +501,7 @@ def main():
     p = subp.Popen(fuzz_cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
     slaves = list()
     for i in range(args.slaves):
-        cmd = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, executable)
+        cmd = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, args.experimental, executable)
         slaves.append(subp.Popen(cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
 
     print()
