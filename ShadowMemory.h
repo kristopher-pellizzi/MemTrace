@@ -15,7 +15,7 @@ uint8_t* getShadowAddr(ADDRINT addr);
 
 void set_as_initialized(ADDRINT addr, UINT32 size);
 
-std::pair<int, int> getUninitializedInterval(ADDRINT addr, UINT32 size);
+uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size);
 
 bool isReadByUninitializedRead(ADDRINT addr, UINT32 size);
 

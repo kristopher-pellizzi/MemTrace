@@ -100,11 +100,16 @@ $(OBJDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h
 $(OBJDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h
 	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
+# Build the intermediate object file.
+$(OBJDIR)Optional$(OBJ_SUFFIX): Optional.cpp Optional.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
 # Build the tool as a dll (shared object).
 $(OBJDIR)MemTrace$(PINTOOL_SUFFIX): $(OBJDIR)MemTrace$(OBJ_SUFFIX) \
 $(OBJDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
 $(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
-$(OBJDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h
+$(OBJDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
+$(OBJDIR)Optional$(OBJ_SUFFIX) Optional.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 $(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)	
@@ -131,11 +136,16 @@ launcher: toolLauncher.cpp
 ./debug/ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h
 	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
+# Build the intermediate object file.
+./debug/Optional$(OBJ_SUFFIX): Optional.cpp Optional.h
+	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
 # Build the tool as a dll (shared object).
 ./debug/MemTrace$(PINTOOL_SUFFIX): ./debug/MemTrace$(OBJ_SUFFIX) \
 ./debug/MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
 ./debug/AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
-./debug/ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h
+./debug/ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
+./debug/Optional$(OBJ_SUFFIX) Optional.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 launchDebug: toolLauncher.cpp

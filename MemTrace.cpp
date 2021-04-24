@@ -24,6 +24,7 @@
 #include "AccessIndex.h"
 #include "MemoryAccess.h"
 #include "SyscallHandler.h"
+#include "Optional.h"
 
 using std::cerr;
 using std::string;
@@ -176,16 +177,16 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcod
 }
 
 // Utility function to compute the intersection of 2 intervals.
-std::pair<unsigned int, unsigned int>* intervalIntersection(std::pair<unsigned int, unsigned int> int1, std::pair<unsigned int, unsigned int> int2){
+Optional<std::pair<unsigned int, unsigned int>> intervalIntersection(std::pair<unsigned int, unsigned int> int1, std::pair<unsigned int, unsigned int> int2){
     if(int1.first <= int2.first){
         if(int1.second < int2.first)
-            return NULL;
-        return new std::pair<unsigned int, unsigned int>(int2.first, min(int1.second, int2.second));
+            return None;
+        return std::pair<unsigned int, unsigned int>(int2.first, min(int1.second, int2.second));
     }
     else{
         if(int2.second < int1.first)
-            return NULL;
-        return new std::pair<unsigned int, unsigned int>(int1.first, min(int1.second, int2.second));
+            return None;
+        return std::pair<unsigned int, unsigned int>(int1.first, min(int1.second, int2.second));
     }
 }
 
@@ -222,17 +223,24 @@ std::pair<unsigned, unsigned>* getOverlappingWriteInterval(const AccessIndex& cu
 // Similar to getOverlappingWriteInterval, but the returned pair contains the bounds of the interval of bytes
 // read by the access pointed to by |v_it| which are also considered not initialized and overlap with
 // the access represented by |currentSetAI|.
-std::pair<unsigned, unsigned>* getOverlappingUninitializedInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it){
+bool hasOverlappingUninitializedInterval(const AccessIndex& currentSetAI, set<PartialOverlapAccess>::iterator& v_it, set<std::pair<unsigned, unsigned>>& intervals){
     // If the read access happens at an address lower that the set address, it is of no interest
     if(v_it->getAddress() < currentSetAI.getFirst())
-        return NULL;
+        return false;
     
-    // Return the part of the partial overlap pointed to by v_it that is uninitialized w.r.t. currentSetAI.
-    // If the whole partial overlap is initialized, return NULL
     ADDRINT overlapBeginning = v_it->getAddress() - currentSetAI.getFirst();
     ADDRINT overlapEnd = min(v_it->getAddress() + v_it->getSize() - 1 - currentSetAI.getFirst(), currentSetAI.getSecond() - 1);
-    ADDRINT overlapSize = overlapEnd - overlapBeginning; 
-    return intervalIntersection(std::pair<unsigned int, unsigned int>(0, overlapSize), v_it->getUninitializedInterval());
+    ADDRINT overlapSize = overlapEnd - overlapBeginning;
+    for(const std::pair<unsigned, unsigned>& p : intervals){
+        // Return the part of the partial overlap pointed to by v_it that is uninitialized w.r.t. currentSetAI.
+        // If the whole partial overlap is initialized, return NULL 
+        Optional<std::pair<unsigned, unsigned>> intersect = intervalIntersection(std::pair<unsigned int, unsigned int>(0, overlapSize), p);
+        if(intersect){
+            return true;
+        }
+    }
+
+    return false;
 }
 
 namespace tracer{
@@ -289,10 +297,11 @@ namespace tracer{
             // If |following| is an uninitialized read access, check if it reads at least a not overwritten byte of 
             // |writeAccess|
             if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && !following->getIsPartialOverlap()){
-                std::pair<unsigned, unsigned>* uninitializedOverlap = getOverlappingUninitializedInterval(ai, following);
+                set<std::pair<unsigned, unsigned>> intervals = following->computeIntervals();
+                bool uninitializedOverlap = hasOverlappingUninitializedInterval(ai, following, intervals);
                 // If the uninitialized read access does not overlap |ai| access, it can overlap |writeAccess|, but it is 
                 // of no interest now.
-                if(uninitializedOverlap == NULL){
+                if(!uninitializedOverlap){
                     ++following;
                     continue;
                 }
@@ -487,12 +496,12 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing read access");
         #endif
-        std::pair<int, int> uninitializedInterval = getUninitializedInterval(addr, size);
+        uint8_t* uninitializedInterval = getUninitializedInterval(addr, size);
         #ifdef DEBUG
             print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
         #endif
         
-        if(uninitializedInterval.first != -1){
+        if(uninitializedInterval != NULL){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
             containsUninitializedRead.insert(ai);
@@ -883,9 +892,13 @@ VOID Fini(INT32 code, VOID *v)
                 memOverlaps << v_it->getSPOffset() << ";";
                 memOverlaps << v_it->getBPOffset() << ";";
                 if(v_it->getIsUninitializedRead()){
-                    std::pair<int, int> interval = v_it->getUninitializedInterval();
-                    memOverlaps << interval.first << ";";
-                    memOverlaps << interval.second << ";";
+                    set<std::pair<unsigned, unsigned>> intervals = v_it->computeIntervals();
+
+                    memOverlaps << intervals.size() << ";";
+                    for(const std::pair<unsigned, unsigned>& p : intervals){
+                        memOverlaps << p.first << ";";
+                        memOverlaps << p.second << ";";
+                    }
                 }
             }
 
@@ -969,7 +982,7 @@ VOID Fini(INT32 code, VOID *v)
             if(v_it->getType() == AccessType::READ && v_it->getIsPartialOverlap())
                 continue;
 
-            std::pair<unsigned int, unsigned int>* uninitializedOverlap = NULL;
+            void* uninitializedOverlap = NULL;
             int overlapBeginning = v_it->getAddress() - it->first.getFirst();
             if(overlapBeginning < 0)
                 overlapBeginning = 0;
@@ -980,7 +993,7 @@ VOID Fini(INT32 code, VOID *v)
             // If it is a READ access and it is uninitialized and execution reaches this branch,
             // it surely is an uninitialized read fully overlapping with the considered set
             if(v_it->getType() == AccessType::READ && v_it->getIsUninitializedRead()){
-                uninitializedOverlap = new std::pair<unsigned, unsigned>(v_it->getUninitializedInterval());
+                uninitializedOverlap = v_it->getUninitializedInterval();
             }
 
 
@@ -1001,7 +1014,8 @@ VOID Fini(INT32 code, VOID *v)
                     << "@ 0x" << std::hex << v_it->getAddress() << "; (sp " << (v_it->getSPOffset() >= 0 ? "+ " : "- ") << std::dec << llabs(v_it->getSPOffset()) << "); "
                     << "(bp " << (v_it->getBPOffset() >= 0 ? "+ " : "- ") << llabs(v_it->getBPOffset()) << ") ";
                 if(uninitializedOverlap != NULL)
-                    partialOverlapsLog << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]";
+                    partialOverlapsLog << "INTERVAL";
+                    //partialOverlapsLog << "bytes [" << std::dec << uninitializedOverlap->first << " ~ " << uninitializedOverlap->second << "]";
                 else
                     partialOverlapsLog << " {NULL interval} ";
                 partialOverlapsLog << endl;
@@ -1022,6 +1036,29 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps << v_it->getSPOffset() << ";";
             memOverlaps << v_it->getBPOffset() << ";";
 
+            if(v_it->getIsPartialOverlap()){
+                memOverlaps.write("\xab\xcd\xef\xff", 4);
+            }
+
+            set<std::pair<unsigned, unsigned>> intervals;
+
+            if(v_it->getType() == AccessType::WRITE){
+                std::pair<unsigned, unsigned> interval = *((std::pair<unsigned, unsigned>*) uninitializedOverlap);
+                intervals.insert(interval);
+            }
+            // If it's not a write access, it is necessarily an uninitialized read access
+            else{
+                intervals = v_it->computeIntervals();
+            }
+
+            memOverlaps << intervals.size() << ";";
+            for(const std::pair<unsigned, unsigned>& p : intervals){
+                memOverlaps << p.first << ";";
+                memOverlaps << p.second << ";";
+            }
+
+            // TODO: write all the intervals in the binary report
+            /*
             if(uninitializedOverlap != NULL){
                 // Entry has uninitialized interval
                 memOverlaps.write("\xab\xcd\xef\xff", 4);
@@ -1041,6 +1078,7 @@ VOID Fini(INT32 code, VOID *v)
                 memOverlaps << uninitializedOverlap->first << ";";
                 memOverlaps << uninitializedOverlap->second << ";";
             }
+            */
         }
 
         memOverlaps.write("\x00\x00\x00\x03", 4);

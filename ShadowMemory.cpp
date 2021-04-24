@@ -46,7 +46,7 @@ static uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     return needsCeiling ? ret + 1 : ret;
 }
 
-static unsigned long min(unsigned long x, unsigned long y){
+static unsigned long long min(unsigned long long x, unsigned long long y){
     return x <= y ? x : y;
 }
 
@@ -157,6 +157,32 @@ static void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr
 
 }
 
+uint8_t* shadow_memory_copy(ADDRINT addr, UINT32 size){
+    ADDRINT lastByteAddr = addr + size - 1;
+    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(lastByteAddr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    unsigned offset = addr % 8;
+    size += offset;
+    UINT32 shadowSize = size % 8 != 0 ? (size / 8) + 1 : (size / 8);
+
+    uint8_t* ret = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
+    UINT32 copied = 0;
+    while(copied != shadowSize){
+        uint8_t* highestCopied = (uint8_t*)min(
+            (unsigned long long) shadowAddr + (shadowSize - copied) - 1,
+            (unsigned long long) shadow[shadowIdx] + SHADOW_ALLOCATION - 1
+        );
+
+        UINT32 toCopy = highestCopied - shadowAddr + 1;
+        memcpy(ret + copied, shadowAddr, toCopy);
+        copied += toCopy;
+        shadowAddr = shadow[++shadowIdx];
+    }
+
+    return ret;
+}
+
 // Function to retrieve the bytes of the given address and size which are considered not initialized.
 // The returned interval contains the offset of the bytes from the beginning of the access.
 // For instance, if a write already initialized bytes [0x0, 0xa] of memory and the given address and size access
@@ -173,7 +199,7 @@ static void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr
 //      of the access, it may have required to return a set of intervals, thus making the following steps
 //      of the tool more complex.
 
-std::pair<int, int> getUninitializedInterval(ADDRINT addr, UINT32 size){
+uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
@@ -224,17 +250,10 @@ std::pair<int, int> getUninitializedInterval(ADDRINT addr, UINT32 size){
     if(isUninitialized){
         set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
 
-        val >>= initialOffset;
-        offset = 0;
-        while(val % 2 != 0){
-            ++offset;
-            val >>= 1;
-        }
-        std::pair<int, int> ret((initialShadowAddr - shadowAddr) * 8 + offset, size - 1);
-        return ret;
+        return shadow_memory_copy(addr, size);
     }
     else
-        return std::pair<int, int>(-1, -1);
+        return NULL;
 }
 
 // Returns true if the access represented by the given address and size (at least one of its bytes, actually)
@@ -290,8 +309,8 @@ void reset(ADDRINT addr){
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
-    unsigned long bottom = min((unsigned long) highestShadowAddr, (unsigned long) (shadowAddr + SHADOW_ALLOCATION - 1));
-    memset(shadowAddr, 0, bottom - (unsigned long) shadowAddr + 1);
+    unsigned long long bottom = min((unsigned long long) highestShadowAddr, (unsigned long long) (shadowAddr + SHADOW_ALLOCATION - 1));
+    memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
 
     for(unsigned i = shadowIdx + 1; i < shadow.size(); ++i){
         if(dirtyPages[i]){

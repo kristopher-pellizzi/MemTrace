@@ -25,7 +25,7 @@ class MemoryAccess{
         AccessType type;
         std::string instructionDisasm;
         bool isUninitializedRead;
-        std::pair<int, int> uninitializedInterval;
+        uint8_t* uninitializedInterval;
 
     public:
         MemoryAccess(){}
@@ -40,11 +40,9 @@ class MemoryAccess{
             accessSize(size),
             type(type),
             instructionDisasm(disasm),
-            isUninitializedRead(false)
-            {
-                uninitializedInterval.first = -1;
-                uninitializedInterval.second = -1;
-            };
+            isUninitializedRead(false),
+            uninitializedInterval(NULL)
+            {};
 
         ADDRINT getIP() const;
 
@@ -64,11 +62,13 @@ class MemoryAccess{
 
         bool getIsUninitializedRead() const;
 
-        std::pair<int, int> getUninitializedInterval() const;
+        uint8_t* getUninitializedInterval() const;
 
-        void setUninitializedInterval(std::pair<int, int>& interval);
+        void setUninitializedInterval(uint8_t* interval);
 
         void setUninitializedRead();
+
+        set<std::pair<unsigned, unsigned>> computeIntervals() const;
 
         bool operator< (const MemoryAccess &other) const;
 
@@ -140,7 +140,7 @@ class MemoryAccess{
 
                     if(ma.getIsUninitializedRead()){
                         hash = lrot(hash, (size >> 1));
-                        std::pair<int, int> interval = ma.getUninitializedInterval();
+                        /*std::pair<int, int> interval = ma.getUninitializedInterval();
                         mask = -1 >> (size - 10);
                         size_t intervalHash = 0;
                         for(int i=0; i < size; i += 20){
@@ -148,7 +148,7 @@ class MemoryAccess{
                             partial <<= i;
                             intervalHash |= partial;
                         }
-                        hash ^= intervalHash;
+                        hash ^= intervalHash;*/
                     }
 
                     return rrot(hash, 16);
@@ -197,7 +197,7 @@ class MemoryAccess{
 
                     if(ma.getIsUninitializedRead()){
                         hash = lrot(hash, (size >> 1));
-                        std::pair<int, int> interval = ma.getUninitializedInterval();
+                        /*std::pair<int, int> interval = ma.getUninitializedInterval();
                         mask = -1 >> (size - 10);
                         size_t intervalHash = 0;
                         for(int i=0; i < size; i += 20){
@@ -205,7 +205,7 @@ class MemoryAccess{
                             partial <<= i;
                             intervalHash |= partial;
                         }
-                        hash ^= intervalHash;
+                        hash ^= intervalHash;*/
                     }
 
                     return rrot(hash, 16);
@@ -267,7 +267,9 @@ class PartialOverlapAccess{
 
         bool getIsUninitializedRead() const;
 
-        std::pair<int, int> getUninitializedInterval() const;
+        uint8_t* getUninitializedInterval() const;
+
+        set<std::pair<unsigned, unsigned>> computeIntervals() const;
 };
 
 #endif // MEMORYACCESS
