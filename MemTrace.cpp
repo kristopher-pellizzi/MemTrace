@@ -1056,29 +1056,6 @@ VOID Fini(INT32 code, VOID *v)
                 memOverlaps << p.first << ";";
                 memOverlaps << p.second << ";";
             }
-
-            // TODO: write all the intervals in the binary report
-            /*
-            if(uninitializedOverlap != NULL){
-                // Entry has uninitialized interval
-                memOverlaps.write("\xab\xcd\xef\xff", 4);
-                if(v_it->getIsPartialOverlap()){
-                    // Entry is a partial overlap
-                    memOverlaps.write("\xab\xcd\xef\xff", 4);
-                    if((unsigned)overlapBeginning != uninitializedOverlap->first){
-                        // overlapBeginning is smaller than uninitializedOverlap.
-                        // This may happen with uninitialized partially overlapping read accesses.
-                        // If that is the case, write 2 intervals, the first is the initialized portion,
-                        // the second is the uninitialized one.
-                        memOverlaps.write("\xab\xcd\xef\xff", 4);
-                        memOverlaps << overlapBeginning << ";";
-                        memOverlaps << uninitializedOverlap->first - 1 << ";";
-                    }
-                }
-                memOverlaps << uninitializedOverlap->first << ";";
-                memOverlaps << uninitializedOverlap->second << ";";
-            }
-            */
         }
 
         memOverlaps.write("\x00\x00\x00\x03", 4);

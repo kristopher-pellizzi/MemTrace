@@ -157,7 +157,7 @@ static void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr
 
 }
 
-uint8_t* shadow_memory_copy(ADDRINT addr, UINT32 size){
+static uint8_t* shadow_memory_copy(ADDRINT addr, UINT32 size){
     ADDRINT lastByteAddr = addr + size - 1;
     std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(lastByteAddr);
     unsigned shadowIdx = idxOffset.first;
