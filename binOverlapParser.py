@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import deque
 from binascii import b2a_hex
 
 class ParseError(Exception):
@@ -132,11 +133,16 @@ def parse_full_overlap_entry(f, reg_size):
     access_size = parse_integer(f)
     sp_offset = parse_integer(f)
     bp_offset = parse_integer(f)
+    uninitialized_intervals = deque()
+
     # If it is an uninitialized read access, the report contains also
     # the interval that is considered uninitialized
     if is_uninitialized_read:
+        n = parse_integer(f)
+        for _ in range(n):
             interval_lower_bound = parse_integer(f)
             interval_upper_bound = parse_integer(f)
+            uninitialized_intervals.append((interval_lower_bound, interval_upper_bound))
 
     # Emit full overlap table entry
     str_list = []
@@ -152,8 +158,9 @@ def parse_full_overlap_entry(f, reg_size):
     str_list.append("(bp ")
     str_list.append("+ " if bp_offset >= 0 else "- ")
     str_list.append(str(abs(bp_offset)) + ")")
-    if(is_uninitialized_read):
-        str_list.append(" [" + str(interval_lower_bound) + " ~ " + str(interval_upper_bound) + "]")
+    while len(uninitialized_intervals) > 0:
+        lower_bound, upper_bound = uninitialized_intervals.popleft()
+        str_list.append(" [" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
 
     print_table_entry(fo, "".join(str_list))
 
@@ -213,22 +220,13 @@ def parse_partial_overlap_entry(f, reg_size):
     access_size = parse_integer(f)
     sp_offset = parse_integer(f)
     bp_offset = parse_integer(f)
-    # Check if this entry has an uninitialized interval
-    # NOTE: it may have an uninitialized interval without being a partial overlap.
-    # That's the case where the access is an uninitialized read access.
-    has_uninitialized_interval = accept(f, b"\xab\xcd\xef\xff")
-    # Check if that's a partial overlap. If it is, check if the overlap and the uninitialized interval
-    # have different lower bounds (happens with some uninitialized partially overlapping read accesses)
     is_partial_overlap = accept(f, b"\xab\xcd\xef\xff")
-    has_initialized_interval = False
-    if is_partial_overlap:
-            has_initialized_interval = accept(f, b"\xab\xcd\xef\xff")
-            if has_initialized_interval:
-                initialized_interval_begin = parse_integer(f)
-                initialized_interval_end = parse_integer(f)
-    if has_uninitialized_interval:
-        overlap_begin = parse_integer(f)
-        overlap_end = parse_integer(f)
+    n = parse_integer(f)
+    uninitialized_intervals = deque()
+    for _ in range(n):
+        lower_bound = parse_integer(f)
+        upper_bound = parse_integer(f)
+        uninitialized_intervals.append((lower_bound, upper_bound))
 
     str_list = []
     if is_partial_overlap:
@@ -252,17 +250,10 @@ def parse_partial_overlap_entry(f, reg_size):
     str_list.append("+ " if bp_offset >= 0 else "- ")
     str_list.append(str(abs(bp_offset)))
     str_list.append("); ")
-    if has_uninitialized_interval:
-        str_list.append("[")
-        if has_initialized_interval:
-            str_list.append(str(initialized_interval_begin))
-            str_list.append(" ~ ")
-            str_list.append(str(initialized_interval_end))
-            str_list.append("; ")
-        str_list.append(str(overlap_begin))
-        str_list.append(" ~ ")
-        str_list.append(str(overlap_end))
-        str_list.append("]")
+    
+    while len(uninitialized_intervals) > 0:
+        lower_bound, upper_bound = uninitialized_intervals.popleft()
+        str_list.append("[" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
 
     print_table_entry(po, "".join(str_list))
     # print("[LOG]: parsed ", "".join(str_list))
