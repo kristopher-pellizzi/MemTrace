@@ -1,5 +1,7 @@
 #include "pin.H"
 #include <set>
+#include <string.h>
+#include <iostream>
 
 #ifndef MEMORYACCESS
 #define MEMORYACCESS
@@ -119,39 +121,8 @@ class MemoryAccess{
                 }
 
                 size_t operator()(const MemoryAccess& ma) const{
-                    size_t addresses = ma.getIP() ^ lrot(ma.getActualIP(), (size >> 1)) ^ ma.executionOrder;
-                    AccessType type = ma.getType();
-                    unsigned long accessSize = ma.getSize();
-                    size_t shiftAmount = accessSize % (size - 4);
-
-                    addresses = lrot(addresses, shiftAmount);
-                    addresses ^= lrot(ma.getAddress(), (size >> 1));
-                    size_t mask = -1 >> (size - 4);
-                    size_t partial = accessSize & mask;
-                    size_t hash = partial;
-
-                    for(int i = 4; i < size; i += 4){
-                        hash = (hash << 4) | partial;
-                    }
-
-                    hash ^= addresses ^ ma.executionOrder;
-
-                    hash = type == AccessType::READ ? lrot(hash, 8) : rrot(hash, 8);
-
-                    if(ma.getIsUninitializedRead()){
-                        hash = lrot(hash, (size >> 1));
-                        /*std::pair<int, int> interval = ma.getUninitializedInterval();
-                        mask = -1 >> (size - 10);
-                        size_t intervalHash = 0;
-                        for(int i=0; i < size; i += 20){
-                            size_t partial = (interval.first & mask) | ((interval.second & mask) << 10);
-                            partial <<= i;
-                            intervalHash |= partial;
-                        }
-                        hash ^= intervalHash;*/
-                    }
-
-                    return rrot(hash, 16);
+                    size_t ret = ma.executionOrder ^ (ma.executionOrder >> (size * 8));
+                    return ret;
                 }
         };
 
@@ -197,15 +168,28 @@ class MemoryAccess{
 
                     if(ma.getIsUninitializedRead()){
                         hash = lrot(hash, (size >> 1));
-                        /*std::pair<int, int> interval = ma.getUninitializedInterval();
-                        mask = -1 >> (size - 10);
-                        size_t intervalHash = 0;
-                        for(int i=0; i < size; i += 20){
-                            size_t partial = (interval.first & mask) | ((interval.second & mask) << 10);
-                            partial <<= i;
-                            intervalHash |= partial;
+
+                        uint8_t* buf = (uint8_t*) malloc(size);
+                        if((unsigned long long) size <= accessSize){
+                            for(unsigned long long i = 0; i < accessSize; i += size){
+                                unsigned long long copySize = i + size <= accessSize ? size : accessSize - i;
+
+                                size_t v = * (size_t*) (ma.uninitializedInterval + i);
+                                v &= (size_t) -1 >> (8 * (size - copySize));
+                                hash ^= v;
+                            }
                         }
-                        hash ^= intervalHash;*/
+                        else{
+                            size_t v = *(size_t*) ma.uninitializedInterval;
+                            v >>= (size - accessSize);
+                            for(unsigned long long i = 0; i < (unsigned long long) size; i += accessSize){
+                                hash ^= v;
+                                v <<= (8 * accessSize);
+                            }
+                        }
+
+                        free(buf);
+                        buf = NULL;
                     }
 
                     return rrot(hash, 16);

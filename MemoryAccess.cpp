@@ -152,33 +152,13 @@ set<std::pair<unsigned, unsigned>> MemoryAccess::computeIntervals() const{
 
 
 bool MemoryAccess::operator<(const MemoryAccess &other) const{
-    if(accessAddress != other.accessAddress)
-        return accessAddress < other.accessAddress;
-    if(accessSize != other.accessSize)
-        return accessSize > other.accessSize;
-    if(instructionPointer != other.instructionPointer)
-        return instructionPointer < other.instructionPointer;
-    if(actualInstructionPointer != other.actualInstructionPointer)
-        return actualInstructionPointer < other.actualInstructionPointer;
-    if(type != other.type)
-        return type == AccessType::WRITE;
-    if(isUninitializedRead && other.isUninitializedRead){
-        UINT32 offset = accessSize % 8;
-        UINT32 size = accessSize + offset;
-        UINT32 shadowSize = (size % 8 != 0 ? (size / 8) + 1 : (size / 8));
-        int cmp = memcmp(uninitializedInterval, other.uninitializedInterval, shadowSize);
-        if(cmp != 0)
-            return cmp < 0;
-    }
     if(executionOrder != other.executionOrder)
         return executionOrder < other.executionOrder;
     return false;
 }
 
 bool MemoryAccess::operator==(const MemoryAccess& other) const{
-    return
-        compare(other) &&
-        this->executionOrder == other.executionOrder;
+    return this->executionOrder == other.executionOrder;
 }
 
 // Returns true if the memory accesses access the very same memory area. 
