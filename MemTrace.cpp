@@ -17,6 +17,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <cstring>
+#include <memory>
 
 #include <ctime>
 
@@ -152,14 +153,12 @@ bool isCallInstruction(OPCODE opcode){
         opcode == XED_ICLASS_CALL_NEAR;
 }
 
-bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE* opcode_ptr, AccessType type){
+bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE opcode, AccessType type){
     // If the thread ID is not found, there's something wrong.
     if(threadInfos.find(tid) == threadInfos.end()){
         *out << "Thread id not found" << endl;
         exit(1);
     }
-
-    OPCODE opcode = *opcode_ptr;
 
     // NOTE: check on the access type in the predicate is required because a push/call instruction may also 
     // read from a memory area, which can be from any memory section (e.g. stack, heap, global variables...)
@@ -408,7 +407,7 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
 /* ===================================================================== */
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                VOID* opcode, bool isFirstVisit)
+                UINT32 opcode_arg, bool isFirstVisit)
 {
     #ifdef DEBUG
         static std::ofstream mtrace("mtrace.log");
@@ -416,11 +415,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     #endif
 
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
-    OPCODE* opcode_ptr = static_cast<OPCODE*>(opcode);
+    OPCODE opcode = opcode_arg;
 
     // Only keep track of accesses on the stack, so if it is an access to any other memory
     // section, return immediately.
-    if(!isStackAddress(tid, addr, sp, opcode_ptr, type)){
+    if(!isStackAddress(tid, addr, sp, opcode, type)){
         return;
     }
 
@@ -459,13 +458,14 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
+    std::string disasm = ins_disasm ? std::string(*ins_disasm) : std::string();
 
     bool isWrite = type == AccessType::WRITE;
     // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
-    int spOffset = isPushInstruction(*opcode_ptr) ? 0 : addr - sp;
+    int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
     int bpOffset = addr - bp;
 
-    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, std::string(*ins_disasm));
+    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm);
     AccessIndex ai(addr, size);
 
     #ifdef DEBUG
@@ -573,7 +573,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
 // for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                    VOID* opcode, bool isFirstVisit)
+                    UINT32 opcode, bool isFirstVisit)
 {
     if(!entryPointExecuted)
         return;
@@ -582,7 +582,7 @@ VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, AD
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                VOID* opcode, bool isFirstVisit)
+                UINT32 opcode, bool isFirstVisit)
 {
     if(!entryPointExecuted)
         return;
@@ -602,13 +602,13 @@ void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v)
     #ifdef DEBUG
         string* disasm = new string("syscall");
     #else
-        string* disasm = new string();
+        string* disasm = NULL;
     #endif
-    OPCODE* opcode = (OPCODE*) malloc(sizeof(OPCODE));
+
     // Actually, it could be another kind of syscall (e.g. int 0x80)
     // but opcode is simply used to be compared to the push opcode, so 
     // does not make any difference
-    *opcode = XED_ICLASS_SYSCALL_AMD;
+    OPCODE opcode = XED_ICLASS_SYSCALL_AMD;
     for(auto i = v.begin(); i != v.end(); ++i){
         memtrace(tid, ctxt, i->getType(), syscallIP, i->getAddress(), i->getSize(), disasm, opcode, false);    
     }
@@ -722,11 +722,10 @@ VOID Instruction(INS ins, VOID* v){
         #ifdef DEBUG
             std::string* disassembly = new std::string(INS_Disassemble(ins));
         #else
-            std::string* disassembly = new std::string("");
+            std::string* disassembly = NULL;
         #endif
 
-        OPCODE* opcode = (OPCODE*) malloc(sizeof(OPCODE));
-        *opcode = INS_Opcode(ins);
+        OPCODE opcode = INS_Opcode(ins);
 
         for(UINT32 memop = 0; memop < memoperands; memop++){
             // Write memory access
@@ -744,7 +743,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYWRITE_EA, 
                         IARG_MEMORYWRITE_SIZE,
                         IARG_PTR, disassembly, 
-                        IARG_PTR, opcode, 
+                        IARG_UINT32, opcode, 
                         IARG_BOOL, memop == 0,
                         IARG_END
                     );
@@ -761,7 +760,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYWRITE_EA, 
                         IARG_MEMORYWRITE_SIZE,
                         IARG_PTR, disassembly, 
-                        IARG_PTR, opcode, 
+                        IARG_UINT32, opcode, 
                         IARG_BOOL, memop == 0,
                         IARG_END
                     ); 
@@ -783,7 +782,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYREAD_EA,
                         IARG_MEMORYREAD_SIZE,
                         IARG_PTR, disassembly,
-                        IARG_PTR, opcode,
+                        IARG_UINT32, opcode,
                         IARG_BOOL, memop == 0,
                         IARG_END
                     );
@@ -800,7 +799,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYREAD_EA, 
                         IARG_MEMORYREAD_SIZE, 
                         IARG_PTR, disassembly,
-                        IARG_PTR, opcode,
+                        IARG_UINT32, opcode,
                         IARG_BOOL, memop == 0,
                         IARG_END
                     );
