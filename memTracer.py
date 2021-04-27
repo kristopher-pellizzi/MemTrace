@@ -504,7 +504,8 @@ def main():
     if(args.admin_priv):
         p = subp.Popen(["sudo", "afl-system-config"])
         p.wait()
-    fuzz_cmd = ["afl-fuzz", "-Q", "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--", executable, "@@"]
+    launch_single_instance = args.slaves == 0
+    fuzz_cmd = ["afl-fuzz", "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--", executable, "@@"]
 
     cpus = os.cpu_count()
     if cpus is None:
