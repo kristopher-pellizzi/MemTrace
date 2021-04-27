@@ -224,6 +224,12 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
     launcher_path = os.path.join(os.getcwd(), "launcher")
     tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "--"] + [exec_cmd]
     traced_inputs = set()
+    # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
+    # already exists, so he probably already launched the script.
+    # This is a special case. The default usage should be to launch the script to perform fuzzing and tracing in parallel,
+    # so, it is user's responsibility to manually get rid of the tracer output folder.
+    if os.path.exists(tracer_out):
+        raise IOError("Folder {0} already exists. Either remove or move it and try again.".format(tracer_out))
     os.mkdir(tracer_out)
     new_inputs_found = True
 
