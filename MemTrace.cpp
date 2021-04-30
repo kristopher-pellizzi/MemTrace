@@ -36,6 +36,21 @@ using std::unordered_map;
 using std::vector;
 using std::set;
 
+/* ===================================================================== */
+/* Names of malloc and free */
+/* ===================================================================== */
+#if defined(TARGET_MAC)
+#define MALLOC "_malloc"
+#define CALLOC "_calloc"
+#define FREE "_free"
+#define REALLOC "realloc"
+#else
+#define MALLOC "malloc"
+#define CALLOC "calloc"
+#define FREE "free"
+#define REALLOC "realloc"
+#endif
+
 /* ================================================================== */
 // Global variables 
 /* ================================================================== */
@@ -85,6 +100,17 @@ bool entryPointExecuted = false;
 // application's memory accesses.
 ADDRINT syscallIP;
 bool argIsStackAddr;
+
+// Global variables required to keep track of malloc/calloc/realloc returned pointers
+bool mallocCalled = false;
+ADDRINT mallocRequestedSize = 0;
+unsigned nestedCalls = 0;
+ADDRINT oldReallocPtr = 0;
+ADDRINT lowestHeapAddr = 0;
+ADDRINT highestHeapAddr = 0;
+unordered_map<ADDRINT, size_t> mallocatedPtrs;
+unordered_map<ADDRINT, size_t> mmapMallocated;
+bool mmapMallocCalled = false;
 
 #ifdef DEBUG
     std::ofstream isReadLogger("isReadLog.log");
@@ -151,6 +177,26 @@ bool isCallInstruction(OPCODE opcode){
     return
         opcode == XED_ICLASS_CALL_FAR ||
         opcode == XED_ICLASS_CALL_NEAR;
+}
+
+// This function can be quite expensive if there are many malloc allocating
+// huge memory blocks through mmap.
+// However, usually malloc is used to allocate small memory blocks, so there should be very few 
+// malloc instructions calling mmap.
+bool isMmapMallocated(ADDRINT addr){
+    for(auto iter = mmapMallocated.begin(); iter != mmapMallocated.end(); ++iter){
+        ADDRINT lowest = iter->first;
+        ADDRINT highest = lowest + iter->second - 1;
+        //*out << "LOWEST: 0x" << std::hex << lowest << "; HIGHEST: 0x" << highest << endl;
+        if(addr >= lowest && addr <= highest)
+            return true;
+    }
+    return false;
+}
+
+bool isHeapAddress(ADDRINT addr){
+    bool isInHeapRange = addr >= lowestHeapAddr && addr <= highestHeapAddr;
+    return isInHeapRange || isMmapMallocated(addr);
 }
 
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE opcode, AccessType type){
@@ -406,6 +452,94 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
 // Analysis routines
 /* ===================================================================== */
 
+// Malloc related analysis routined
+VOID MallocBefore(ADDRINT size){
+    if(!entryPointExecuted || size == 0)
+        return;
+
+    mallocRequestedSize = size;
+    mallocCalled = true;
+}
+
+VOID CallocBefore(ADDRINT nmemb, ADDRINT size){
+    if(!entryPointExecuted || nmemb == 0 || size == 0)
+        return;
+
+    mallocRequestedSize = nmemb * size;
+    mallocCalled = true;
+}
+
+VOID FreeBefore(ADDRINT ptr){
+    if(!entryPointExecuted)
+        return;
+
+    if(mmapMallocated.find(ptr) != mmapMallocated.end()){
+        mmapMallocated[ptr] = 0;
+    }
+    else{
+        mallocatedPtrs[ptr] = 0;
+    }
+}
+
+VOID ReallocBefore(ADDRINT ptr, ADDRINT size){
+    if(!entryPointExecuted || size == 0)
+        return;
+        
+    mallocRequestedSize = size;
+    mallocCalled = true;
+    oldReallocPtr = ptr;
+}
+
+// Called right after malloc or calloc or realloc is executed
+VOID MallocAfter(ADDRINT ret)
+{   
+    if(ret == 0)
+        return;
+
+    if(oldReallocPtr != 0 && oldReallocPtr != ret){
+        FreeBefore(oldReallocPtr);
+    }
+
+    if(mmapMallocCalled){
+        mmapMallocated[ret] = mallocRequestedSize;
+    }
+    else{
+        if(lowestHeapAddr == 0)
+            lowestHeapAddr = ret;
+        mallocatedPtrs[ret] = mallocRequestedSize;
+        ADDRINT lastByte = ret + mallocRequestedSize - 1;
+        if(lastByte > highestHeapAddr)
+            highestHeapAddr = lastByte;
+    }
+}
+
+VOID mallocRet(CONTEXT* ctxt){
+    if(!mallocCalled)
+        return;
+
+    if(nestedCalls > 0){
+        --nestedCalls;
+        return;
+    }
+
+    ADDRINT ret = PIN_GetContextReg(ctxt, REG_GAX);
+    MallocAfter(ret);
+    oldReallocPtr = 0;
+    mallocCalled = false;
+    mmapMallocCalled = false;
+}
+
+VOID mallocNestedCall(){
+    if(!mallocCalled)
+        return;
+    ++nestedCalls;
+}
+
+
+
+
+std::ofstream f("heapaddresses.log");
+
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 UINT32 opcode_arg, bool isFirstVisit)
 {
@@ -416,6 +550,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     OPCODE opcode = opcode_arg;
+
+    if(isHeapAddress(addr)){
+        f << "0x" << std::hex << ip << ": ";
+        f << "0x" << std::hex << addr << " is a " << (type == AccessType::WRITE ? "written" : "read") << " heap address" << endl;
+    }
 
     // Only keep track of accesses on the stack, so if it is an access to any other memory
     // section, return immediately.
@@ -624,6 +763,12 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     ADDRINT actualIp = PIN_GetContextReg(ctxt, REG_INST_PTR);
     syscallIP = actualIp;
     ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
+    // If this is a call to mmap and a malloc has been called, but not returned yet,
+    // this mmap is part of the malloc itself, which is allocating memory pages,
+    // probably because the requested size is very high
+    if(sysNum == 9 && mallocCalled){
+        mmapMallocCalled = true;
+    }
     unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
     vector<ADDRINT> actualArgs;
     for(int i = 0; i < argsCount; ++i){
@@ -688,6 +833,62 @@ VOID Image(IMG img, VOID* v){
 
     if(name.find("libc") != name.npos)
         libc_base = offset;
+
+
+    // Instrument the malloc() and free() functions
+   
+    //  Find the allocation functions.
+    RTN mallocRtn = RTN_FindByName(img, MALLOC);
+    if (RTN_Valid(mallocRtn))
+    {
+        RTN_Open(mallocRtn);
+        // Instrument malloc() to print the input argument value and the return value.
+        RTN_InsertCall(mallocRtn, IPOINT_BEFORE, (AFUNPTR)MallocBefore,
+                    IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                    IARG_END);
+
+        RTN_Close(mallocRtn);
+    }
+
+    mallocRtn = RTN_FindByName(img, CALLOC);
+    if (RTN_Valid(mallocRtn))
+    {
+        RTN_Open(mallocRtn);
+
+        // Instrument malloc() to print the input argument value and the return value.
+        RTN_InsertCall(mallocRtn, IPOINT_BEFORE, (AFUNPTR)CallocBefore,
+                    IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                    IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                    IARG_END);
+
+        RTN_Close(mallocRtn);
+    }
+
+    // Find the realloc() function
+    RTN reallocRtn = RTN_FindByName(img, REALLOC);
+    if(RTN_Valid(reallocRtn)){
+        RTN_Open(reallocRtn);
+
+        RTN_InsertCall(reallocRtn, IPOINT_BEFORE, (AFUNPTR) ReallocBefore,
+                        IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                        IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                        IARG_END);
+
+        RTN_Close(reallocRtn);
+    }
+
+    // Find the free() function.
+    RTN freeRtn = RTN_FindByName(img, FREE);
+    if (RTN_Valid(freeRtn))
+    {
+        RTN_Open(freeRtn);
+        // Instrument free() to print the input argument value.
+        RTN_InsertCall(freeRtn, IPOINT_BEFORE, (AFUNPTR)FreeBefore,
+                       IARG_ADDRINT, FREE,
+                       IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                       IARG_END);
+        RTN_Close(freeRtn);
+    }
 }
 
 VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
@@ -747,6 +948,13 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_BOOL, memop == 0,
                         IARG_END
                     );
+
+                    INS_InsertPredicatedCall(
+                        ins,
+                        IPOINT_BEFORE,
+                        (AFUNPTR) mallocNestedCall,
+                        IARG_END
+                    );
                 }
                 else{
                     INS_InsertPredicatedCall(
@@ -784,6 +992,14 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
                         IARG_BOOL, memop == 0,
+                        IARG_END
+                    );
+
+                    INS_InsertPredicatedCall(
+                        ins,
+                        IPOINT_BEFORE,
+                        (AFUNPTR) mallocRet,
+                        IARG_CONTEXT,
                         IARG_END
                     );
                 }
@@ -1090,7 +1306,7 @@ int main(int argc, char *argv[])
 {
     // Initialize PIN library. Print help message if -h(elp) is specified
     // in the command line or the command line is invalid 
-    //PIN_InitSymbols();
+    PIN_InitSymbols();
     if( PIN_Init(argc,argv) )
     {
         return Usage();
