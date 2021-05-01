@@ -357,27 +357,188 @@ HeapShadow::HeapShadow(){
 }
 
 std::pair<unsigned, unsigned> HeapShadow::getShadowAddrIdxOffset(ADDRINT addr){
-    return std::pair<unsigned, unsigned>(0, 0);
+    unsigned retOffset = (unsigned) (addr - baseAddr);
+    unsigned offset = retOffset;
+    offset >>= 3;
+    unsigned shadowIdx = offset / SHADOW_ALLOCATION;
+    return std::pair<unsigned, unsigned>(shadowIdx, retOffset);
 }
 
 void HeapShadow::set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx){
+    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
+    UINT32 leftSize = size + offset;
+    while(leftSize >= 8){
+        *readShadowAddr |= 0xff >> offset;
+        offset = 0;
+
+        if(readShadowAddr != readShadow[shadowIdx] + SHADOW_ALLOCATION - 1){
+            ++readShadowAddr;
+        } 
+        else{
+            readShadowAddr = readShadow[++shadowIdx];
+        }
+
+        leftSize -= 8;
+    }
+    if(leftSize > 0){
+        uint8_t mask = ~(0xff >> leftSize);
+        mask >>= offset;
+        *readShadowAddr |= mask;
+    }
 }
 
 void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
+    dirtyPages[shadowIdx] = true;
+
+    // The address associated to shadowAddr is an 8-bytes aligned address.
+    // However, addr may not be 8-bytes aligned. Consider the 8-bytes aligned address
+    // represented by shadowAddr, and adjust operations with the offset of the first considered byte
+    // from the beginning of that address.
+    unsigned offset = addr % 8;
+    UINT32 leftSize = size + offset;
+    while(leftSize >= 8){
+        uint8_t mask = (0xff >> offset);
+        *shadowAddr |= mask;
+        *readShadowAddr &= ~mask;
+        offset = 0;
+
+        if(shadowAddr != shadow[shadowIdx] + SHADOW_ALLOCATION - 1){
+            ++shadowAddr;
+            ++readShadowAddr;
+        } 
+        else{
+            shadowAddr = shadow[++shadowIdx];
+            readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
+            dirtyPages[shadowIdx] = true;
+        }
+
+        leftSize -= 8;
+    }
+    if(leftSize > 0){
+        uint8_t mask = ~(0xff >> leftSize);
+        mask >>= offset;
+        *shadowAddr |= mask;
+        *readShadowAddr &= ~mask;
+    }
+
+    if(shadowAddr > highestShadowAddr)
+        highestShadowAddr = shadowAddr;
 }
 
 uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
-    return NULL;
+    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+
+    bool isUninitialized = false;
+    uint8_t* initialShadowAddr = shadowAddr;
+    unsigned offset = addr % 8;
+    unsigned initialOffset = offset;
+    UINT32 leftSize = size + offset;
+    uint8_t val;
+
+    while(leftSize >= 8 && !isUninitialized){
+        val = *shadowAddr;
+        val |= ~(0xff >> offset);
+        if(val != 0xff){
+            isUninitialized = true;
+        }
+        offset = 0;
+
+        if(shadowAddr != shadow[shadowIdx] + SHADOW_ALLOCATION - 1){
+            ++shadowAddr;
+        }
+        else{
+            shadowAddr = shadow[++shadowIdx];
+        }
+
+        leftSize -= 8;
+    }
+    if(!isUninitialized && leftSize > 0){
+        val = *shadowAddr;
+        // Change val to put 1 to every bit not considered by this access
+        uint8_t mask = ~(0xff >> (leftSize - offset));
+        mask = ~(mask >> offset);
+        val |= mask;
+        if(val != 0xff){
+            isUninitialized = true;
+        }
+    }
+    else{
+        // While loop exited after having decresed it. In order to compute the uninitialized interval,
+        // we need to restore the last address that we checked
+        --shadowAddr;
+    }
+
+    if(isUninitialized){
+        this->set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
+
+        return this->shadow_memory_copy(addr, size);
+    }
+    else
+        return NULL;
 }
 
 bool HeapShadow::isReadByUninitializedRead(ADDRINT addr, UINT32 size){
-    return true;
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
+
+    bool isRead = false;
+    unsigned offset = addr % 8;
+    UINT32 leftSize = size + offset;
+    uint8_t val;
+
+    while(leftSize >= 8 && !isRead){
+        val = *readShadowAddr;
+        val &= 0xff >> offset;
+        if(val != 0){
+            isRead = true;
+        }
+        offset = 0;
+
+        if(readShadowAddr != readShadow[shadowIdx] + SHADOW_ALLOCATION - 1){
+            ++readShadowAddr;
+        }
+        else{
+            readShadowAddr = readShadow[++shadowIdx];
+        }
+
+        leftSize -= 8;
+    }
+    if(!isRead && leftSize > 0){
+        val = *readShadowAddr;
+        val &= 0xff >> offset;
+        val &= ~(0xff >> leftSize);
+        if(val != 0){
+            isRead = true;
+        }
+    }
+
+    return isRead;
 }
 
 void HeapShadow::reset(ADDRINT addr){
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    size_t freed_size = mallocatedPtrs[addr];
+    size_t reset_size = 0;
 
+    while(reset_size < freed_size){
+        unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, (unsigned long long) (shadowAddr + SHADOW_ALLOCATION - 1));
+        unsigned long long freedBytes = bottom - (unsigned long long) shadowAddr + 1);
+        memset(shadowAddr, 0, freedBytes);
+        reset_size += freedBytes;
+        shadowAddr = shadow[++shadowIdx];
+    }
 }
 
 

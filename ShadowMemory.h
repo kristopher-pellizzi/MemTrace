@@ -13,6 +13,8 @@ using std::vector;
 
 extern map<THREADID, ADDRINT> threadInfos;
 extern ADDRINT lowestHeapAddr;
+extern unordered_map<ADDRINT, size_t> mallocatedPtrs;
+extern unordered_map<ADDRINT, size_t> mmapMallocated;
 
 class ShadowBase{
     protected:
