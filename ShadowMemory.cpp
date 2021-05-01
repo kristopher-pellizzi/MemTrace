@@ -4,30 +4,47 @@
 
 using std::vector;
 
-static vector<bool> dirtyPages;
-static unsigned long SHADOW_ALLOCATION;
+static unsigned long SHADOW_ALLOCATION = sysconf(_SC_PAGESIZE);
 
-// This shadow memory keeps 1 bit for each byte of application memory,
-// telling if that byte has been initialized by a write access
-static std::vector<uint8_t*> shadow;
+unsigned long long ShadowBase::min(unsigned long long x, unsigned long long y){
+    return x <= y ? x : y;
+}
 
-// This second shadow memory keeps 1 additional bit for each byte of application memory,
-// telling if that byte has been read by a read access considered uninitialized
-static std::vector<uint8_t*> readShadow;
+uint8_t* ShadowBase::shadow_memory_copy(ADDRINT addr, UINT32 size){
+    ADDRINT lastByteAddr = addr + size - 1;
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(lastByteAddr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    unsigned offset = addr % 8;
+    size += offset;
+    UINT32 shadowSize = size % 8 != 0 ? (size / 8) + 1 : (size / 8);
 
-// Returns a pair containing the index to be used to retrieve the correct shadow page
-// and an offset required to get the correct address inside that page
-static std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr){
-    unsigned retOffset = (unsigned) (threadInfos[0] - addr);
+    uint8_t* ret = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
+    UINT32 copied = 0;
+    while(copied != shadowSize){
+        uint8_t* highestCopied = (uint8_t*)min(
+            (unsigned long long) shadowAddr + (shadowSize - copied) - 1,
+            (unsigned long long) shadow[shadowIdx] + SHADOW_ALLOCATION - 1
+        );
+
+        UINT32 toCopy = highestCopied - shadowAddr + 1;
+        memcpy(ret + copied, shadowAddr, toCopy);
+        copied += toCopy;
+        shadowAddr = shadow[++shadowIdx];
+    }
+
+    return ret;
+}
+
+std::pair<unsigned, unsigned> StackShadow::getShadowAddrIdxOffset(ADDRINT addr) {
+    unsigned retOffset = (unsigned) (baseAddr - addr);
     unsigned offset = retOffset;
     offset >>= 3;
     unsigned shadowIdx = offset / SHADOW_ALLOCATION;
     return std::pair<unsigned, unsigned>(shadowIdx, retOffset);
 }
 
-// Given the index and the offset returned from the previous function,
-// return the corresponding shadow memory address
-static uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
+uint8_t* ShadowBase::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     bool needsCeiling = offset % 8 != 0;
     
     offset >>=3;
@@ -46,20 +63,14 @@ static uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     return needsCeiling ? ret + 1 : ret;
 }
 
-static unsigned long long min(unsigned long long x, unsigned long long y){
-    return x <= y ? x : y;
-}
+uint8_t* ShadowBase::getShadowAddr(ADDRINT addr){
+    std::pair<unsigned, unsigned> shadowIdxOffset = this->getShadowAddrIdxOffset(addr);
 
-uint8_t* getShadowAddr(ADDRINT addr){
-    std::pair<unsigned, unsigned> shadowIdxOffset = getShadowAddrIdxOffset(addr);
-
-    uint8_t* ret = getShadowAddrFromIdx(shadowIdxOffset.first, shadowIdxOffset.second);
+    uint8_t* ret = this->getShadowAddrFromIdx(shadowIdxOffset.first, shadowIdxOffset.second);
     return ret;
 }
 
-// Given a shadow address, return the corresponding shadow address of the read shadow memory
-// (the one containing information about bytes read by uninitialized read accesses)
-static uint8_t* getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
+uint8_t* ShadowBase::getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
     unsigned offset = shadowAddr - shadow[shadowIdx];
 
     while(shadowIdx >= readShadow.size()){
@@ -74,14 +85,11 @@ static uint8_t* getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx)
     return readShadow[shadowIdx] + offset;
 }
 
-// Function invoked whenever a write access is executed.
-// It sets the corresponding shadow memory area to 1 and resets the corresponding
-// read shadow memory area to 0
-void set_as_initialized(ADDRINT addr, UINT32 size){
-    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
+void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    uint8_t* readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
     dirtyPages[shadowIdx] = true;
 
@@ -105,7 +113,7 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
         } 
         else if(shadowIdx != 0){
             shadowAddr = shadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
-            readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
+            readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
             dirtyPages[shadowIdx] = true;
         }
         else{
@@ -126,10 +134,8 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
     }
 }
 
-// Function invoked whenever an uninitialized read is executed.
-// It sets the corresponding read shadow memory area to 1.
-static void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx){
-    uint8_t* readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
+void StackShadow::set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx) {
+    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
     UINT32 leftSize = size + offset;
     while(leftSize >= 8){
@@ -157,32 +163,6 @@ static void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr
 
 }
 
-static uint8_t* shadow_memory_copy(ADDRINT addr, UINT32 size){
-    ADDRINT lastByteAddr = addr + size - 1;
-    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(lastByteAddr);
-    unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    unsigned offset = addr % 8;
-    size += offset;
-    UINT32 shadowSize = size % 8 != 0 ? (size / 8) + 1 : (size / 8);
-
-    uint8_t* ret = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
-    UINT32 copied = 0;
-    while(copied != shadowSize){
-        uint8_t* highestCopied = (uint8_t*)min(
-            (unsigned long long) shadowAddr + (shadowSize - copied) - 1,
-            (unsigned long long) shadow[shadowIdx] + SHADOW_ALLOCATION - 1
-        );
-
-        UINT32 toCopy = highestCopied - shadowAddr + 1;
-        memcpy(ret + copied, shadowAddr, toCopy);
-        copied += toCopy;
-        shadowAddr = shadow[++shadowIdx];
-    }
-
-    return ret;
-}
-
 // Function to retrieve the bytes of the given address and size which are considered not initialized.
 // The returned interval contains the offset of the bytes from the beginning of the access.
 // For instance, if a write already initialized bytes [0x0, 0xa] of memory and the given address and size access
@@ -199,10 +179,10 @@ static uint8_t* shadow_memory_copy(ADDRINT addr, UINT32 size){
 //      of the access, it may have required to return a set of intervals, thus making the following steps
 //      of the tool more complex.
 
-uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){
+uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
     std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
     bool isUninitialized = false;
     uint8_t* initialShadowAddr = shadowAddr;
@@ -248,21 +228,19 @@ uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){
     }
 
     if(isUninitialized){
-        set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
+        this->set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
 
-        return shadow_memory_copy(addr, size);
+        return this->shadow_memory_copy(addr, size);
     }
     else
         return NULL;
 }
 
-// Returns true if the access represented by the given address and size (at least one of its bytes, actually)
-// is read by an uninitialized read access
-bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
-    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
+bool StackShadow::isReadByUninitializedRead(ADDRINT addr, UINT32 size) {
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    uint8_t* readShadowAddr = getReadShadowFromShadow(shadowAddr, shadowIdx);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
     bool isRead = false;
     unsigned offset = addr % 8;
@@ -302,12 +280,10 @@ bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
     return isRead;
 }
 
-// Resets all the shadow memory addresses above or equal to |addr| to 0.
-// This is invoked on return instructions, when a stack frame is "freed".
-void reset(ADDRINT addr){
-    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
+void StackShadow::reset(ADDRINT addr) {
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
     unsigned long long bottom = min((unsigned long long) highestShadowAddr, (unsigned long long) (shadowAddr + SHADOW_ALLOCATION - 1));
     memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
@@ -320,14 +296,20 @@ void reset(ADDRINT addr){
     }
 }
 
-// Shadow memory initialization
-void shadowInit(){
-    shadow.reserve(25);
-    readShadow.reserve(25);
-    dirtyPages.reserve(25);
-    long pagesize = sysconf(_SC_PAGESIZE);
-    SHADOW_ALLOCATION = pagesize;
-    for(int i = 0; i < 3; ++i){
+void ShadowBase::setBaseAddr(ADDRINT baseAddr){
+    this->baseAddr = baseAddr;
+}
+
+ShadowBase* ShadowBase::getPtr(){
+    return this;
+}
+
+StackShadow::StackShadow(){
+    shadow.reserve(5);
+    readShadow.reserve(5);
+    dirtyPages.reserve(5);
+
+    for(int i = 0; i < 2; ++i){
         uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if(newMap == (void*) -1){
             printf("mmap failed: %s\n", strerror(errno));
@@ -343,9 +325,83 @@ void shadowInit(){
         }
         readShadow.push_back(newMap);
     }
+
     // The address contained by the stack pointer at the beginning of the application entry point is initialized
     // outside the function itself (i.e. by the loader) but the entry point reads it through a pop instruction.
     // In order to avoid to report a false positive, set as initialized the shadow memory mirroring that address.
     *shadow[0] = 0xff;
     dirtyPages[0] = true;
+}
+
+HeapShadow::HeapShadow(){
+    shadow.reserve(5);
+    readShadow.reserve(5);
+    dirtyPages.reserve(5);
+
+    for(int i = 0; i < 2; ++i){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        shadow.push_back(newMap);
+        dirtyPages[i] = false;
+
+        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        readShadow.push_back(newMap);
+    }
+}
+
+std::pair<unsigned, unsigned> HeapShadow::getShadowAddrIdxOffset(ADDRINT addr){
+    return std::pair<unsigned, unsigned>(0, 0);
+}
+
+void HeapShadow::set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx){
+
+}
+
+void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
+
+}
+
+uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
+    return NULL;
+}
+
+bool HeapShadow::isReadByUninitializedRead(ADDRINT addr, UINT32 size){
+    return true;
+}
+
+void HeapShadow::reset(ADDRINT addr){
+
+}
+
+
+StackShadow stack;
+HeapShadow heap;
+
+ShadowBase* currentShadow;
+
+uint8_t* getShadowAddr(ADDRINT addr){
+    return currentShadow->getShadowAddr(addr);
+}
+
+void set_as_initialized(ADDRINT addr, UINT32 size){
+    currentShadow->set_as_initialized(addr, size);
+}
+
+uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){
+    return currentShadow->getUninitializedInterval(addr, size);
+}
+
+bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
+    return currentShadow->isReadByUninitializedRead(addr, size);
+}
+
+void reset(ADDRINT addr){
+    currentShadow->reset(addr);
 }

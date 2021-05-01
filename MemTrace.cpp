@@ -504,8 +504,10 @@ VOID MallocAfter(ADDRINT ret)
         mmapMallocated[ret] = mallocRequestedSize;
     }
     else{
-        if(lowestHeapAddr == 0)
+        if(lowestHeapAddr == 0){
             lowestHeapAddr = ret;
+            heap.setBaseAddr(lowestHeapAddr);
+        }
         mallocatedPtrs[ret] = mallocRequestedSize;
         ADDRINT lastByte = ret + mallocRequestedSize - 1;
         if(lastByte > highestHeapAddr)
@@ -558,9 +560,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     // Only keep track of accesses on the stack, so if it is an access to any other memory
     // section, return immediately.
-    if(!isStackAddress(tid, addr, sp, opcode, type)){
-        return;
+    if(isStackAddress(tid, addr, sp, opcode, type)){
+        currentShadow = stack.getPtr();
     }
+    else
+        return;
 
     // This is an application instruction
     if(ip >= textStart && ip <= textEnd){
@@ -894,6 +898,9 @@ VOID Image(IMG img, VOID* v){
 VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     ADDRINT stackBase = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     threadInfos.insert(std::pair<THREADID, ADDRINT>(tid, stackBase));
+    // NOTE: threadInfos is a map created for a future extension to multi-threaded applications.
+    // However, for now the tool supports only single threaded applications.
+    stack.setBaseAddr(threadInfos[0]);
 
     #ifdef DEBUG
         print_profile(applicationTiming, "Application started");
@@ -1311,9 +1318,6 @@ int main(int argc, char *argv[])
     {
         return Usage();
     }
-
-    // Initialize shadow memory
-    shadowInit();
     
     // Add required instrumentation routines
     IMG_AddInstrumentFunction(Image, 0);
