@@ -1,3 +1,6 @@
+#ifndef SHADOWMEMORY
+#define SHADOWMEMORY
+
 #include <map>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -5,11 +8,15 @@
 #include <errno.h>
 #include <vector>
 #include <iostream>
+#include <unordered_map>
+#include <set>
 
 #include "pin.H"
 
 using std::map;
 using std::vector;
+using std::set;
+using std::unordered_map;
 
 extern map<THREADID, ADDRINT> threadInfos;
 extern ADDRINT lowestHeapAddr;
@@ -39,7 +46,7 @@ class ShadowBase{
         
         // Given the index and the offset returned from the previous function,
         // return the corresponding shadow memory address
-        uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset);
+        virtual uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) = 0;
         
         // Given a shadow address, return the corresponding shadow address of the read shadow memory
         // (the one containing information about bytes read by uninitialized read accesses)
@@ -71,6 +78,13 @@ class ShadowBase{
         // or on free invocations.
         virtual void reset(ADDRINT addr) = 0;
 
+        // This takes the shadow memory dump saved in the MemoryAccess object and computes the set of uninitialized
+        // intervals from that by scanning its bits. For this reason, this is a quite expensive operation, and the
+        // more bytes are accessed by a MemoryAccess, the more expensive it is.
+        // However, this is executed only for those uninitialized read accesses saved by the tool (which shouldn't be so
+        // many in a well produced program), most of which are usually of a few bytes.
+        virtual set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize) = 0;
+
         void setBaseAddr(ADDRINT baseAddr);
         ShadowBase* getPtr();
 };
@@ -79,6 +93,7 @@ class StackShadow : public ShadowBase{
     protected:
         std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr) override;
         void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx) override;
+        uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) override;
 
     public:
         StackShadow();
@@ -87,12 +102,14 @@ class StackShadow : public ShadowBase{
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
         bool isReadByUninitializedRead(ADDRINT addr, UINT32 size) override;
         void reset(ADDRINT addr) override;
+        set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize) override;
 };
 
 class HeapShadow : public ShadowBase{
     protected:
         std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr) override;
         void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx) override;
+        uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) override;
 
     public:
         HeapShadow();
@@ -101,6 +118,7 @@ class HeapShadow : public ShadowBase{
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
         bool isReadByUninitializedRead(ADDRINT addr, UINT32 size) override;
         void reset(ADDRINT addr) override;
+        set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize) override;
 };
 
 extern StackShadow stack;
@@ -117,3 +135,5 @@ uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size);
 bool isReadByUninitializedRead(ADDRINT addr, UINT32 size);
 
 void reset(ADDRINT addr);
+
+#endif //SHADOWMEMORY

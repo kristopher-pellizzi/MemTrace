@@ -11,8 +11,7 @@ unsigned long long ShadowBase::min(unsigned long long x, unsigned long long y){
 }
 
 uint8_t* ShadowBase::shadow_memory_copy(ADDRINT addr, UINT32 size){
-    ADDRINT lastByteAddr = addr + size - 1;
-    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(lastByteAddr);
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
     unsigned offset = addr % 8;
@@ -44,7 +43,32 @@ std::pair<unsigned, unsigned> StackShadow::getShadowAddrIdxOffset(ADDRINT addr) 
     return std::pair<unsigned, unsigned>(shadowIdx, retOffset);
 }
 
-uint8_t* ShadowBase::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
+uint8_t* ShadowBase::getShadowAddr(ADDRINT addr){
+    std::pair<unsigned, unsigned> shadowIdxOffset = this->getShadowAddrIdxOffset(addr);
+
+    uint8_t* ret = this->getShadowAddrFromIdx(shadowIdxOffset.first, shadowIdxOffset.second);
+    return ret;
+}
+
+
+uint8_t* ShadowBase::getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
+    unsigned offset = shadowAddr - shadow[shadowIdx];
+
+    while(shadowIdx >= readShadow.size()){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) - 1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        readShadow.push_back(newMap);
+    }
+
+    return readShadow[shadowIdx] + offset;
+}
+
+
+
+uint8_t* StackShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     bool needsCeiling = offset % 8 != 0;
     
     offset >>=3;
@@ -61,28 +85,6 @@ uint8_t* ShadowBase::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
     return needsCeiling ? ret + 1 : ret;
-}
-
-uint8_t* ShadowBase::getShadowAddr(ADDRINT addr){
-    std::pair<unsigned, unsigned> shadowIdxOffset = this->getShadowAddrIdxOffset(addr);
-
-    uint8_t* ret = this->getShadowAddrFromIdx(shadowIdxOffset.first, shadowIdxOffset.second);
-    return ret;
-}
-
-uint8_t* ShadowBase::getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
-    unsigned offset = shadowAddr - shadow[shadowIdx];
-
-    while(shadowIdx >= readShadow.size()){
-        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) - 1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        readShadow.push_back(newMap);
-    }
-
-    return readShadow[shadowIdx] + offset;
 }
 
 void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
@@ -230,7 +232,7 @@ uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
     if(isUninitialized){
         this->set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
 
-        return this->shadow_memory_copy(addr, size);
+        return this->shadow_memory_copy(addr + size - 1, size);
     }
     else
         return NULL;
@@ -294,6 +296,102 @@ void StackShadow::reset(ADDRINT addr) {
             dirtyPages[i] = false;
         }
     }
+}
+
+set<std::pair<unsigned, unsigned>> StackShadow::computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize){
+    set<std::pair<unsigned, unsigned>> ret;
+
+    uint8_t* addr = uninitializedInterval;
+    unsigned offset = accessAddr % 8;
+    UINT32 size = accessSize + offset;
+    UINT32 shadowSize = (size % 8 != 0 ? (size / 8) + 1 : (size / 8));
+    uint8_t mask = 0xff << (8 - (size % 8));
+
+    while(shadowSize > 0){
+        uint8_t val = *addr;
+        val |= mask;
+        val |= (shadowSize != 1 ? 0 : ((1 << offset) - 1));
+        mask = 0;
+
+        if(val != 0xff){
+            // Start scanning the bits to find the lower and upper bounds of the interval
+            mask = 1 << 7;
+            int counter = 0;
+
+            // Starting from the most significant bit, scan every other bit until a 0 is found (guaranteed to be found, 
+            // as we already know |val| is not 0xff
+            while((val & mask) != 0){
+                ++counter;
+                mask >>= 1;
+            }
+
+            int upperBound = shadowSize * 8 - counter - 1 - offset;
+
+            while((val & mask) == 0 && mask != 0){
+                ++counter;
+                mask >>= 1;
+            }
+
+            // If another 1 is found inside the same shadow byte, we have found the interval's lower bound
+            if(mask != 0){
+                int lowerBound = shadowSize * 8 - counter - offset;
+                ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                // Update mask in order to ignore the interval just found
+                mask = 0xff << (8 - counter);
+            }
+            // the lower bound is in the following shadow byte. Before scanning bit by bit, try to see if the whole
+            // shadow byte is 0. If it's not, scan the byte one bit at a time.
+            else{
+                bool lowerBoundFound = false;
+
+                while(!lowerBoundFound){
+                    --shadowSize;
+                    ++addr;
+
+                    // This condition evaluates to true if there's no bit set to 1 starting from the |upperBound|.
+                    // This means that also the very first byte of the access is uninitialized, so |lowerBound| is 0
+                    if(shadowSize == 0){
+                        int lowerBound = 0;
+                        ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                        break;
+                    }
+
+                    if(shadowSize == 1)
+                        offset = accessAddr % 8;
+
+                    val = *addr;
+                    val |= (shadowSize != 1 ? 0 : ((1 << offset) - 1));
+
+                    if(val != 0){
+                        mask = 1 << 7;
+                        counter = 0;
+
+                        // Starting from the most significant bit, scan every other bit until a 1 is found (guaranteed to be found, 
+                        // as we already know |val| is not 0
+                        while((val & mask) == 0){
+                            ++counter;
+                            mask >>= 1;
+                        }
+
+                        int lowerBound = shadowSize * 8 - counter - offset;
+                        ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                        mask = 0xff << (8 - counter);
+                        lowerBoundFound = true;
+                    }
+                }
+            }
+        }
+        // This shadow byte is 0xff. No uninitialized interval can be found
+        else{
+            // |addr| is increased only if it was 0xff. This way, it is checked again after computing
+            // interval's bounds in case there are more "holes" in the same shadow byte 
+            // (e.g. shadowByte = 11011001 => intervals are [1,2] and [5, 5], assuming only 1 byte is accessed by the application)
+            --shadowSize;
+            ++addr;
+        }
+    }
+
+    return ret;
 }
 
 void ShadowBase::setBaseAddr(ADDRINT baseAddr){
@@ -364,6 +462,23 @@ std::pair<unsigned, unsigned> HeapShadow::getShadowAddrIdxOffset(ADDRINT addr){
     return std::pair<unsigned, unsigned>(shadowIdx, retOffset);
 }
 
+uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){    
+    offset >>=3;
+    // If the requested address does not have a shadow location yet, allocate it
+    while(shadowIdx >= shadow.size()){
+        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) - 1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        shadow.push_back(newMap);
+        dirtyPages.push_back(false);
+    }
+    
+    uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
+    return ret;
+}
+
 void HeapShadow::set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx){
     uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
@@ -421,7 +536,7 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
         leftSize -= 8;
     }
     if(leftSize > 0){
-        uint8_t mask = ~(0xff >> leftSize);
+        uint8_t mask = ~(0xff >> (leftSize - offset));
         mask >>= offset;
         *shadowAddr |= mask;
         *readShadowAddr &= ~mask;
@@ -534,11 +649,110 @@ void HeapShadow::reset(ADDRINT addr){
 
     while(reset_size < freed_size){
         unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, (unsigned long long) (shadowAddr + SHADOW_ALLOCATION - 1));
-        unsigned long long freedBytes = bottom - (unsigned long long) shadowAddr + 1);
+        unsigned long long freedBytes = bottom - (unsigned long long) shadowAddr + 1;
         memset(shadowAddr, 0, freedBytes);
         reset_size += freedBytes;
         shadowAddr = shadow[++shadowIdx];
     }
+}
+
+set<std::pair<unsigned, unsigned>> HeapShadow::computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize){
+    set<std::pair<unsigned, unsigned>> ret;
+
+    uint8_t* addr = uninitializedInterval;
+    unsigned offset = accessAddr % 8;
+    UINT32 size = accessSize + offset;
+    UINT32 shadowSize = (size % 8 != 0 ? (size / 8) + 1 : (size / 8));
+    uint8_t mask = ~(0xff >> offset);
+    int byteCount = 0;
+
+    while(shadowSize > 0){
+        uint8_t val = *addr;
+        val |= mask;
+        if(shadowSize == 1)
+            val |= (0xff >> (size - byteCount * 8));
+        mask = 0;
+
+        if(val != 0xff){
+            // Start scanning the bits to find the lower and upper bounds of the interval
+            mask = 1 << 7;
+            int counter = 0;
+
+            // Starting from the most significant bit, scan every other bit until a 0 is found (guaranteed to be found, 
+            // as we already know |val| is not 0xff
+            while((val & mask) != 0){
+                ++counter;
+                mask >>= 1;
+            }
+
+            int lowerBound = byteCount * 8 + counter - offset;
+
+            while((val & mask) == 0 && mask != 0){
+                ++counter;
+                mask >>= 1;
+            }
+
+            // If another 1 is found inside the same shadow byte, we have found the interval's upper bound
+            if(mask != 0){
+                int upperBound = byteCount * 8 + counter - 1 - offset;
+                ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                // Update mask in order to ignore the interval just found
+                mask = 0xff << (8 - counter);
+            }
+            // the lower bound is in the following shadow byte. Before scanning bit by bit, try to see if the whole
+            // shadow byte is 0. If it's not, scan the byte one bit at a time.
+            else{
+                bool upperBoundFound = false;
+
+                while(!upperBoundFound){
+                    --shadowSize;
+                    ++addr;
+                    ++byteCount;
+
+                    // This condition evaluates to true if there's no bit set to 1 starting from the |upperBound|.
+                    // This means that also the very first byte of the access is uninitialized, so |lowerBound| is 0
+                    if(shadowSize == 0){
+                        int upperBound = accessSize - 1;
+                        ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                        break;
+                    }
+
+                    val = *addr;
+
+                    if(shadowSize == 1)
+                        val &= ~(0xff >> (size - byteCount * 8));
+
+                    if(val != 0){
+                        mask = 1 << 7;
+                        counter = 0;
+
+                        // Starting from the most significant bit, scan every other bit until a 1 is found (guaranteed to be found, 
+                        // as we already know |val| is not 0
+                        while((val & mask) == 0){
+                            ++counter;
+                            mask >>= 1;
+                        }
+
+                        int upperBound = byteCount * 8 + counter - 1 - offset;
+                        ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                        mask = 0xff << (8 - counter);
+                        upperBoundFound = true;
+                    }
+                }
+            }
+        }
+        // This shadow byte is 0xff. No uninitialized interval can be found
+        else{
+            // |addr| is increased only if it was 0xff. This way, it is checked again after computing
+            // interval's bounds in case there are more "holes" in the same shadow byte 
+            // (e.g. shadowByte = 11011001 => intervals are [1,2] and [5, 5], assuming only 1 byte is accessed by the application)
+            --shadowSize;
+            ++addr;
+            ++byteCount;
+        }
+    }
+
+    return ret;
 }
 
 
