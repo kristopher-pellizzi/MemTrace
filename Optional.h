@@ -1,3 +1,6 @@
+#ifndef OPTIONAL
+#define OPTIONAL
+
 // Keep this special class visible only here, as it is used to create an empty Optional object
 namespace{
     class EmptyOptional{
@@ -42,7 +45,13 @@ class Optional{
             return !isNone;
         }
 
-        T& value() const;
+        T& value(){
+            return val;
+        };
 
-        bool hasValue() const;
+        bool hasValue() const{
+            return !isNone;
+        };
 };
+
+#endif // OPTIONAL

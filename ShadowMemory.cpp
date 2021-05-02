@@ -4,6 +4,8 @@
 
 using std::vector;
 
+unordered_map<ADDRINT, HeapShadow> mmapShadows;
+
 static unsigned long SHADOW_ALLOCATION = sysconf(_SC_PAGESIZE);
 
 unsigned long long ShadowBase::min(unsigned long long x, unsigned long long y){
@@ -779,4 +781,9 @@ bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
 
 void reset(ADDRINT addr){
     currentShadow->reset(addr);
+}
+
+ShadowBase* getMmapShadowMemory(ADDRINT index){
+    HeapShadow& shadowMemory = mmapShadows[index];
+    return shadowMemory.getPtr();
 }

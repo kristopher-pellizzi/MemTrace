@@ -26,6 +26,7 @@
 #include "MemoryAccess.h"
 #include "SyscallHandler.h"
 #include "Optional.h"
+#include "HeapType.h"
 
 using std::cerr;
 using std::string;
@@ -183,20 +184,22 @@ bool isCallInstruction(OPCODE opcode){
 // huge memory blocks through mmap.
 // However, usually malloc is used to allocate small memory blocks, so there should be very few 
 // malloc instructions calling mmap.
-bool isMmapMallocated(ADDRINT addr){
+HeapType isMmapMallocated(ADDRINT addr){
     for(auto iter = mmapMallocated.begin(); iter != mmapMallocated.end(); ++iter){
         ADDRINT lowest = iter->first;
         ADDRINT highest = lowest + iter->second - 1;
         //*out << "LOWEST: 0x" << std::hex << lowest << "; HIGHEST: 0x" << highest << endl;
         if(addr >= lowest && addr <= highest)
-            return true;
+            return HeapType(HeapEnum::MMAP, lowest);
     }
-    return false;
+    return HeapType(HeapEnum::INVALID);
 }
 
-bool isHeapAddress(ADDRINT addr){
+HeapType isHeapAddress(ADDRINT addr){
     bool isInHeapRange = addr >= lowestHeapAddr && addr <= highestHeapAddr;
-    return isInHeapRange || isMmapMallocated(addr);
+    if(isInHeapRange)
+        return HeapType(HeapEnum::NORMAL);
+    return isMmapMallocated(addr);
 }
 
 bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE opcode, AccessType type){
@@ -502,6 +505,7 @@ VOID MallocAfter(ADDRINT ret)
 
     if(mmapMallocCalled){
         mmapMallocated[ret] = mallocRequestedSize;
+        mmapShadows[ret] = HeapShadow();
     }
     else{
         if(lowestHeapAddr == 0){
@@ -558,8 +562,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     if(isStackAddress(tid, addr, sp, opcode, type)){
         currentShadow = stack.getPtr();
     }
-    else if(isHeapAddress(addr)){
-        currentShadow = heap.getPtr();
+    else if(HeapType heapType = isHeapAddress(addr)){
+        currentShadow = heapType.isNormal() ? heap.getPtr() : getMmapShadowMemory(heapType.getShadowMemoryIndex());
     }
     else
         return;

@@ -123,6 +123,7 @@ class HeapShadow : public ShadowBase{
 
 extern StackShadow stack;
 extern HeapShadow heap;
+extern unordered_map<ADDRINT, HeapShadow> mmapShadows;
 
 extern ShadowBase* currentShadow;
 
@@ -135,5 +136,7 @@ uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size);
 bool isReadByUninitializedRead(ADDRINT addr, UINT32 size);
 
 void reset(ADDRINT addr);
+
+ShadowBase* getMmapShadowMemory(ADDRINT index);
 
 #endif //SHADOWMEMORY
