@@ -540,7 +540,6 @@ VOID mallocNestedCall(){
 
 
 
-std::ofstream f("heapaddresses.log");
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 UINT32 opcode_arg, bool isFirstVisit)
@@ -553,15 +552,14 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     OPCODE opcode = opcode_arg;
 
-    if(isHeapAddress(addr)){
-        f << "0x" << std::hex << ip << ": ";
-        f << "0x" << std::hex << addr << " is a " << (type == AccessType::WRITE ? "written" : "read") << " heap address" << endl;
-    }
 
     // Only keep track of accesses on the stack, so if it is an access to any other memory
     // section, return immediately.
     if(isStackAddress(tid, addr, sp, opcode, type)){
         currentShadow = stack.getPtr();
+    }
+    else if(isHeapAddress(addr)){
+        currentShadow = heap.getPtr();
     }
     else
         return;
@@ -608,7 +606,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
     int bpOffset = addr - bp;
 
-    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm);
+    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm, currentShadow);
     AccessIndex ai(addr, size);
 
     #ifdef DEBUG
@@ -721,6 +719,7 @@ VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, AD
     if(!entryPointExecuted)
         return;
 
+    currentShadow = stack.getPtr();
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 }
 
@@ -730,6 +729,8 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     if(!entryPointExecuted)
         return;
         
+    currentShadow = stack.getPtr();
+
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);

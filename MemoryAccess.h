@@ -1,10 +1,12 @@
+#ifndef MEMORYACCESS
+#define MEMORYACCESS
+
 #include "pin.H"
 #include <set>
 #include <string.h>
 #include <iostream>
 
-#ifndef MEMORYACCESS
-#define MEMORYACCESS
+#include "ShadowMemory.h"
 
 using std::set;
 
@@ -28,11 +30,12 @@ class MemoryAccess{
         std::string instructionDisasm;
         bool isUninitializedRead;
         uint8_t* uninitializedInterval;
+        ShadowBase* shadowMemory;
 
     public:
         MemoryAccess(){}
 
-        MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string disasm) : 
+        MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string disasm, ShadowBase* shadowMemory) : 
             executionOrder(executionOrder),
             instructionPointer(ip),
             actualInstructionPointer(actualInstructionPointer),
@@ -43,7 +46,8 @@ class MemoryAccess{
             type(type),
             instructionDisasm(disasm),
             isUninitializedRead(false),
-            uninitializedInterval(NULL)
+            uninitializedInterval(NULL),
+            shadowMemory(shadowMemory)
             {};
 
         ADDRINT getIP() const;
