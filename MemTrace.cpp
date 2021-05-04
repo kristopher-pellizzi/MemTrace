@@ -476,11 +476,33 @@ VOID FreeBefore(ADDRINT ptr){
     if(!entryPointExecuted)
         return;
 
-    if(mmapMallocated.find(ptr) != mmapMallocated.end()){
-        mmapMallocated[ptr] = 0;
+    // NOTE: the user is calling function |free|, so, we can assume it surely is a heap address.
+    // However, a HeapType object also keeps some other useful information. For instance, it allows us to 
+    // know if it is a normal malloc or a mmap and to get the pointer to the correct shadow memory index 
+    // (in case it is a mmap malloc)
+    HeapType type = isHeapAddress(ptr);
+    bool isNormalAndValid = type.isNormal() && mallocatedPtrs.find(ptr) != mallocatedPtrs.end();
+
+    // If the program is correct, this should never be the case
+    if(!type.isValid() || !isNormalAndValid){
+        *out << "The program called free on an invalid heap address" << endl;
+        exit(1);
+    }
+
+    if(type.isNormal()){
+        currentShadow = heap.getPtr();
     }
     else{
+        currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
+    }
+
+    currentShadow->reset(ptr);
+
+    if(type.isNormal()){
         mallocatedPtrs[ptr] = 0;
+    }
+    else{
+        mmapMallocated[ptr] = 0;
     }
 }
 
@@ -505,7 +527,7 @@ VOID MallocAfter(ADDRINT ret)
 
     if(mmapMallocCalled){
         mmapMallocated[ret] = mallocRequestedSize;
-        mmapShadows[ret] = HeapShadow();
+        mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(ret, HeapShadow(HeapEnum::MMAP)));
     }
     else{
         if(lowestHeapAddr == 0){
@@ -893,7 +915,6 @@ VOID Image(IMG img, VOID* v){
         RTN_Open(freeRtn);
         // Instrument free() to print the input argument value.
         RTN_InsertCall(freeRtn, IPOINT_BEFORE, (AFUNPTR)FreeBefore,
-                       IARG_ADDRINT, FREE,
                        IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
                        IARG_END);
         RTN_Close(freeRtn);

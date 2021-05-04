@@ -433,7 +433,7 @@ StackShadow::StackShadow(){
     dirtyPages[0] = true;
 }
 
-HeapShadow::HeapShadow(){
+HeapShadow::HeapShadow(HeapEnum type) : heapType(type){
     shadow.reserve(5);
     readShadow.reserve(5);
     dirtyPages.reserve(5);
@@ -646,7 +646,15 @@ void HeapShadow::reset(ADDRINT addr){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    if(heapType == HeapEnum::MMAP){
+        // If it is a heap allocated through mmap, it is due to a big allocation request.
+        // These kind of requests are very rare, and when they happen it is likely to have a long life.
+        // For these reasons, it is simpler to simply remove its shadow memory, so that it also reduces memory usage
+        mmapShadows.erase(addr);
+        return;
+    }
     size_t freed_size = mallocatedPtrs[addr];
+    freed_size = freed_size % 8 == 0 ? freed_size / 8 : freed_size / 8 + 1;
     size_t reset_size = 0;
 
     while(reset_size < freed_size){
@@ -759,7 +767,7 @@ set<std::pair<unsigned, unsigned>> HeapShadow::computeIntervals(uint8_t* uniniti
 
 
 StackShadow stack;
-HeapShadow heap;
+HeapShadow heap(HeapEnum::NORMAL);
 
 ShadowBase* currentShadow;
 
@@ -784,6 +792,6 @@ void reset(ADDRINT addr){
 }
 
 ShadowBase* getMmapShadowMemory(ADDRINT index){
-    HeapShadow& shadowMemory = mmapShadows[index];
+    HeapShadow& shadowMemory = mmapShadows.find(index)->second;
     return shadowMemory.getPtr();
 }

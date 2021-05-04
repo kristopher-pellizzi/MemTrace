@@ -12,6 +12,7 @@
 #include <set>
 
 #include "pin.H"
+#include "HeapEnum.h"
 
 using std::map;
 using std::vector;
@@ -107,12 +108,14 @@ class StackShadow : public ShadowBase{
 
 class HeapShadow : public ShadowBase{
     protected:
+        HeapEnum heapType;
+
         std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr) override;
         void set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx) override;
         uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) override;
 
     public:
-        HeapShadow();
+        HeapShadow(HeapEnum type);
 
         void set_as_initialized(ADDRINT addr, UINT32 size) override;
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
