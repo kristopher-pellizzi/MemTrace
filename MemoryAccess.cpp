@@ -1,5 +1,4 @@
 #include "MemoryAccess.h"
-#include <iostream>
 
 ADDRINT MemoryAccess::getIP() const{
     return instructionPointer;
@@ -51,6 +50,18 @@ void MemoryAccess::setUninitializedRead(){
 
 set<std::pair<unsigned, unsigned>> MemoryAccess::computeIntervals() const{
     return shadowMemory->computeIntervals(uninitializedInterval, accessAddress, accessSize);
+}
+
+std::string MemoryAccess::toString() const{
+    std::stringstream ss;
+    ss <<   "0x" << std::hex << getIP() <<
+            "(0x" << getActualIP() << "): " <<
+            getDisasm() << " " <<
+            (getType() == AccessType::READ ? "R " : "W ") <<
+            std::dec << getSize() << " B @ " << std::hex <<
+            "0x" << getAddress();
+    std::string s = ss.str();
+    return s;
 }
 
 bool MemoryAccess::operator<(const MemoryAccess &other) const{

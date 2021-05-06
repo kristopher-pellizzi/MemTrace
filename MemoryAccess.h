@@ -5,6 +5,8 @@
 #include <set>
 #include <string.h>
 #include <iostream>
+#include <string>
+#include <sstream>
 
 #include "ShadowMemory.h"
 
@@ -75,6 +77,8 @@ class MemoryAccess{
         void setUninitializedRead();
 
         set<std::pair<unsigned, unsigned>> computeIntervals() const;
+
+        std::string toString() const;
 
         bool operator< (const MemoryAccess &other) const;
 
