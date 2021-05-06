@@ -1,13 +1,14 @@
 #include <iostream>
 #include <set>
 
-#ifdef __amd64__
-    #define X86_64
+#include "Platform.h"
+
+#if defined(X86_64)
     #include "x86_64_linux_syscall_handlers.h"
-#elif defined __i386__
-    #define X86
+#elif defined(X86)
+    // Include x86 syscall handlers here
 #else
-    #error "Not supported architecture"
+    // Unsupported architecture
 #endif
 
 using std::endl;
