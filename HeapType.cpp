@@ -29,8 +29,12 @@ bool HeapType::isValid() const{
     return type != HeapEnum::INVALID;
 }
 
-bool HeapType::isNormal(){
+bool HeapType::isNormal() const{
     return type == HeapEnum::NORMAL;
+}
+
+bool HeapType::isMmap() const{
+    return type == HeapEnum::MMAP;
 }
 
 HeapType::operator bool() const{

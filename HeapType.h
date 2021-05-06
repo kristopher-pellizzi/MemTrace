@@ -19,7 +19,9 @@ class HeapType {
 
         bool isValid() const;
 
-        bool isNormal();
+        bool isNormal() const;
+
+        bool isMmap() const;
 
         // By overriding operator bool(), we allow the user to use a HeapType object as a boolean value,
         // simplifying the usage as a boolean expression. Note that the same can be achieved by using method
