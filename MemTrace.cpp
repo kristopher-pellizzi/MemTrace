@@ -27,6 +27,39 @@
 #include "SyscallHandler.h"
 #include "Optional.h"
 #include "HeapType.h"
+#include "Platform.h"
+
+#if defined(CUSTOM_ALLOCATOR)
+    // If user compiled to use a custom allocator (or any other malloc functions not contained in the glibc)
+    // it is its own responsibility to define the specific handlers for that
+    
+    // #include "custom_allocator_malloc_handlers.h"
+#elif defined(X86_64)
+    #if defined(LINUX)
+        #include "x86_64_linux_malloc_handlers.h"
+    #elif defined(WINDOWS)
+        // NOT IMPLEMENTED YET
+        // #include "x86_64_windows_malloc_handlers.h"
+    #elif defined(MACOS)
+        // NOT IMPLEMENTED YET
+        // #include "x86_64_macos_malloc_handlers.h"
+    #else
+        #error "OS not supported yet"
+    #endif
+#elif defined(X86)
+    #if defined(LINUX)
+        // NOT IMPLEMENTED YET
+        //#include "x86_linux_malloc_handlers.h"
+    #elif defined(WINDOWS)
+        // NOT IMPLEMENTED YET
+        //#include "x86_windows_malloc_handlers.h"
+    #elif defined(MACOS)
+        // NOT IMPLEMENTED YET
+        //#include "x86_macos_malloc_handlers.h"
+    #else
+        #error "OS not supported yet"
+    #endif
+#endif
 
 using std::cerr;
 using std::string;
@@ -76,6 +109,13 @@ unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, 
 // find the writes whose content is read by uninitialized reads.
 unordered_map<AccessIndex, MemoryAccess, AccessIndex::AIHasher> lastWriteInstruction;
 
+// The following map is used as a temporary storage for write accesses during the execution of malloc.
+// This is done because in some cases (e.g. the first malloc call) we can decide whether an address is a heap
+// address or not only after the malloc is executed, but at that point, we already skipped all the writes done during
+// the malloc itself (e.g. on Linux, with the standard glibc, malloc writes the size of the allocated block and the 
+// top_chunk structure, and some of them are read by other functions, for instance free reads the block size).
+unordered_map<AccessIndex, MemoryAccess, AccessIndex::AIHasher> mallocTemporaryWriteStorage;
+
 // The following set is needed in order to optimize queries about sets containing
 // uninitialized read accesses. If a set contains at least 1 uninitialized read,
 // the correspondin AccessIndex object is inserted in the set (implemented as an hash table).
@@ -83,11 +123,6 @@ unordered_set<AccessIndex, AccessIndex::AIHasher> containsUninitializedRead;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 
 ADDRINT libc_base;
-
-// Global variable shared with |SharedMemory| module. This is used to keep track of the highest used shadow memory
-// address (mirroring the lowest accessed stack address) in order to optimize the reset operation of the shadow memory
-// (it allows us to avoid resetting the whole shadow memory to 0, but to do that up to the address stored in this variable)
-uint8_t* highestShadowAddr;
 
 // NOTE: this map is useful only in case of a multi-process/multi-threaded application.
 // However, the pintool currently supports only single threaded applications; this map has been
@@ -104,10 +139,12 @@ bool argIsStackAddr;
 
 // Global variables required to keep track of malloc/calloc/realloc returned pointers
 bool mallocCalled = false;
+bool freeCalled = false;
 ADDRINT mallocRequestedSize = 0;
+ADDRINT freeRequestedAddr = 0;
 unsigned nestedCalls = 0;
 ADDRINT oldReallocPtr = 0;
-ADDRINT lowestHeapAddr = 0;
+ADDRINT lowestHeapAddr = -1;
 ADDRINT highestHeapAddr = 0;
 unordered_map<ADDRINT, size_t> mallocatedPtrs;
 unordered_map<ADDRINT, size_t> mmapMallocated;
@@ -188,7 +225,6 @@ HeapType isMmapMallocated(ADDRINT addr){
     for(auto iter = mmapMallocated.begin(); iter != mmapMallocated.end(); ++iter){
         ADDRINT lowest = iter->first;
         ADDRINT highest = lowest + iter->second - 1;
-        //*out << "LOWEST: 0x" << std::hex << lowest << "; HIGHEST: 0x" << highest << endl;
         if(addr >= lowest && addr <= highest)
             return HeapType(HeapEnum::MMAP, lowest);
     }
@@ -472,19 +508,26 @@ VOID CallocBefore(ADDRINT nmemb, ADDRINT size){
     mallocCalled = true;
 }
 
-VOID FreeBefore(ADDRINT ptr){
+VOID FreeBefore(ADDRINT addr){
     if(!entryPointExecuted)
         return;
 
+    freeCalled = true;
+    freeRequestedAddr = addr;
+}
+
+VOID FreeAfter(ADDRINT ptr){
     // NOTE: the user is calling function |free|, so, we can assume it surely is a heap address.
     // However, a HeapType object also keeps some other useful information. For instance, it allows us to 
     // know if it is a normal malloc or a mmap and to get the pointer to the correct shadow memory index 
     // (in case it is a mmap malloc)
+
+    ptr = malloc_get_block_beginning(ptr);
     HeapType type = isHeapAddress(ptr);
-    bool isNormalAndValid = type.isNormal() && mallocatedPtrs.find(ptr) != mallocatedPtrs.end();
+    bool isInvalidForFree = mallocatedPtrs.find(ptr) == mallocatedPtrs.end();
 
     // If the program is correct, this should never be the case
-    if(!type.isValid() || !isNormalAndValid){
+    if(!type.isValid() || isInvalidForFree){
         *out << "The program called free on an invalid heap address" << endl;
         exit(1);
     }
@@ -498,10 +541,12 @@ VOID FreeBefore(ADDRINT ptr){
 
     currentShadow->reset(ptr);
 
-    if(type.isNormal()){
-        mallocatedPtrs[ptr] = 0;
-    }
-    else{
+    mallocatedPtrs[ptr] = 0;
+
+    // This condition evaluates to true if the size requested to malloc
+    // was so big that the allocator decided to allocate pages dedicated only to that.
+    // In that case, all the pages are deallocated.
+    if(malloc_get_block_size(ptr) == mmapMallocated[ptr]){
         mmapMallocated[ptr] = 0;
     }
 }
@@ -521,28 +566,81 @@ VOID MallocAfter(ADDRINT ret)
     if(ret == 0)
         return;
 
+    // If this is a malloc performed by a call to realloc and the returned ptr
+    // is different from the previous ptr, the previous ptr has been freed.
     if(oldReallocPtr != 0 && oldReallocPtr != ret){
-        FreeBefore(oldReallocPtr);
+        FreeAfter(oldReallocPtr);
     }
 
+    ret = malloc_get_block_beginning(ret);
+
+    // This kind of allocation should be the same for every platform
     if(mmapMallocCalled){
+        // NOTE: mallocRequestedSize has been overridden by the size passed as an argument to mmap
         mmapMallocated[ret] = mallocRequestedSize;
-        mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(ret, HeapShadow(HeapEnum::MMAP)));
+        HeapShadow newShadowMem(HeapEnum::MMAP);
+        size_t blockSize = malloc_get_block_size(ret);
+        mallocatedPtrs[ret] = blockSize;
+        // If the blockSize is equal to the size allocated by mmap, this malloc dedicated the whole allocated memory
+        // to a single block.
+        if(blockSize == mallocRequestedSize){
+            newShadowMem.setAsSingleChunk();
+        }
+        mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(ret, newShadowMem));
     }
-    else{
-        if(lowestHeapAddr == 0){
-            lowestHeapAddr = ret;
+    else {
+        HeapType type = isHeapAddress(ret);
+
+        // If we are already aware it is a mmap heap address, it means we don't have to update anything
+        // as through the mmap we already know the boundaries of the allocated memory. However, we have to
+        // insert the returned pointer inside the |mallocatedPtrs| map, with the size of its block
+        if(type.isMmap()){
+            mallocatedPtrs[ret] = malloc_get_block_size(ret);
+            return;
+        }
+        
+        // Otherwise, it means the malloc returned an address of the main heap, which was not allocated through mmap
+        // (e.g. glibc allocates it through sbrk system call). In that case, we may need to update the information
+        // about the main heap boundaries
+        // NOTE: in case the first address returned by malloc is not contained in the first allocated
+        // memory page, the following assignment to lowestHeapAddr may invalidate the whole main heap shadow 
+        // memory. This is true only if the allocation happened without using mmap. In that case, everything should 
+        // work well
+        if(ret < lowestHeapAddr){
+            // lowestHeapAddr is set to the start address of the memory page the return address belongs to
+            lowestHeapAddr = ret & ~ (PAGE_SIZE - 1);
             heap.setBaseAddr(lowestHeapAddr);
         }
-        mallocatedPtrs[ret] = mallocRequestedSize;
-        ADDRINT lastByte = ret + mallocRequestedSize - 1;
+        size_t blockSize = malloc_get_block_size(ret);
+        mallocatedPtrs[ret] = blockSize;
+        ADDRINT lastByte = malloc_get_main_heap_upper_bound(ret, blockSize);
         if(lastByte > highestHeapAddr)
             highestHeapAddr = lastByte;
     }
+
+    // NOTE: |mallocTemporaryWriteStorage| only contains write accesses happened during the execution of malloc
+    // and that resulted to not be a heap address. In some cases, this may happen only because we still
+    // have to update information about the heap. In any case, the number of accesses stored here should be small 
+    // enough to not compromise performances too much.
+    for(auto iter = mallocTemporaryWriteStorage.begin(); iter != mallocTemporaryWriteStorage.end(); ++iter){
+        const AccessIndex& ai = iter->first;
+        const MemoryAccess& ma = iter->second;
+        if(HeapType type = isHeapAddress(ai.getFirst())){
+            lastWriteInstruction[ai] = ma;
+            if(type.isNormal()){
+                currentShadow = heap.getPtr();
+            }
+            else{
+                currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
+            }
+            set_as_initialized(ai.getFirst(), ai.getSecond());
+        }
+    }
+    mallocTemporaryWriteStorage.clear();
 }
 
 VOID mallocRet(CONTEXT* ctxt){
-    if(!mallocCalled)
+    if(!mallocCalled && !freeCalled)
         return;
 
     if(nestedCalls > 0){
@@ -550,15 +648,28 @@ VOID mallocRet(CONTEXT* ctxt){
         return;
     }
 
-    ADDRINT ret = PIN_GetContextReg(ctxt, REG_GAX);
-    MallocAfter(ret);
+    // NOTE: when nestedCalls is 0, only 1 and only 1 among freeCalled and mallocCalled is set.
+    // According to which of these is set, we should call either MallocAfter or FreeAfter.
+    // In any case, we must reinitialize the flags
+
+    if(mallocCalled && !freeCalled){
+        ADDRINT ret = PIN_GetContextReg(ctxt, REG_GAX);
+        MallocAfter(ret);
+    }
+
+    if(!mallocCalled && freeCalled){
+        FreeAfter(freeRequestedAddr);
+    }
+
     oldReallocPtr = 0;
     mallocCalled = false;
     mmapMallocCalled = false;
+    freeCalled = false;
+    freeRequestedAddr = 0;
 }
 
 VOID mallocNestedCall(){
-    if(!mallocCalled)
+    if(!mallocCalled && !freeCalled)
         return;
     ++nestedCalls;
 }
@@ -578,6 +689,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     OPCODE opcode = opcode_arg;
 
+    bool isWrite = type == AccessType::WRITE;
 
     // Only keep track of accesses on the stack, so if it is an access to any other memory
     // section, return immediately.
@@ -587,6 +699,34 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     else if(HeapType heapType = isHeapAddress(addr)){
         currentShadow = heapType.isNormal() ? heap.getPtr() : getMmapShadowMemory(heapType.getShadowMemoryIndex());
     }
+    // If malloc has been called and it is a write access, save it temporarily. After the malloc completed (and we 
+    // can therefore decide which of these writes were done on the heap) the interesting ones are stored as normally.
+    else if(mallocCalled && isWrite){
+        REG regBasePtr;
+
+        // If the stack pointer register is 64 bits long, than we are on an x86-64 architecture,
+        // otherwise (size is 32 bits), we are on x86 architecture.
+
+        // NOTE: intel PIN supports only intel x86 and x86-64 architectures, so there's no other possibility.
+        if(REG_Size(REG_STACK_PTR) == 8){
+            regBasePtr = REG_GBP;
+        }
+        else{
+            regBasePtr = REG_EBP;
+        }
+        ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
+
+        std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
+        std::string disasm = ins_disasm ? std::string(*ins_disasm) : std::string();
+
+        // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
+        int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
+        int bpOffset = addr - bp;
+
+        MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm, currentShadow);
+        AccessIndex ai(addr, size);
+        mallocTemporaryWriteStorage[ai] = ma;
+    }
     else
         return;
 
@@ -594,7 +734,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     if(ip >= textStart && ip <= textEnd){
         if(!entryPointExecuted){
             entryPointExecuted = true;
-            highestShadowAddr = getShadowAddr(addr);
         }
 
         // Compute the last executed application ip. This is useless when application code is executed, but may be useful
@@ -627,7 +766,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
     std::string disasm = ins_disasm ? std::string(*ins_disasm) : std::string();
 
-    bool isWrite = type == AccessType::WRITE;
     // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
     int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
     int bpOffset = addr - bp;
@@ -796,9 +934,13 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
     // If this is a call to mmap and a malloc has been called, but not returned yet,
     // this mmap is part of the malloc itself, which is allocating memory pages,
-    // probably because the requested size is very high
+    // probably because the requested size is very high.
+    // The requested size is overridden by the size passed as an argument to mmap
+    // (which must be a multiple of the page size). This way, we can store the
+    // exact allocated size
     if(sysNum == 9 && mallocCalled){
         mmapMallocCalled = true;
+        mallocRequestedSize = PIN_GetSyscallArgument(ctxt, std, 1);
     }
     unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
     vector<ADDRINT> actualArgs;
