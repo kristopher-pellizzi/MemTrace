@@ -289,7 +289,7 @@ void StackShadow::reset(ADDRINT addr) {
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
-    unsigned long long bottom = min((unsigned long long) highestShadowAddr, (unsigned long long) (shadowAddr + SHADOW_ALLOCATION - 1));
+    unsigned long long bottom = min((unsigned long long) highestShadowAddr, (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1));
     memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
 
     for(unsigned i = shadowIdx + 1; i < shadow.size(); ++i){
@@ -437,6 +437,7 @@ HeapShadow::HeapShadow(HeapEnum type) : heapType(type){
     shadow.reserve(5);
     readShadow.reserve(5);
     dirtyPages.reserve(5);
+    isSingleChunk = false;
 
     for(int i = 0; i < 2; ++i){
         uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -454,6 +455,10 @@ HeapShadow::HeapShadow(HeapEnum type) : heapType(type){
         }
         readShadow.push_back(newMap);
     }
+}
+
+void HeapShadow::setAsSingleChunk(){
+    isSingleChunk = true;
 }
 
 std::pair<unsigned, unsigned> HeapShadow::getShadowAddrIdxOffset(ADDRINT addr){
@@ -646,24 +651,32 @@ void HeapShadow::reset(ADDRINT addr){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    if(heapType == HeapEnum::MMAP){
+    uint8_t* initialShadowAddr = shadowAddr;
+    if(heapType == HeapEnum::MMAP && isSingleChunk){
         // If it is a heap allocated through mmap, it is due to a big allocation request.
         // These kind of requests are very rare, and when they happen it is likely to have a long life.
         // For these reasons, it is simpler to simply remove its shadow memory, so that it also reduces memory usage
         mmapShadows.erase(addr);
+        mallocatedPtrs[addr] = 0;
         return;
     }
-    size_t freed_size = mallocatedPtrs[addr];
-    freed_size = freed_size % 8 == 0 ? freed_size / 8 : freed_size / 8 + 1;
+    // Remember the ShadowMemory model keeps 1 byte for each 8 bytes of application memory
+    size_t blockSize = mallocatedPtrs[addr];
+    size_t freed_size = blockSize / 8;
     size_t reset_size = 0;
 
     while(reset_size < freed_size){
-        unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, (unsigned long long) (shadowAddr + SHADOW_ALLOCATION - 1));
+        unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1));
         unsigned long long freedBytes = bottom - (unsigned long long) shadowAddr + 1;
         memset(shadowAddr, 0, freedBytes);
         reset_size += freedBytes;
         shadowAddr = shadow[++shadowIdx];
     }
+
+    // If the size of the block is not a multiple of 8, we need to reset |blockSize % 8| bits of the shadow memory
+    freed_size = blockSize % 8;
+    shadowAddr = initialShadowAddr + reset_size * 8;
+    *shadowAddr &= (0xff >> freed_size);
 }
 
 set<std::pair<unsigned, unsigned>> HeapShadow::computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize){
