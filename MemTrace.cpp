@@ -28,38 +28,7 @@
 #include "Optional.h"
 #include "HeapType.h"
 #include "Platform.h"
-
-#if defined(CUSTOM_ALLOCATOR)
-    // If user compiled to use a custom allocator (or any other malloc functions not contained in the glibc)
-    // it is its own responsibility to define the specific handlers for that
-    
-    // #include "custom_allocator_malloc_handlers.h"
-#elif defined(X86_64)
-    #if defined(LINUX)
-        #include "x86_64_linux_malloc_handlers.h"
-    #elif defined(WINDOWS)
-        // NOT IMPLEMENTED YET
-        // #include "x86_64_windows_malloc_handlers.h"
-    #elif defined(MACOS)
-        // NOT IMPLEMENTED YET
-        // #include "x86_64_macos_malloc_handlers.h"
-    #else
-        #error "OS not supported yet"
-    #endif
-#elif defined(X86)
-    #if defined(LINUX)
-        // NOT IMPLEMENTED YET
-        //#include "x86_linux_malloc_handlers.h"
-    #elif defined(WINDOWS)
-        // NOT IMPLEMENTED YET
-        //#include "x86_windows_malloc_handlers.h"
-    #elif defined(MACOS)
-        // NOT IMPLEMENTED YET
-        //#include "x86_macos_malloc_handlers.h"
-    #else
-        #error "OS not supported yet"
-    #endif
-#endif
+#include "MallocHandler.h"
 
 using std::cerr;
 using std::string;
@@ -539,7 +508,12 @@ VOID FreeAfter(ADDRINT ptr){
         currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
     }
 
-    currentShadow->reset(ptr);
+    set<std::pair<ADDRINT, size_t>> to_reinit = malloc_mem_to_reinit(ptr, malloc_get_block_size(ptr));
+    for(const std::pair<ADDRINT, size_t>& segment : to_reinit){
+        // NOTE: at this point, we are sure currentShadow is an instance of HeapShadow, so we can
+        // perform the cast.
+        static_cast<HeapShadow*>(currentShadow)->reset(segment.first, segment.second);
+    }
 
     mallocatedPtrs[ptr] = 0;
 
@@ -899,8 +873,10 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // memory area. Call memtrace to analyze the read access.
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
 
-    // Reset the shadow memory of the "freed" stack frame
-    reset(addr);    
+    // Reset the shadow memory of the "freed" stack frame.
+    // NOTE: at this point we are sure currentShadow is an instance of StackShadow, so we can perform
+    // the cast
+    static_cast<StackShadow*>(currentShadow)->reset(addr);    
 }
 
 

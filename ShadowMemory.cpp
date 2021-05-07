@@ -647,7 +647,7 @@ bool HeapShadow::isReadByUninitializedRead(ADDRINT addr, UINT32 size){
     return isRead;
 }
 
-void HeapShadow::reset(ADDRINT addr){
+void HeapShadow::reset(ADDRINT addr, size_t size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
@@ -661,8 +661,7 @@ void HeapShadow::reset(ADDRINT addr){
         return;
     }
     // Remember the ShadowMemory model keeps 1 byte for each 8 bytes of application memory
-    size_t blockSize = mallocatedPtrs[addr];
-    size_t freed_size = blockSize / 8;
+    size_t freed_size = size / 8;
     size_t reset_size = 0;
 
     while(reset_size < freed_size){
@@ -674,7 +673,7 @@ void HeapShadow::reset(ADDRINT addr){
     }
 
     // If the size of the block is not a multiple of 8, we need to reset |blockSize % 8| bits of the shadow memory
-    freed_size = blockSize % 8;
+    freed_size = size % 8;
     shadowAddr = initialShadowAddr + reset_size * 8;
     *shadowAddr &= (0xff >> freed_size);
 }
@@ -798,10 +797,6 @@ uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){
 
 bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
     return currentShadow->isReadByUninitializedRead(addr, size);
-}
-
-void reset(ADDRINT addr){
-    currentShadow->reset(addr);
 }
 
 ShadowBase* getMmapShadowMemory(ADDRINT index){
