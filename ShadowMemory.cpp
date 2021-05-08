@@ -416,7 +416,7 @@ StackShadow::StackShadow(){
             exit(1);
         }
         shadow.push_back(newMap);
-        dirtyPages[i] = false;
+        dirtyPages.push_back(false);
 
         newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if(newMap == (void*) -1){
@@ -446,7 +446,7 @@ HeapShadow::HeapShadow(HeapEnum type) : heapType(type){
             exit(1);
         }
         shadow.push_back(newMap);
-        dirtyPages[i] = false;
+        dirtyPages.push_back(false);
 
         newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if(newMap == (void*) -1){
@@ -554,7 +554,7 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
 }
 
 uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
-    std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 

@@ -520,8 +520,9 @@ VOID FreeAfter(ADDRINT ptr){
     // This condition evaluates to true if the size requested to malloc
     // was so big that the allocator decided to allocate pages dedicated only to that.
     // In that case, all the pages are deallocated.
-    if(malloc_get_block_size(ptr) == mmapMallocated[ptr]){
-        mmapMallocated[ptr] = 0;
+    ADDRINT page_start = ptr & ~(PAGE_SIZE - 1);
+    if(malloc_get_block_size(ptr) == mmapMallocated[page_start]){
+        mmapMallocated[page_start] = 0;
     }
 }
 
@@ -551,8 +552,10 @@ VOID MallocAfter(ADDRINT ret)
     // This kind of allocation should be the same for every platform
     if(mmapMallocCalled){
         // NOTE: mallocRequestedSize has been overridden by the size passed as an argument to mmap
-        mmapMallocated[ret] = mallocRequestedSize;
+        ADDRINT page_start = ret & ~(PAGE_SIZE - 1);
+        mmapMallocated[page_start] = mallocRequestedSize;
         HeapShadow newShadowMem(HeapEnum::MMAP);
+        newShadowMem.setBaseAddr(page_start);
         size_t blockSize = malloc_get_block_size(ret);
         mallocatedPtrs[ret] = blockSize;
         // If the blockSize is equal to the size allocated by mmap, this malloc dedicated the whole allocated memory
