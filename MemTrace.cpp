@@ -478,7 +478,7 @@ VOID CallocBefore(ADDRINT nmemb, ADDRINT size){
 }
 
 VOID FreeBefore(ADDRINT addr){
-    if(!entryPointExecuted)
+    if(!entryPointExecuted || (void*) addr == NULL)
         return;
 
     freeCalled = true;
@@ -497,7 +497,7 @@ VOID FreeAfter(ADDRINT ptr){
 
     // If the program is correct, this should never be the case
     if(!type.isValid() || isInvalidForFree){
-        *out << "The program called free on an invalid heap address" << endl;
+        *out << "The program called free on an invalid heap address: 0x" << std::hex << ptr << endl;
         exit(1);
     }
 
