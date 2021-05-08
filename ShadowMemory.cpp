@@ -56,15 +56,6 @@ uint8_t* ShadowBase::getShadowAddr(ADDRINT addr){
 uint8_t* ShadowBase::getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
     unsigned offset = shadowAddr - shadow[shadowIdx];
 
-    while(shadowIdx >= readShadow.size()){
-        uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) - 1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        readShadow.push_back(newMap);
-    }
-
     return readShadow[shadowIdx] + offset;
 }
 
@@ -83,6 +74,13 @@ uint8_t* StackShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
         }
         shadow.push_back(newMap);
         dirtyPages.push_back(false);
+
+        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        readShadow.push_back(newMap);
     }
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
@@ -480,6 +478,13 @@ uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
         }
         shadow.push_back(newMap);
         dirtyPages.push_back(false);
+
+        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if(newMap == (void*) -1){
+            printf("mmap failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        readShadow.push_back(newMap);
     }
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
@@ -535,7 +540,32 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
             ++readShadowAddr;
         } 
         else{
-            shadowAddr = shadow[++shadowIdx];
+            ++shadowIdx;
+            if(shadowIdx < shadow.size()){
+                shadowAddr = shadow[shadowIdx];
+            }
+            else{
+                // This should happen in some rare cases, and in most of these cases just 1 time for a single access.
+                // This manages the case where the access is performed between 2 memory pages, and the last shadow memory has not been allocated yet
+                // Note that this can't happen in a StackShadow object, as when the shadowMemory address is computed, every required memory page
+                // is eventually allocated, because the stack grows towards low addresses, so every byte at an address higher than the start address of the 
+                // access will already have an allocated shadow memory page.
+                uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                if(newMap == (void*) - 1){
+                    printf("mmap failed: %s\n", strerror(errno));
+                    exit(1);
+                }
+                shadow.push_back(newMap);
+                dirtyPages.push_back(false);
+                shadowAddr = newMap;
+
+                newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                if(newMap == (void*) -1){
+                    printf("mmap failed: %s\n", strerror(errno));
+                    exit(1);
+                }
+                readShadow.push_back(newMap);
+            }
             readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
             dirtyPages[shadowIdx] = true;
         }
