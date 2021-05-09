@@ -432,13 +432,13 @@ void dumpMemTrace(map<AccessIndex, set<MemoryAccess>> fullOverlaps){
     trace.close();
 }
 
-void print_profile(std::ofstream& stream, const char* msg){
+void print_profile(std::ostream& stream, const char* msg){
     time_t timestamp;
     struct tm* currentTime;
 
     timestamp = time(NULL);
     currentTime = localtime(&timestamp);
-    stream 
+    stream << std::dec
         << currentTime->tm_hour << ":" << currentTime->tm_min << ":" << currentTime->tm_sec 
         << " - " << msg << endl;
 }
@@ -651,9 +651,25 @@ VOID mallocNestedCall(){
     ++nestedCalls;
 }
 
+bool accessesOverlap(const MemoryAccess& readAccess, const MemoryAccess& writeAccess){
+    ADDRINT readStart = readAccess.getAddress();
+    ADDRINT writeStart = writeAccess.getAddress();
 
+    if(readStart == writeStart){
+        // There's at least 1 overlapping byte
+        return true;
+    }
 
+    ADDRINT readEnd = readStart + readAccess.getSize() - 1;
+    ADDRINT writeEnd = writeStart + writeAccess.getSize() - 1;
 
+    if(readStart < writeStart){
+        return writeStart <= readEnd;
+    }
+    else{
+        return readStart <= writeEnd;
+    }
+}
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 UINT32 opcode_arg, bool isFirstVisit)
@@ -703,8 +719,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm, currentShadow);
         AccessIndex ai(addr, size);
         mallocTemporaryWriteStorage[ai] = ma;
+        return;
     }
     else
+        // The access is not to the stack, nor to the heap, nor is a write access happening during a malloc
+        // Therefore, it is of no interest for the tool
         return;
 
     // This is an application instruction
@@ -803,7 +822,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                     // If the considered uninitialized read access reads any byte of this write,
                     // use it to compute the hash representing the context where the read is happening
-                    if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
+                    if(accessesOverlap(ma, lastWrite)){
                         hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
                     }
                 }
@@ -826,7 +845,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
 
                     // Compute the context hash
-                    if(isReadByUninitializedRead(lastWrite.getAddress(), lastWrite.getSize())){
+                    if(accessesOverlap(ma, lastWrite)){
                         hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
                     }
                 }
@@ -849,7 +868,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 }
             }
         }
-    }    
+    } 
 }
 
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory

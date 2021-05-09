@@ -53,13 +53,6 @@ uint8_t* ShadowBase::getShadowAddr(ADDRINT addr){
 }
 
 
-uint8_t* ShadowBase::getReadShadowFromShadow(uint8_t* shadowAddr, unsigned shadowIdx){
-    unsigned offset = shadowAddr - shadow[shadowIdx];
-
-    return readShadow[shadowIdx] + offset;
-}
-
-
 
 uint8_t* StackShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     bool needsCeiling = offset % 8 != 0;
@@ -74,13 +67,6 @@ uint8_t* StackShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
         }
         shadow.push_back(newMap);
         dirtyPages.push_back(false);
-
-        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) -1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        readShadow.push_back(newMap);
     }
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
@@ -91,7 +77,6 @@ void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
     dirtyPages[shadowIdx] = true;
 
@@ -106,16 +91,13 @@ void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
     UINT32 leftSize = size + offset;
     while(leftSize >= 8){
         *shadowAddr |= 0xff << offset;
-        *readShadowAddr &= (1 << offset) - 1;
         offset = 0;
 
         if(shadowAddr != shadow[shadowIdx]){
             --shadowAddr;
-            --readShadowAddr;
         } 
         else if(shadowIdx != 0){
             shadowAddr = shadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
-            readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
             dirtyPages[shadowIdx] = true;
         }
         else{
@@ -129,40 +111,7 @@ void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
         uint8_t val = (1 << (leftSize - offset)) - 1;
         val <<= offset;
         *shadowAddr |= val;
-
-        val = (uint8_t) 0xff << leftSize;
-        val |= (1 << offset) - 1;
-        *readShadowAddr &= val;
     }
-}
-
-void StackShadow::set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx) {
-    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
-
-    UINT32 leftSize = size + offset;
-    while(leftSize >= 8){
-        *readShadowAddr |= 0xff << offset;
-        offset = 0;
-
-        if(readShadowAddr != readShadow[shadowIdx]){
-            --readShadowAddr;
-        } 
-        else if(shadowIdx != 0){
-            readShadowAddr = readShadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
-        }
-        else{
-            leftSize = 0;
-            break;
-        }
-
-        leftSize -= 8;
-    }
-    if(leftSize > 0){
-        uint8_t val = (1 << (leftSize - offset)) - 1;
-        val <<= offset;
-        *readShadowAddr |= val;
-    }
-
 }
 
 // Function to retrieve the bytes of the given address and size which are considered not initialized.
@@ -187,9 +136,7 @@ uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
     bool isUninitialized = false;
-    uint8_t* initialShadowAddr = shadowAddr;
     unsigned offset = addr % 8;
-    unsigned initialOffset = offset;
     UINT32 leftSize = size + offset;
     uint8_t val;
 
@@ -230,56 +177,10 @@ uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
     }
 
     if(isUninitialized){
-        this->set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
-
         return this->shadow_memory_copy(addr + size - 1, size);
     }
     else
         return NULL;
-}
-
-bool StackShadow::isReadByUninitializedRead(ADDRINT addr, UINT32 size) {
-    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
-    unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
-
-    bool isRead = false;
-    unsigned offset = addr % 8;
-    UINT32 leftSize = size + offset;
-    uint8_t val;
-
-    while(leftSize >= 8 && !isRead){
-        val = *readShadowAddr;
-        val &= 0xff << offset;
-        if(val != 0){
-            isRead = true;
-        }
-        offset = 0;
-
-        if(readShadowAddr != readShadow[shadowIdx]){
-            --readShadowAddr;
-        }
-        else if(shadowIdx != 0){
-            readShadowAddr = readShadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
-        }
-        else{
-            leftSize = 0;
-            break;
-        }
-
-        leftSize -= 8;
-    }
-    if(!isRead && leftSize > 0){
-        val = *readShadowAddr;
-        val &= 0xff << offset;
-        val &= (1 << leftSize) - 1;
-        if(val != 0){
-            isRead = true;
-        }
-    }
-
-    return isRead;
 }
 
 void StackShadow::reset(ADDRINT addr) {
@@ -404,7 +305,6 @@ ShadowBase* ShadowBase::getPtr(){
 
 StackShadow::StackShadow(){
     shadow.reserve(5);
-    readShadow.reserve(5);
     dirtyPages.reserve(5);
 
     for(int i = 0; i < 2; ++i){
@@ -415,13 +315,6 @@ StackShadow::StackShadow(){
         }
         shadow.push_back(newMap);
         dirtyPages.push_back(false);
-
-        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) -1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        readShadow.push_back(newMap);
     }
 
     // The address contained by the stack pointer at the beginning of the application entry point is initialized
@@ -433,7 +326,6 @@ StackShadow::StackShadow(){
 
 HeapShadow::HeapShadow(HeapEnum type) : heapType(type){
     shadow.reserve(5);
-    readShadow.reserve(5);
     dirtyPages.reserve(5);
     isSingleChunk = false;
 
@@ -445,13 +337,6 @@ HeapShadow::HeapShadow(HeapEnum type) : heapType(type){
         }
         shadow.push_back(newMap);
         dirtyPages.push_back(false);
-
-        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) -1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        readShadow.push_back(newMap);
     }
 }
 
@@ -478,48 +363,16 @@ uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
         }
         shadow.push_back(newMap);
         dirtyPages.push_back(false);
-
-        newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(newMap == (void*) -1){
-            printf("mmap failed: %s\n", strerror(errno));
-            exit(1);
-        }
-        readShadow.push_back(newMap);
     }
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
     return ret;
 }
 
-void HeapShadow::set_as_read_by_uninitialized_read(unsigned size, uint8_t* shadowAddr, unsigned offset, unsigned shadowIdx){
-    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
-
-    UINT32 leftSize = size + offset;
-    while(leftSize >= 8){
-        *readShadowAddr |= 0xff >> offset;
-        offset = 0;
-
-        if(readShadowAddr != readShadow[shadowIdx] + SHADOW_ALLOCATION - 1){
-            ++readShadowAddr;
-        } 
-        else{
-            readShadowAddr = readShadow[++shadowIdx];
-        }
-
-        leftSize -= 8;
-    }
-    if(leftSize > 0){
-        uint8_t mask = ~(0xff >> leftSize);
-        mask >>= offset;
-        *readShadowAddr |= mask;
-    }
-}
-
 void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
 
     dirtyPages[shadowIdx] = true;
 
@@ -532,12 +385,10 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
     while(leftSize >= 8){
         uint8_t mask = (0xff >> offset);
         *shadowAddr |= mask;
-        *readShadowAddr &= ~mask;
         offset = 0;
 
         if(shadowAddr != shadow[shadowIdx] + SHADOW_ALLOCATION - 1){
             ++shadowAddr;
-            ++readShadowAddr;
         } 
         else{
             ++shadowIdx;
@@ -558,15 +409,7 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
                 shadow.push_back(newMap);
                 dirtyPages.push_back(false);
                 shadowAddr = newMap;
-
-                newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-                if(newMap == (void*) -1){
-                    printf("mmap failed: %s\n", strerror(errno));
-                    exit(1);
-                }
-                readShadow.push_back(newMap);
             }
-            readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
             dirtyPages[shadowIdx] = true;
         }
 
@@ -576,7 +419,6 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
         uint8_t mask = ~(0xff >> (leftSize - offset));
         mask >>= offset;
         *shadowAddr |= mask;
-        *readShadowAddr &= ~mask;
     }
 
     if(shadowAddr > highestShadowAddr)
@@ -589,9 +431,7 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
 
     bool isUninitialized = false;
-    uint8_t* initialShadowAddr = shadowAddr;
     unsigned offset = addr % 8;
-    unsigned initialOffset = offset;
     UINT32 leftSize = size + offset;
     uint8_t val;
 
@@ -629,52 +469,10 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
     }
 
     if(isUninitialized){
-        this->set_as_read_by_uninitialized_read(size, initialShadowAddr, initialOffset, shadowIdx);
-
         return this->shadow_memory_copy(addr, size);
     }
     else
         return NULL;
-}
-
-bool HeapShadow::isReadByUninitializedRead(ADDRINT addr, UINT32 size){
-    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
-    unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
-    uint8_t* readShadowAddr = this->getReadShadowFromShadow(shadowAddr, shadowIdx);
-
-    bool isRead = false;
-    unsigned offset = addr % 8;
-    UINT32 leftSize = size + offset;
-    uint8_t val;
-
-    while(leftSize >= 8 && !isRead){
-        val = *readShadowAddr;
-        val &= 0xff >> offset;
-        if(val != 0){
-            isRead = true;
-        }
-        offset = 0;
-
-        if(readShadowAddr != readShadow[shadowIdx] + SHADOW_ALLOCATION - 1){
-            ++readShadowAddr;
-        }
-        else{
-            readShadowAddr = readShadow[++shadowIdx];
-        }
-
-        leftSize -= 8;
-    }
-    if(!isRead && leftSize > 0){
-        val = *readShadowAddr;
-        val &= 0xff >> offset;
-        val &= ~(0xff >> leftSize);
-        if(val != 0){
-            isRead = true;
-        }
-    }
-
-    return isRead;
 }
 
 void HeapShadow::reset(ADDRINT addr, size_t size){
@@ -823,10 +621,6 @@ void set_as_initialized(ADDRINT addr, UINT32 size){
 
 uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){
     return currentShadow->getUninitializedInterval(addr, size);
-}
-
-bool isReadByUninitializedRead(ADDRINT addr, UINT32 size){
-    return currentShadow->isReadByUninitializedRead(addr, size);
 }
 
 ShadowBase* getMmapShadowMemory(ADDRINT index){
