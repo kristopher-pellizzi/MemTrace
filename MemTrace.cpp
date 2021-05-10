@@ -840,9 +840,13 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                     const auto& lastWrite = iter->second;
 
-                    // It is not sure yet we need to insert these write accesses, we must verify if 
-                    // this access has already been stored with the same context
+                    // It is not sure yet we need to insert the read access, we must verify if 
+                    // it has already been stored with the same context
                     writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
+
+                    // We always need to store write accesses, because otherwise we may lose partial initializations 
+                    // for future uninitialized read accesses
+                    storeMemoryAccess(iter->first, iter->second);
 
                     // Compute the context hash
                     if(accessesOverlap(ma, lastWrite)){
@@ -858,11 +862,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
                     storeMemoryAccess(ai, ma);
-
-                    // Permanently store write accesses
-                    for(std::pair<AccessIndex, MemoryAccess>& obj : writes){
-                        storeMemoryAccess(obj.first, obj.second);
-                    }
 
                     reportedHashes.insert(hash);
                 }
