@@ -816,18 +816,15 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 for(auto iter = lastWriteInstruction.begin(); iter != lastWriteInstruction.end(); ++iter){
 
                     const auto& lastWrite = iter->second;
-                    
-                    // Store the write accesses permanently
-                    storeMemoryAccess(iter->first, iter->second);
 
                     // If the considered uninitialized read access reads any byte of this write,
                     // use it to compute the hash representing the context where the read is happening
                     if(accessesOverlap(ma, lastWrite)){
                         hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
+                        // Store the write accesses permanently
+                        storeMemoryAccess(iter->first, iter->second);
                     }
                 }
-
-                lastWriteInstruction.clear();
 
                 unordered_set<size_t> s;
                 s.insert(hash);
@@ -840,21 +837,14 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                     const auto& lastWrite = iter->second;
 
-                    // It is not sure yet we need to insert the read access, we must verify if 
-                    // it has already been stored with the same context
-                    writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
-
-                    // We always need to store write accesses, because otherwise we may lose partial initializations 
-                    // for future uninitialized read accesses
-                    storeMemoryAccess(iter->first, iter->second);
-
                     // Compute the context hash
                     if(accessesOverlap(ma, lastWrite)){
                         hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
+                        // It is not sure yet we need to insert the read access, we must verify if 
+                        // it has already been stored with the same context
+                        writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
                     }
                 }
-
-                lastWriteInstruction.clear();
 
                 unordered_set<size_t>&  reportedHashes = overlapGroup->second;
 
@@ -862,6 +852,10 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
                     storeMemoryAccess(ai, ma);
+
+                    for(std::pair<AccessIndex, MemoryAccess>& write_access : writes){
+                        storeMemoryAccess(write_access.first, write_access.second);
+                    }
 
                     reportedHashes.insert(hash);
                 }
