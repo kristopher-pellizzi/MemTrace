@@ -111,6 +111,7 @@ bool mallocCalled = false;
 bool freeCalled = false;
 ADDRINT mallocRequestedSize = 0;
 ADDRINT freeRequestedAddr = 0;
+ADDRINT freeBlockSize = 0;
 unsigned nestedCalls = 0;
 ADDRINT oldReallocPtr = 0;
 ADDRINT lowestHeapAddr = -1;
@@ -483,6 +484,16 @@ VOID FreeBefore(ADDRINT addr){
 
     freeCalled = true;
     freeRequestedAddr = addr;
+    // NOTE: it is required to get the block size here, because in some cases the call to free
+    // simply overwrites the size of the block with |top_chunk_size| + |block_size|, and sets the top_chunk
+    // beginning to the start of the block, thus efficiently re-inserting the block inside
+    // the top chunk. Therefore, after the free has been completed, the size of the block is lost, and
+    // can't therefore be retrieved in |FreeAfter|.
+    // If we get the block size there, and the previously described scenario is going on, a segmentation fault
+    // will happen, as we'll try to re-initialize the shadow memory for the whole heap, which might be not allocated
+    // yet. In order to avoid segmentation faults, an additional global variable is used to take the block size
+    // before the free is actually executed.
+    freeBlockSize = malloc_get_block_size(malloc_get_block_beginning(addr));
 }
 
 VOID FreeAfter(ADDRINT ptr){
@@ -508,7 +519,7 @@ VOID FreeAfter(ADDRINT ptr){
         currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
     }
 
-    set<std::pair<ADDRINT, size_t>> to_reinit = malloc_mem_to_reinit(ptr, malloc_get_block_size(ptr));
+    set<std::pair<ADDRINT, size_t>> to_reinit = malloc_mem_to_reinit(ptr, freeBlockSize);
     for(const std::pair<ADDRINT, size_t>& segment : to_reinit){
         // NOTE: at this point, we are sure currentShadow is an instance of HeapShadow, so we can
         // perform the cast.
@@ -521,7 +532,7 @@ VOID FreeAfter(ADDRINT ptr){
     // was so big that the allocator decided to allocate pages dedicated only to that.
     // In that case, all the pages are deallocated.
     ADDRINT page_start = ptr & ~(PAGE_SIZE - 1);
-    if(malloc_get_block_size(ptr) == mmapMallocated[page_start]){
+    if(freeBlockSize == mmapMallocated[page_start]){
         mmapMallocated[page_start] = 0;
     }
 }
