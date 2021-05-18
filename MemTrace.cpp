@@ -99,6 +99,7 @@ ADDRINT libc_base;
 map<THREADID, ADDRINT> threadInfos;
 
 bool entryPointExecuted = false;
+bool gt16B_AccessIgnored = false;
 
 // Global variable required as the syscall IP is only retrievable at syscall
 // entry point, but it is required at syscall exit point to be added to the
@@ -814,8 +815,80 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #endif
         
         if(uninitializedInterval != NULL){
+            // If we already ignored at least 1 access of size >= 16 B in this same function and the considered
+            // access is still higher than 16 B, we can suppose it can still be ignored (it's always related to
+            // some string operation). E.g. sometimes strcpy performs a sort of pre-fetching, reading 32 B from 
+            // the beginning of the string and 32 B from startAddr+32. That second read should be ignored.
+            if(size >= 16 && gt16B_AccessIgnored){
+                free(uninitializedInterval);
+                return;
+            }
+
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
+
+            // This is an heuristics applied in order to reduce the number of reported uninitialized reads
+            // by avoiding reporting those not very significant.
+            // More specifically, this is done to try and avoid reporting those uninitialized read
+            // accesses performed due to the optimization of strings operations.
+            // Being an heuristics, this is not always precise, and may lead to false negatives (e.g. if memcpy is 
+            // is implemented using SIMD extensions as well, memcpys may be lost).
+            if(size >= 16 && opcode != XED_ICLASS_SYSCALL_AMD){
+                char* content = (char*) malloc(sizeof(char) * size);
+                PIN_SafeCopy(content, (void*) addr, size);
+
+                // Look for an initialized nul byte in the access. If there's no initialized nul byte ('\0'), we
+                // will report the access, as it is possible that either this is not a string operation or the 
+                // string has not been initialized or a buffer overflow may be happening (e.g. the absence of '\0' in an 
+                // uninitialized read may imply the fact that a string terminator is missing, and we are reading 
+                // something more than the intended string).
+                char* nulPtr = strchr(content, '\0');
+                unsigned nulIndex = 0;
+                set<uint8_t*> toFree;
+            
+                while(nulPtr != NULL){
+                    nulIndex = nulPtr - content;
+
+                    // A null byte has been found outside the boundaries of the considered access
+                    if(nulIndex >= size){
+                        nulPtr = NULL;
+                        break;
+                    }
+                    uint8_t* byteShadowCopy = getUninitializedInterval(addr + nulIndex, 1);
+                    toFree.insert(byteShadowCopy);
+                    
+                    // The null byte has been found and has been proven to be initialized
+                    if(byteShadowCopy == NULL){
+                        break;
+                    }
+                    nulPtr = strchr(nulPtr + 1, '\0');
+                }
+
+                // Free all unused allocated memory
+                for(uint8_t* ptr : toFree){
+                    free(ptr);
+                }
+
+                // At this point, nulPtr points to the first occurrence of '\0' that is also initialized,
+                // and nulIndex is the index of that character from the beginning of the considered access
+                if(nulPtr != NULL){
+                    set<std::pair<unsigned, unsigned>> intervals = ma.computeIntervals();
+                    auto firstInterval = intervals.begin();
+                    // If any of these conditions evaluated to true, it is likely to be executin some operation on a string
+                    if(
+                        intervals.size() > 1 || // There are more than 1 uninitialized interval
+                        (firstInterval->first == 0 && firstInterval->second <= nulIndex - 1) || // There's only 1 uninitialized interval, that starts at index 0 at ends before nulIndex
+                        (firstInterval->first >= nulIndex + 1) // There's only 1 uninitialized interval, and everything from 0 to '\0' is initialized
+                    ){
+                        free(content);
+                        free(uninitializedInterval);
+                        gt16B_AccessIgnored = true;
+                        return;
+                    }
+                }
+                free(content);
+            }
+
             containsUninitializedRead.insert(ai);
 
             size_t hash = maHasher(ma);
@@ -892,7 +965,10 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 {
     if(!entryPointExecuted)
         return;
-        
+    
+    // We are returning from a function. If in this function we ignored some big uninitialized read access,
+    // we need to restore the boolean flag to false
+    gt16B_AccessIgnored = false;
     currentShadow = stack.getPtr();
 
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
