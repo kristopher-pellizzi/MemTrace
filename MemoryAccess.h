@@ -76,6 +76,8 @@ class MemoryAccess{
 
         void setUninitializedRead();
 
+        bool isStackAccess() const;
+
         set<std::pair<unsigned, unsigned>> computeIntervals() const;
 
         std::string toString() const;
@@ -260,6 +262,8 @@ class PartialOverlapAccess{
         bool getIsUninitializedRead() const;
 
         uint8_t* getUninitializedInterval() const;
+
+        bool isStackAccess() const;
 
         set<std::pair<unsigned, unsigned>> computeIntervals() const;
 };

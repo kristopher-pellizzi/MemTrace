@@ -48,6 +48,10 @@ void MemoryAccess::setUninitializedRead(){
     isUninitializedRead = true;
 }
 
+bool MemoryAccess::isStackAccess() const{
+    return shadowMemory == stack.getPtr();
+}
+
 set<std::pair<unsigned, unsigned>> MemoryAccess::computeIntervals() const{
     return shadowMemory->computeIntervals(uninitializedInterval, accessAddress, accessSize);
 }
@@ -191,6 +195,10 @@ bool PartialOverlapAccess::getIsUninitializedRead() const{
 
 uint8_t* PartialOverlapAccess::getUninitializedInterval() const{
     return ma.getUninitializedInterval();
+}
+
+bool PartialOverlapAccess::isStackAccess() const{
+    return ma.isStackAccess();
 }
 
 set<std::pair<unsigned, unsigned>> PartialOverlapAccess::computeIntervals() const{
