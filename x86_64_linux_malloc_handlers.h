@@ -34,6 +34,6 @@ ADDRINT malloc_get_block_beginning(ADDRINT addr){
 // about the freed chunk and may be used by successive calls to malloc.
 std::set<std::pair<ADDRINT, size_t>> malloc_mem_to_reinit(ADDRINT block_addr, size_t blockSize){
     std::set<std::pair<ADDRINT, size_t>> ret;
-    ret.insert(std::pair<ADDRINT, size_t>(block_addr + 32, blockSize - 32));
+    ret.insert(std::pair<ADDRINT, size_t>(block_addr + 16, blockSize - 16));
     return ret;
 }

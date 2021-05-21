@@ -535,6 +535,27 @@ VOID FreeAfter(ADDRINT ptr){
     if(freeBlockSize == mmapMallocated[page_start]){
         mmapMallocated[page_start] = 0;
     }
+
+    for(auto iter = mallocTemporaryWriteStorage.begin(); iter != mallocTemporaryWriteStorage.end(); ++iter){
+        const AccessIndex& ai = iter->first;
+
+        ADDRINT accessAddr = ai.getFirst();
+        UINT32 accessSize = ai.getSecond();
+        
+        // If the write access does not overlap (at least partially) with the freed heap chunk,
+        // it is not required to set the corresponding shadow memory as initialized.
+        // NOTE: this loop should iterate on a map containing very few elements, so it should
+        // not degrade performances too much.
+        if(
+            (accessAddr < ptr && accessAddr + accessSize - 1 < ptr) ||
+            (accessAddr > ptr + freeBlockSize - 1)
+        ){
+            continue;
+        }
+
+        set_as_initialized(ai.getFirst(), ai.getSecond());
+    }
+    mallocTemporaryWriteStorage.clear();    
 }
 
 VOID ReallocBefore(ADDRINT ptr, ADDRINT size){
@@ -804,6 +825,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         lastWriteInstruction[ai] = ma;
         set_as_initialized(addr, size);
+        if(freeCalled && !ma.isStackAccess()){
+            mallocTemporaryWriteStorage[ai] = ma;
+        }
     }
     else{
         #ifdef DEBUG
