@@ -706,6 +706,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // If malloc has been called and it is a write access, save it temporarily. After the malloc completed (and we 
     // can therefore decide which of these writes were done on the heap) the interesting ones are stored as normally.
     else if(mallocCalled && isWrite){
+        currentShadow = heap.getPtr();
         REG regBasePtr;
 
         // If the stack pointer register is 64 bits long, than we are on an x86-64 architecture,
@@ -1281,6 +1282,7 @@ VOID Fini(INT32 code, VOID *v)
                 memOverlaps << v_it->getDisasm() << ";";
                 memOverlaps.write((v_it->getType() == AccessType::WRITE ? "\x1a" :"\x1b"), 1);
                 memOverlaps << v_it->getSize() << ";";
+                memOverlaps.write(v_it->isStackAccess() ? "\x1c" : "\x1d", 1);
                 memOverlaps << v_it->getSPOffset() << ";";
                 memOverlaps << v_it->getBPOffset() << ";";
                 if(v_it->getIsUninitializedRead()){
@@ -1425,6 +1427,7 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps << v_it->getDisasm() << ";";
             memOverlaps.write((v_it->getType() == AccessType::WRITE ? "\x1a" : "\x1b"), 1);
             memOverlaps << v_it->getSize() << ";";
+            memOverlaps.write(v_it->isStackAccess() ? "\x1c" : "\x1d", 1);
             memOverlaps << v_it->getSPOffset() << ";";
             memOverlaps << v_it->getBPOffset() << ";";
 
