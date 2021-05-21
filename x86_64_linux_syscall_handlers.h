@@ -1043,8 +1043,12 @@ RETTYPE sys_clock_nanosleep ARGUMENTS{
         ret.insert(ma);
     }
 
-    // |remain| is used only if the flag passed in args[1] is not TIMER_ABSTIME
-    if(remain != NULL && args[1] != TIMER_ABSTIME){
+    // |remain| is used only if the flag passed in args[1] is not TIMER_ABSTIME.
+    // NOTE: |remain| is only written if the system call return EINTR.
+    // If the system call terminates without interrupts, remain will be untouched, so if the
+    // user reads from that, it will read junk, or anything else there was written before calling the
+    // system call
+    if(remain != NULL && retVal == EINTR && args[1] != TIMER_ABSTIME){
         SyscallMemAccess ma(args[3], sizeof(struct timespec), AccessType::WRITE);
         ret.insert(ma);
     }
