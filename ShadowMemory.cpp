@@ -502,7 +502,7 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
 
     // If the size of the block is not a multiple of 8, we need to reset |blockSize % 8| bits of the shadow memory
     freed_size = size % 8;
-    shadowAddr = initialShadowAddr + reset_size * 8;
+    shadowAddr = initialShadowAddr + reset_size;
     *shadowAddr &= (0xff >> freed_size);
 }
 
