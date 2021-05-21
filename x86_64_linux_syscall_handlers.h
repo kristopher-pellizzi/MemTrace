@@ -990,6 +990,68 @@ RETTYPE sys_time_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_clock_settime ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const struct timespec* tp = (struct timespec*) args[1];
+    if(tp != NULL){
+        SyscallMemAccess ma(args[1], sizeof(struct timespec), AccessType::READ);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_clock_gettime ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+    
+    struct timespec* tp = (struct timespec*) args[1];
+    if(tp != NULL){
+        SyscallMemAccess ma(args[1], sizeof(struct timespec), AccessType::WRITE);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_clock_getres ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    struct timespec* res = (struct timespec*) args[1];
+    if(res != NULL){
+        SyscallMemAccess ma(args[1], sizeof(struct timespec), AccessType::WRITE);
+        ret.insert(ma);
+    }
+    return ret;
+}
+
+RETTYPE sys_clock_nanosleep ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    // NOTE: if this system call is interrupted, it returns EINTR and writes inside |remain| the
+    if(retVal != 0 && retVal != EINTR)
+        return ret;
+
+    struct timespec* request = (struct timespec*) args[2];
+    struct timespec* remain = (struct timespec*) args[3];
+
+    if(request != NULL){
+        SyscallMemAccess ma(args[2], sizeof(struct timespec), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    // |remain| is used only if the flag passed in args[1] is not TIMER_ABSTIME
+    if(remain != NULL && args[1] != TIMER_ABSTIME){
+        SyscallMemAccess ma(args[3], sizeof(struct timespec), AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
 RETTYPE sys_rt_sigaction_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal < 0)
@@ -1121,6 +1183,10 @@ class HandlerSelector{
             SYSCALL_ENTRY(170, 2, sys_sethostname_handler);
             SYSCALL_ENTRY(171, 2, sys_setdomainname_handler);
             SYSCALL_ENTRY(201, 1, sys_time_handler);
+            SYSCALL_ENTRY(227, 2, sys_clock_settime);
+            SYSCALL_ENTRY(228, 2, sys_clock_gettime);
+            SYSCALL_ENTRY(229, 2, sys_clock_getres);
+            SYSCALL_ENTRY(230, 4, sys_clock_nanosleep);
             SYSCALL_ENTRY(235, 2, sys_utimes_handler);
             SYSCALL_ENTRY(257, 4, sys_openat_handler);
             SYSCALL_ENTRY(258, 3, sys_mkdirat_handler);
