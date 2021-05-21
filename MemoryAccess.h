@@ -72,6 +72,8 @@ class MemoryAccess{
 
         uint8_t* getUninitializedInterval() const;
 
+        ShadowBase* getShadowMemory() const;
+
         void setUninitializedInterval(uint8_t* interval);
 
         void setUninitializedRead();
@@ -262,6 +264,8 @@ class PartialOverlapAccess{
         bool getIsUninitializedRead() const;
 
         uint8_t* getUninitializedInterval() const;
+
+        ShadowBase* getShadowMemory() const;
 
         bool isStackAccess() const;
 

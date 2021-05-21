@@ -40,6 +40,10 @@ uint8_t* MemoryAccess::getUninitializedInterval() const{
     return uninitializedInterval;
 }
 
+ShadowBase* MemoryAccess::getShadowMemory() const{
+    return shadowMemory;
+}
+
 void MemoryAccess::setUninitializedInterval(uint8_t* interval){
     uninitializedInterval = interval;
 }
@@ -195,6 +199,10 @@ bool PartialOverlapAccess::getIsUninitializedRead() const{
 
 uint8_t* PartialOverlapAccess::getUninitializedInterval() const{
     return ma.getUninitializedInterval();
+}
+
+ShadowBase* PartialOverlapAccess::getShadowMemory() const{
+    return ma.getShadowMemory();
 }
 
 bool PartialOverlapAccess::isStackAccess() const{
