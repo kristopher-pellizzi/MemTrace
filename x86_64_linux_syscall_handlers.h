@@ -509,6 +509,15 @@ RETTYPE sys_truncate_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_getdents_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+    SyscallMemAccess ma(args[1], retVal, AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
 RETTYPE sys_getcwd_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((char*) retVal == NULL)
@@ -990,6 +999,16 @@ RETTYPE sys_time_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_getdents64_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    SyscallMemAccess ma(args[1], retVal, AccessType::WRITE);
+    ret.insert(ma);
+    return ret;
+}
+
 RETTYPE sys_clock_settime ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((int) retVal == -1)
@@ -1153,6 +1172,7 @@ class HandlerSelector{
             SYSCALL_ENTRY(55, 5, sys_getsockopt_handler);
             SYSCALL_ENTRY(63, 1, sys_uname_handler);
             SYSCALL_ENTRY(76, 2, sys_truncate_handler);
+            SYSCALL_ENTRY(78, 3, sys_getdents_handler);
             SYSCALL_ENTRY(79, 2, sys_getcwd_handler);
             SYSCALL_ENTRY(80, 1, sys_chdir_handler);
             SYSCALL_ENTRY(82, 2, sys_rename_handler);
@@ -1187,6 +1207,7 @@ class HandlerSelector{
             SYSCALL_ENTRY(170, 2, sys_sethostname_handler);
             SYSCALL_ENTRY(171, 2, sys_setdomainname_handler);
             SYSCALL_ENTRY(201, 1, sys_time_handler);
+            SYSCALL_ENTRY(217, 3, sys_getdents64_handler);
             SYSCALL_ENTRY(227, 2, sys_clock_settime);
             SYSCALL_ENTRY(228, 2, sys_clock_gettime);
             SYSCALL_ENTRY(229, 2, sys_clock_getres);
