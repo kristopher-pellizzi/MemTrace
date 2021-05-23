@@ -23,15 +23,59 @@ class AccessIndex{
 
         bool operator!=(const AccessIndex &other) const;
 
-        struct AIHasher{
-            size_t operator()(const AccessIndex& ai) const{
-                int size = sizeof(size_t) * 8;
-                size_t firstHash = ai.getFirst();
-                size_t shiftAmount = ai.getSecond() % (size > 4 ? (size - 4) : size);
+        class AIHasher{
+            private:
+                unsigned size;
 
-                firstHash = firstHash ^ ((firstHash & ~((size_t) -1 << (size >> 1))) << (size - (size >> 1)));
-                return 
-                    ai.getFirst() + (((firstHash << shiftAmount) ^ (firstHash + ai.getSecond() - 1) << (size - shiftAmount)) | (firstHash >> (size - shiftAmount)));
-            }
+                size_t lrot(size_t val, unsigned amount) const{
+                    return (val << amount) | (val >> (size - amount));
+                }
+
+                size_t rrot(size_t val, unsigned amount) const{
+                    return (val >> amount) | (val << (size - amount));
+                }
+
+                // Swaps bytes in pos1 and pos2, where 0 is the LSB.
+                size_t swapBytes(size_t val, unsigned pos1, unsigned pos2) const{
+                    if(pos1 == pos2)
+                        return val;
+                    
+                    if(pos1 > pos2){
+                        unsigned tmp = pos2;
+                        pos2 = pos1;
+                        pos1 = tmp;
+                    }
+
+                    pos1 *= 8;
+                    pos2 *= 8;
+
+                    size_t pos1Byte = (size_t) 0xff << pos1;
+                    size_t pos2Byte = (size_t) 0xff << pos2;
+                    size_t valCpy = val & ~pos1Byte & ~pos2Byte;
+                    pos1Byte &= val;
+                    pos2Byte &= val;
+                    pos1Byte <<= pos2 - pos1;
+                    pos2Byte >>= pos2 - pos1;
+                    return valCpy ^ pos1Byte ^ pos2Byte;
+                }
+            
+            public:
+                AIHasher(){
+                    size = sizeof(size_t) * 8;
+                }
+
+                size_t operator()(const AccessIndex& ai) const{
+                    size_t hash = rrot(ai.getFirst(), 8);
+                    size_t accessBits = 0;
+                    UINT32 accessSize = ai.getSecond() << 24;
+                    while(accessBits < size){
+                        hash += (accessSize << accessBits);
+                        accessBits += sizeof(accessSize) * 8;
+                    }
+                    hash = lrot(hash, 8);
+                    hash ^= ai.getSecond();
+                    hash = swapBytes(hash, 2, 3);
+                    return hash;  
+                }
         };
 };
