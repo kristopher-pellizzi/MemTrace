@@ -76,7 +76,7 @@ unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, 
 // This way, we avoid storing write accesses that are overwritten by another write to the same address and the same size
 // and that have not been read by an uninitialized read, thus saving memory space and execution time when we need to
 // find the writes whose content is read by uninitialized reads.
-unordered_map<AccessIndex, MemoryAccess, AccessIndex::AIHasher> lastWriteInstruction;
+map<AccessIndex, MemoryAccess, AccessIndex::LastAccessedByteSorter> lastWriteInstruction;
 
 // The following map is used as a temporary storage for write accesses during the execution of malloc.
 // This is done because in some cases (e.g. the first malloc call) we can decide whether an address is a heap
@@ -849,17 +849,22 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 // Store the read access
                 storeMemoryAccess(ai, ma);
 
-                for(auto iter = lastWriteInstruction.begin(); iter != lastWriteInstruction.end(); ++iter){
+                auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
+                ADDRINT iterFirstAccessedByte = iter->first.getFirst();
+                ADDRINT maLastAccessedByte = ma.getAddress() + ma.getSize() - 1;
+
+                while(iterFirstAccessedByte <= maLastAccessedByte){
 
                     const auto& lastWrite = iter->second;
 
                     // If the considered uninitialized read access reads any byte of this write,
                     // use it to compute the hash representing the context where the read is happening
-                    if(accessesOverlap(ma, lastWrite)){
-                        hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
-                        // Store the write accesses permanently
-                        storeMemoryAccess(iter->first, iter->second);
-                    }
+                    hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
+                    // Store the write accesses permanently
+                    storeMemoryAccess(iter->first, iter->second);
+
+                    ++iter;
+                    iterFirstAccessedByte = iter->first.getFirst();
                 }
 
                 unordered_set<size_t> s;
@@ -869,17 +874,22 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             else{
                 vector<std::pair<AccessIndex, MemoryAccess>> writes;
 
-                for(auto iter = lastWriteInstruction.begin(); iter != lastWriteInstruction.end(); ++iter){
+                auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
+                ADDRINT iterFirstAccessedByte = iter->first.getFirst();
+                ADDRINT maLastAccessedByte = ma.getAddress() + ma.getSize() - 1;
+
+                while(iterFirstAccessedByte <= maLastAccessedByte){
 
                     const auto& lastWrite = iter->second;
 
                     // Compute the context hash
-                    if(accessesOverlap(ma, lastWrite)){
-                        hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
-                        // It is not sure yet we need to insert the read access, we must verify if 
-                        // it has already been stored with the same context
-                        writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
-                    }
+                    hash = maHasher.lrot(hash, 4) ^ maHasher(lastWrite);
+                    // It is not sure yet we need to insert the read access, we must verify if 
+                    // it has already been stored with the same context
+                    writes.push_back(std::pair<AccessIndex, MemoryAccess>(iter->first, iter->second));
+
+                    ++iter;
+                    iterFirstAccessedByte = iter->first.getFirst();
                 }
 
                 unordered_set<size_t>&  reportedHashes = overlapGroup->second;
