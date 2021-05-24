@@ -23,6 +23,9 @@ class AccessIndex{
 
         bool operator!=(const AccessIndex &other) const;
 
+
+
+
         class AIHasher{
             private:
                 unsigned size;
@@ -77,5 +80,13 @@ class AccessIndex{
                     hash = swapBytes(hash, 2, 3);
                     return hash;  
                 }
+        };
+
+
+
+
+        class LastAccessedByteSorter{
+            public:
+                bool operator()(const AccessIndex& ai1, const AccessIndex& ai2) const;
         };
 };

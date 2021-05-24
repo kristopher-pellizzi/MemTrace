@@ -19,3 +19,9 @@ bool AccessIndex::operator==(const AccessIndex &other) const{
 bool AccessIndex::operator!=(const AccessIndex& other) const{
     return !operator==(other);
 }
+
+
+
+bool AccessIndex::LastAccessedByteSorter::operator()(const AccessIndex& ai1, const AccessIndex& ai2) const{
+    return ai1.getFirst() + ai1.getSecond() < ai2.getFirst() + ai2.getSecond();
+}
