@@ -35,7 +35,23 @@ class MemoryAccess{
         ShadowBase* shadowMemory;
 
     public:
-        MemoryAccess(){}
+        // NOTE: this default constructor is never really useful. However, since we are using operator[] of a map
+        // whose elements are MemoryAccess objects, we are required to provide a default constructor, and to initialize
+        // its members (otherwise a warning will raise, and Intel PIN's default makefile considers all warnings as errors).
+        MemoryAccess() :
+            executionOrder(0),
+            instructionPointer(0),
+            actualInstructionPointer(0),
+            accessAddress(0),
+            spOffset(0),
+            bpOffset(0),
+            accessSize(0),
+            type(AccessType::READ),
+            instructionDisasm(std::string()),
+            isUninitializedRead(false),
+            uninitializedInterval(NULL),
+            shadowMemory(NULL)
+            {}
 
         MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string disasm, ShadowBase* shadowMemory) : 
             executionOrder(executionOrder),
