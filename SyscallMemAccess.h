@@ -27,6 +27,13 @@ class SyscallMemAccess{
         }
 
         bool operator<(const SyscallMemAccess& other) const{
-            return this->accessAddress < other.accessAddress;
+            if(this->accessAddress != other.accessAddress)
+                return this->accessAddress < other.accessAddress;
+            if(this->accessSize != other.accessSize)
+                return this->accessSize < other.accessSize;
+            if(this->type != other.type){
+                return this->type == AccessType::READ;
+            }
+            return false;
         }
 };

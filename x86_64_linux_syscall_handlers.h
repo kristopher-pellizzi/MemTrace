@@ -499,6 +499,96 @@ RETTYPE sys_uname_handler ARGUMENTS{
     return ret;
 }
 
+// This is a quite complex system call. Indeed, its semantic is different according to the value of the |cmd|
+// argument. Only in some cases it reads or writes from memory, and some of the commands are not always available
+// (from Linux manual, some of them are only available since a specific version of Linux kernel. However, it seems that
+// by using Intel PIN, it is not always true. This might depend from the fact that many of the C standard library headers
+// have been replaced by Intel PIN itself. In order to avoid compilation errors, those commands with dependencies 
+// from the kernel version have been guarded by pre-processor conditionals to check the corresponding value is
+// actually defined somewhere)
+RETTYPE sys_fcntl_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    unsigned int cmd = (unsigned int) args[1];
+    switch(cmd){
+        case F_SETLK:
+        case F_SETLKW:
+    #ifdef F_OFD_SETLK
+        case F_OFD_SETLK:
+    #endif
+    #ifdef F_OFD_SETLKW
+        case F_OFD_SETLKW:
+    #endif
+            {
+                SyscallMemAccess ma(args[2], sizeof(struct flock), AccessType::READ);
+                ret.insert(ma);
+                break;
+            }
+        case F_GETLK:    
+    #ifdef F_OFD_GETLK
+        case F_OFD_GETLK:
+    #endif
+            {
+                // In this case, the syscall reads info about the lock the user is going to acquire.
+                // If it can be acquired, it actually write only field |l_type| of the flock structure,
+                // but if that is already locked, the whole structure is overwritten to contain the infos
+                // about 1 of the processes holding the lock. For this reason, here we store both a read and a write 
+                // access on the same memory area. Note that according to operator< of SyscallMemAccess objects,
+                // if 2 accesses have the same address and size, read accesses are considered less than write accesses.
+                struct flock* lock = (struct flock*) args[2];
+                SyscallMemAccess readMA(args[2], sizeof(struct flock), AccessType::READ);
+                ret.insert(readMA);
+
+                if(lock->l_type == F_UNLCK){
+                    SyscallMemAccess writeMA((ADDRINT) &(lock->l_type), sizeof(lock->l_type), AccessType::WRITE);
+                    ret.insert(writeMA);
+                }
+                else{
+                    SyscallMemAccess writeMA(args[2], sizeof(struct flock), AccessType::WRITE);
+                    ret.insert(writeMA);
+                }
+                break;
+            }
+        case F_GETOWN_EX:
+            {
+                SyscallMemAccess ma(args[2], sizeof(struct f_owner_ex), AccessType::WRITE);
+                ret.insert(ma);
+                break;
+            }
+        case F_SETOWN_EX:
+            {
+                SyscallMemAccess ma(args[2], sizeof(struct f_owner_ex), AccessType::READ);
+                ret.insert(ma);
+                break;
+            }
+    #if defined(F_GET_RW_HINT) && defined(F_GET_FILE_RW_HINT)
+        case F_GET_RW_HINT:
+        case F_GET_FILE_RW_HINT:
+            {
+                SyscallMemAccess ma(args[2], sizeof(uint64_t), AccessType::WRITE);
+                ret.insert(ma);
+                break;
+            }
+    #endif
+    #if defined(F_SET_RW_HINT) && defined(F_SET_FILE_RW_HINT)
+        case F_SET_RW_HINT:
+        case F_SET_FILE_RW_HINT:
+            {
+                SyscallMemAccess ma(args[2], sizeof(uint64_t), AccessType:: READ);
+                ret.insert(ma);
+                break;
+            }
+    #endif
+        default:
+            // Empty default case. Nothing is either read or written in memory
+            {}
+    }
+
+    return ret;
+}
+
 RETTYPE sys_truncate_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal < 0)
@@ -1171,6 +1261,7 @@ class HandlerSelector{
             SYSCALL_ENTRY(54, 5, sys_setsockopt_handler);
             SYSCALL_ENTRY(55, 5, sys_getsockopt_handler);
             SYSCALL_ENTRY(63, 1, sys_uname_handler);
+            SYSCALL_ENTRY(72, 3, sys_fcntl_handler);
             SYSCALL_ENTRY(76, 2, sys_truncate_handler);
             SYSCALL_ENTRY(78, 3, sys_getdents_handler);
             SYSCALL_ENTRY(79, 2, sys_getcwd_handler);
