@@ -19,7 +19,7 @@ $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
+./launcher -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -55,7 +55,7 @@ $EXE_PATH/b2sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/b2sum ./test.iso
+./launcher -- $EXE_PATH/b2sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -89,7 +89,7 @@ $EXE_PATH/base32 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/base32 ./test.iso
+./launcher -- $EXE_PATH/base32 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -123,7 +123,7 @@ $EXE_PATH/base64 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/base64 ./test.iso
+./launcher -- $EXE_PATH/base64 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -159,7 +159,7 @@ $EXE_PATH/basename $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/basename $path
+./launcher -- $EXE_PATH/basename $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -193,7 +193,7 @@ $EXE_PATH/cat ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/cat ./test.iso ./test2.iso
+./launcher -- $EXE_PATH/cat ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -227,7 +227,7 @@ $EXE_PATH/chgrp root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/chgrp root ./test.iso
+./launcher -- $EXE_PATH/chgrp root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -267,7 +267,7 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/chmod 700 ./test.cpy
+./launcher -- $EXE_PATH/chmod 700 ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -306,7 +306,7 @@ $EXE_PATH/chown root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/chown root ./test.iso
+./launcher -- $EXE_PATH/chown root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -340,7 +340,7 @@ $EXE_PATH/cksum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/cksum ./test.iso
+./launcher -- $EXE_PATH/cksum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -376,7 +376,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.sorted
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sort ./test.iso -o ./test.sorted
+./launcher -- $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.sorted
@@ -415,7 +415,7 @@ $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/comm ./test.sorted ./test2.sorted
+./launcher -- $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -451,7 +451,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./toDelete.tmp
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/cp ./test.iso ./toDelete.tmp
+./launcher -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./toDelete.tmp
@@ -491,7 +491,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm xx00 xx01
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/csplit ./test.iso 3
+./launcher -- $EXE_PATH/csplit ./test.iso 3
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm xx00 xx01
@@ -528,7 +528,7 @@ $EXE_PATH/cut -b1-10 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/cut -b1-10 ./test.iso
+./launcher -- $EXE_PATH/cut -b1-10 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -562,7 +562,7 @@ $EXE_PATH/date
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/date
+./launcher -- $EXE_PATH/date
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -596,7 +596,7 @@ $EXE_PATH/df -h
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/df -h
+./launcher -- $EXE_PATH/df -h
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -630,7 +630,7 @@ $EXE_PATH/dir
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/dir
+./launcher -- $EXE_PATH/dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -664,7 +664,7 @@ $EXE_PATH/dircolors --print-database
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/dircolors --print-database
+./launcher -- $EXE_PATH/dircolors --print-database
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -698,7 +698,7 @@ $EXE_PATH/dirname $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/dirname $path
+./launcher -- $EXE_PATH/dirname $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -735,7 +735,7 @@ $EXE_PATH/du -h $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/du -h $path
+./launcher -- $EXE_PATH/du -h $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -773,7 +773,7 @@ $EXE_PATH/echo $random_data
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/echo $random_data
+./launcher -- $EXE_PATH/echo $random_data
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -808,7 +808,7 @@ $EXE_PATH/env
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/env
+./launcher -- $EXE_PATH/env
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -844,7 +844,7 @@ $EXE_PATH/expand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/expand ./test.iso
+./launcher -- $EXE_PATH/expand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -882,7 +882,7 @@ $EXE_PATH/expr 118462910 \* 123456
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/expr 118462910 \* 123456
+./launcher -- $EXE_PATH/expr 118462910 \* 123456
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -918,7 +918,7 @@ $EXE_PATH/factor 123456789123459
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/factor 123456789123459
+./launcher -- $EXE_PATH/factor 123456789123459
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -955,7 +955,7 @@ $EXE_PATH/fmt -s -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/fmt -s -w 15 ./test.iso
+./launcher -- $EXE_PATH/fmt -s -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -990,7 +990,7 @@ $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/fold -s -b -w 15 ./test.iso
+./launcher -- $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1025,7 +1025,7 @@ $EXE_PATH/getlimits
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/getlimits
+./launcher -- $EXE_PATH/getlimits
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1060,7 +1060,7 @@ $EXE_PATH/groups
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/groups
+./launcher -- $EXE_PATH/groups
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1097,7 +1097,7 @@ $EXE_PATH/head -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/head -c 512 ./test.iso
+./launcher -- $EXE_PATH/head -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1134,7 +1134,7 @@ $EXE_PATH/hostid
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/hostid
+./launcher -- $EXE_PATH/hostid
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1169,7 +1169,7 @@ $EXE_PATH/id
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/id
+./launcher -- $EXE_PATH/id
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1205,7 +1205,7 @@ $EXE_PATH/join ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/join ./test.sorted ./test2.sorted
+./launcher -- $EXE_PATH/join ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1242,7 +1242,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.link
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/link ./test.iso ./test.link
+./launcher -- $EXE_PATH/link ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -1283,7 +1283,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.link
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/ln -s ./test.iso ./test.link
+./launcher -- $EXE_PATH/ln -s ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -1321,7 +1321,7 @@ $EXE_PATH/ls -al ./Tests/coreutils/src
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/ls -al ./Tests/coreutils/src
+./launcher -- $EXE_PATH/ls -al ./Tests/coreutils/src
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1356,7 +1356,7 @@ $EXE_PATH/md5sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/md5sum ./test.iso
+./launcher -- $EXE_PATH/md5sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1394,7 +1394,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm -r abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
+./launcher -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm -r abcdefghijklmnopqrstuvwxyz
@@ -1435,7 +1435,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
+./launcher -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
@@ -1478,7 +1478,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
+./launcher -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
@@ -1519,7 +1519,7 @@ $EXE_PATH/mktemp
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/mktemp
+./launcher -- $EXE_PATH/mktemp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1558,7 +1558,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 $EXE_PATH/mv ./test_dir/test.iso .
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/mv ./test.iso ./test_dir
+./launcher -- $EXE_PATH/mv ./test.iso ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/mv ./test_dir/test.iso .
@@ -1600,7 +1600,7 @@ $EXE_PATH/nice -n 19 ls -al
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/nice -n 19 ls -al
+./launcher -- $EXE_PATH/nice -n 19 ls -al
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1636,7 +1636,7 @@ $EXE_PATH/nl ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/nl ./test.iso
+./launcher -- $EXE_PATH/nl ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1671,7 +1671,7 @@ $EXE_PATH/nproc
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/nproc
+./launcher -- $EXE_PATH/nproc
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1706,7 +1706,7 @@ $EXE_PATH/numfmt 123456789 1253 9182746583
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/numfmt 123456789 1253 9182746583
+./launcher -- $EXE_PATH/numfmt 123456789 1253 9182746583
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1742,7 +1742,7 @@ $EXE_PATH/od -x ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/od -x ./test.iso
+./launcher -- $EXE_PATH/od -x ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1779,7 +1779,7 @@ $EXE_PATH/paste ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/paste ./test.iso ./test2.iso
+./launcher -- $EXE_PATH/paste ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1814,7 +1814,7 @@ $EXE_PATH/pinky
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/pinky
+./launcher -- $EXE_PATH/pinky
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1850,7 +1850,7 @@ $EXE_PATH/printenv
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/printenv
+./launcher -- $EXE_PATH/printenv
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1887,7 +1887,7 @@ $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
+./launcher -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1921,7 +1921,7 @@ $EXE_PATH/ptx ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/ptx ./test.iso
+./launcher -- $EXE_PATH/ptx ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1958,7 +1958,7 @@ $EXE_PATH/pwd
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/pwd
+./launcher -- $EXE_PATH/pwd
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -1996,7 +1996,7 @@ $EXE_PATH/readlink ./test.link
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/readlink ./test.link
+./launcher -- $EXE_PATH/readlink ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2034,7 +2034,7 @@ $EXE_PATH/realpath ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/realpath ./test.iso
+./launcher -- $EXE_PATH/realpath ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2076,7 +2076,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/rm ./test.cpy
+./launcher -- $EXE_PATH/rm ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
@@ -2119,7 +2119,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 mkdir ./test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/rmdir ./test_dir
+./launcher -- $EXE_PATH/rmdir ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 mkdir ./test_dir
@@ -2158,7 +2158,7 @@ $EXE_PATH/seq 1 1000000
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/seq 1 1000000
+./launcher -- $EXE_PATH/seq 1 1000000
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2194,7 +2194,7 @@ $EXE_PATH/sha1sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sha1sum ./test.iso
+./launcher -- $EXE_PATH/sha1sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2231,7 +2231,7 @@ $EXE_PATH/sha224sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sha224sum ./test.iso
+./launcher -- $EXE_PATH/sha224sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2267,7 +2267,7 @@ $EXE_PATH/sha256sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sha256sum ./test.iso
+./launcher -- $EXE_PATH/sha256sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2303,7 +2303,7 @@ $EXE_PATH/sha384sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sha384sum ./test.iso
+./launcher -- $EXE_PATH/sha384sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2340,7 +2340,7 @@ $EXE_PATH/sha512sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sha512sum ./test.iso
+./launcher -- $EXE_PATH/sha512sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2381,7 +2381,7 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/shred ./test.cpy
+./launcher -- $EXE_PATH/shred ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2420,7 +2420,7 @@ $EXE_PATH/shuf ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/shuf ./test.iso
+./launcher -- $EXE_PATH/shuf ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2457,7 +2457,7 @@ $EXE_PATH/sleep 1
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sleep 1
+./launcher -- $EXE_PATH/sleep 1
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2503,7 +2503,7 @@ mkdir test_dir
 cd test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-../launcher ../$EXE_PATH/split -b 512 ../test.iso
+../launcher -- ../$EXE_PATH/split -b 512 ../test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -2548,7 +2548,7 @@ $EXE_PATH/stat ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/stat ./test.iso
+./launcher -- $EXE_PATH/stat ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2583,7 +2583,7 @@ $EXE_PATH/stty -a
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/stty -a
+./launcher -- $EXE_PATH/stty -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2618,7 +2618,7 @@ $EXE_PATH/sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/sum ./test.iso
+./launcher -- $EXE_PATH/sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2654,7 +2654,7 @@ $EXE_PATH/tac ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/tac ./test.iso ./test2.iso
+./launcher -- $EXE_PATH/tac ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2690,7 +2690,7 @@ $EXE_PATH/tail -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/tail -c 512 ./test.iso
+./launcher -- $EXE_PATH/tail -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2727,7 +2727,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/touch ./test.cpy
+./launcher -- $EXE_PATH/touch ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2771,7 +2771,7 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/truncate -s 512K ./test.cpy
+./launcher -- $EXE_PATH/truncate -s 512K ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2811,7 +2811,7 @@ $EXE_PATH/tty
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/tty
+./launcher -- $EXE_PATH/tty
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2847,7 +2847,7 @@ $EXE_PATH/uname -a
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/uname -a
+./launcher -- $EXE_PATH/uname -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2882,7 +2882,7 @@ $EXE_PATH/unexpand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/unexpand ./test.iso
+./launcher -- $EXE_PATH/unexpand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2917,7 +2917,7 @@ $EXE_PATH/uniq -u ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/uniq -u ./test.iso
+./launcher -- $EXE_PATH/uniq -u ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -2958,7 +2958,7 @@ end_orig=$(date +%s%N | cut -b1-13)
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/unlink ./test.cpy
+./launcher -- $EXE_PATH/unlink ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
@@ -2997,7 +2997,7 @@ $EXE_PATH/uptime
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/uptime
+./launcher -- $EXE_PATH/uptime
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -3032,7 +3032,7 @@ $EXE_PATH/users
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/users
+./launcher -- $EXE_PATH/users
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -3069,7 +3069,7 @@ $EXE_PATH/vdir
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/vdir
+./launcher -- $EXE_PATH/vdir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -3104,7 +3104,7 @@ $EXE_PATH/wc ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/wc ./test.iso
+./launcher -- $EXE_PATH/wc ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -3139,7 +3139,7 @@ $EXE_PATH/who
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/who
+./launcher -- $EXE_PATH/who
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
@@ -3175,7 +3175,7 @@ $EXE_PATH/whoami
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher $EXE_PATH/whoami
+./launcher -- $EXE_PATH/whoami
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
