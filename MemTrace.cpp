@@ -91,7 +91,7 @@ unordered_map<AccessIndex, MemoryAccess, AccessIndex::AIHasher> mallocTemporaryW
 unordered_set<AccessIndex, AccessIndex::AIHasher> containsUninitializedRead;
 map<AccessIndex, set<MemoryAccess>> partialOverlaps;
 
-ADDRINT libc_base;
+map<std::string, ADDRINT> imgs_base;
 
 // NOTE: this map is useful only in case of a multi-process/multi-threaded application.
 // However, the pintool currently supports only single threaded applications; this map has been
@@ -619,6 +619,7 @@ VOID MallocAfter(ADDRINT ret)
             // lowestHeapAddr is set to the start address of the memory page the return address belongs to
             lowestHeapAddr = ret & ~ (PAGE_SIZE - 1);
             heap.setBaseAddr(lowestHeapAddr);
+            imgs_base.insert(std::pair<std::string, ADDRINT>("Heap", lowestHeapAddr));
         }
         size_t blockSize = malloc_get_block_size(ret);
         mallocatedPtrs[ret] = blockSize;
@@ -1041,8 +1042,7 @@ VOID Image(IMG img, VOID* v){
     ADDRINT offset = IMG_LoadOffset(img);
     *out << name << " loaded @ 0x" << std::hex << offset << endl;
 
-    if(name.find("libc") != name.npos)
-        libc_base = offset;
+    imgs_base.insert(std::pair<std::string, ADDRINT>(name, offset));
 
 
     // Instrument the malloc() and free() functions
@@ -1272,7 +1272,12 @@ VOID Fini(INT32 code, VOID *v)
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
     memOverlaps << regSize << ";";
-    memOverlaps.write(reinterpret_cast<const char*>(&libc_base), regSize);
+    for(auto iter = imgs_base.begin(); iter != imgs_base.end(); ++iter){
+        memOverlaps << iter->first << ";";
+        memOverlaps.write(reinterpret_cast<const char*>(&(iter->second)), regSize);
+    }
+    // End of loaded libraries base addresses
+    memOverlaps.write("\x00\x00\x00\x05", 4);
     memOverlaps.write(reinterpret_cast<const char*>(&threadInfos[0]), regSize);
 
     #ifdef DEBUG
