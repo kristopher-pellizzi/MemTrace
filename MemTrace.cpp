@@ -303,6 +303,8 @@ namespace tracer{
     bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
         ADDRINT writeStart = writeAccess->getAddress();
         UINT32 writeSize = writeAccess->getSize();
+        if(writeSize == 0)
+            return false;
 
         // Determine the portion of the write access that overlaps with the considered set
         int overlapBeginning = ai.getFirst() - writeStart;
