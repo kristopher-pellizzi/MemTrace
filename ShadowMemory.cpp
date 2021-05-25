@@ -303,6 +303,13 @@ ShadowBase* ShadowBase::getPtr(){
     return this;
 }
 
+void ShadowBase::freeMemory(){
+    for(uint8_t* ptr : shadow){
+        munmap(ptr, SHADOW_ALLOCATION);
+    }
+    shadow.clear();
+}
+
 StackShadow::StackShadow(){
     shadow.reserve(5);
     dirtyPages.reserve(5);
@@ -484,6 +491,7 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
         // If it is a heap allocated through mmap, it is due to a big allocation request.
         // These kind of requests are very rare, and when they happen it is likely to have a long life.
         // For these reasons, it is simpler to simply remove its shadow memory, so that it also reduces memory usage
+        mmapShadows.find(addr)->second.freeMemory();
         mmapShadows.erase(addr);
         mallocatedPtrs[addr] = 0;
         return;

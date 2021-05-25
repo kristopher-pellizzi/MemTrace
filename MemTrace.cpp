@@ -372,6 +372,7 @@ namespace tracer{
                             isReadLogger << "[LOG]: " << following->getDisasm() << " reads a byte of the write" << endl;
                         #endif
                         // Read access reads a not overwritten byte.
+                        delete[] overwrittenBytes;
                         return true;
                     }
                 }
@@ -395,6 +396,7 @@ namespace tracer{
                     #ifdef DEBUG
                         isReadLogger << "[LOG]: write access completely overwritten" << endl << endl << endl;
                     #endif
+                    delete[] overwrittenBytes;
                     return false;
                 }
             }
@@ -405,6 +407,7 @@ namespace tracer{
         #ifdef DEBUG
             isReadLogger << "[LOG]: write access not completely overwritten, but never read" << endl << endl << endl;
         #endif
+        delete[] overwrittenBytes;
         return false;
     }
 }
@@ -744,13 +747,12 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
         std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
-        std::string disasm = ins_disasm ? std::string(*ins_disasm) : std::string();
 
         // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
         int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
         int bpOffset = addr - bp;
 
-        MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm, currentShadow);
+        MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, ins_disasm, currentShadow);
         AccessIndex ai(addr, size);
         mallocTemporaryWriteStorage[ai] = ma;
         return;
@@ -794,13 +796,12 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
-    std::string disasm = ins_disasm ? std::string(*ins_disasm) : std::string();
 
     // If it is a writing push instruction, it increments sp and writes it, so spOffset is 0
     int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
     int bpOffset = addr - bp;
 
-    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, disasm, currentShadow);
+    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, ins_disasm, currentShadow);
     AccessIndex ai(addr, size);
 
     #ifdef DEBUG
@@ -1420,8 +1421,9 @@ VOID Fini(INT32 code, VOID *v)
             if(overlapBeginning < 0)
                 overlapBeginning = 0;
 
-            if(v_it->getType() == AccessType::WRITE && tracer::isReadByUninitializedRead(v_it, v, it->first))
+            if(v_it->getType() == AccessType::WRITE && tracer::isReadByUninitializedRead(v_it, v, it->first)){
                 uninitializedOverlap = getOverlappingWriteInterval(it->first, v_it);
+            }
                     
             // If it is a READ access and it is uninitialized and execution reaches this branch,
             // it surely is an uninitialized read fully overlapping with the considered set
@@ -1477,8 +1479,11 @@ VOID Fini(INT32 code, VOID *v)
             set<std::pair<unsigned, unsigned>> intervals;
 
             if(v_it->getType() == AccessType::WRITE){
-                std::pair<unsigned, unsigned> interval = *((std::pair<unsigned, unsigned>*) uninitializedOverlap);
+                std::pair<unsigned, unsigned>* pair_ptr = (std::pair<unsigned, unsigned>*) uninitializedOverlap;
+                std::pair<unsigned, unsigned> interval = *pair_ptr;
                 intervals.insert(interval);
+                // Free the pair previously created by a call to getOverlappingWriteInterval
+                delete pair_ptr;
             }
             // If it's not a write access, it is necessarily an uninitialized read access
             else{
@@ -1508,6 +1513,22 @@ VOID Fini(INT32 code, VOID *v)
     memOverlaps.write("\x00\x00\x00\x04", 4);
 
     memOverlaps.close();
+
+    // Free every shadow memory
+    stack.freeMemory();
+    heap.freeMemory();
+    for(auto iter = mmapShadows.begin(); iter != mmapShadows.end(); ++iter){
+        iter->second.freeMemory();
+    }
+
+    // Free all shadow memory copies stored in MemoryAccess objects
+    for(auto aiIter = memAccesses.begin(); aiIter != memAccesses.end(); ++aiIter){
+        auto& aiSet = aiIter->second;
+        for(auto iter = aiSet.begin(); iter != aiSet.end(); ++iter){
+            iter->freeMemory();
+        }
+    }
+
     #ifdef DEBUG
         partialOverlapsLog.close();
         isReadLogger.close();

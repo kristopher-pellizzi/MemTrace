@@ -67,6 +67,7 @@ class ShadowBase{
 
         void setBaseAddr(ADDRINT baseAddr);
         ShadowBase* getPtr();
+        void freeMemory();
 };
 
 class StackShadow : public ShadowBase{

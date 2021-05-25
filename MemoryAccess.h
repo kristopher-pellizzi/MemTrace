@@ -29,7 +29,7 @@ class MemoryAccess{
         long long int bpOffset;
         UINT32 accessSize;
         AccessType type;
-        std::string instructionDisasm;
+        std::string* instructionDisasm;
         bool isUninitializedRead;
         uint8_t* uninitializedInterval;
         ShadowBase* shadowMemory;
@@ -47,13 +47,13 @@ class MemoryAccess{
             bpOffset(0),
             accessSize(0),
             type(AccessType::READ),
-            instructionDisasm(std::string()),
+            instructionDisasm(NULL),
             isUninitializedRead(false),
             uninitializedInterval(NULL),
             shadowMemory(NULL)
             {}
 
-        MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string disasm, ShadowBase* shadowMemory) : 
+        MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string* disasm, ShadowBase* shadowMemory) : 
             executionOrder(executionOrder),
             instructionPointer(ip),
             actualInstructionPointer(actualInstructionPointer),
@@ -99,6 +99,8 @@ class MemoryAccess{
         set<std::pair<unsigned, unsigned>> computeIntervals() const;
 
         std::string toString() const;
+
+        void freeMemory() const;
 
         bool operator< (const MemoryAccess &other) const;
 

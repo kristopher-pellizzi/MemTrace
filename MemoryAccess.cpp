@@ -29,7 +29,7 @@ AccessType MemoryAccess::getType() const{
 }
 
 std::string MemoryAccess::getDisasm() const{
-    return instructionDisasm;
+    return instructionDisasm != NULL ? *instructionDisasm : std::string();
 }
 
 bool MemoryAccess::getIsUninitializedRead() const{
@@ -70,6 +70,11 @@ std::string MemoryAccess::toString() const{
             "0x" << getAddress();
     std::string s = ss.str();
     return s;
+}
+
+void MemoryAccess::freeMemory() const{
+    free(uninitializedInterval);
+    delete instructionDisasm;
 }
 
 bool MemoryAccess::operator<(const MemoryAccess &other) const{
