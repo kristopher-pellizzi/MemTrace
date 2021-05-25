@@ -303,8 +303,6 @@ namespace tracer{
     bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
         ADDRINT writeStart = writeAccess->getAddress();
         UINT32 writeSize = writeAccess->getSize();
-        if(writeSize == 0)
-            return false;
 
         // Determine the portion of the write access that overlaps with the considered set
         int overlapBeginning = ai.getFirst() - writeStart;
@@ -717,6 +715,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         print_profile(applicationTiming, "Tracing new memory access");
     #endif
 
+    if(size == 0)
+        return;
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     OPCODE opcode = opcode_arg;
 
