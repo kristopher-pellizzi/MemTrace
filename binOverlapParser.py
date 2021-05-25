@@ -292,13 +292,24 @@ with open("overlaps.bin", "rb") as f:
     
     reg_size = parse_integer(f)
 
-    libc_base = parse_address(f, reg_size)
+    load_bases = set()
+    while not accept(f, b"\x00\x00\x00\x05"):
+        load_bases.add((parse_string(f), parse_address(f, reg_size)))
     stack_base = parse_address(f, reg_size)
 
     fo.writelines([get_fo_legend(), "\n"])
+    fo.writelines(["LOAD ADDRESSES:"])
+    po.writelines(["LOAD ADDRESSES:"])
+    # Order images base addresses in increasing order of their load address
+    load_bases = list(load_bases)
+    load_bases.sort(key = lambda x: x[1])
 
-    fo.writelines(["Libc base address: " + libc_base])
+    for (name, addr) in load_bases:
+        fo.writelines([name + " base address: " + addr])
+        po.writelines([name + " base address: " + addr])
+
     fo.writelines(["Stack base address: " + stack_base, "\n"])
+    po.writelines(["Stack base address: " + stack_base, "\n"])
 
     # While there are full overlaps...
     while not accept(f, b"\x00\x00\x00\x02"):
