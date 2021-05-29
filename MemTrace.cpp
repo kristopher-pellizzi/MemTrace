@@ -707,6 +707,31 @@ bool accessesOverlap(const MemoryAccess& readAccess, const MemoryAccess& writeAc
     }
 }
 
+bool hasOnlyEvenIntervals(set<std::pair<unsigned, unsigned>> intervals){
+    for(const auto& interval : intervals){
+        if((interval.second - interval.first + 1) % 2 != 0)
+            return false;
+    }
+    return true;
+}
+
+bool initUpToNullByte(unsigned nulIndex, set<std::pair<unsigned, unsigned>> intervals){
+    auto firstInterval = intervals.begin();
+
+    if(firstInterval->first > nulIndex)
+        return true;
+
+    auto secondInterval = intervals.begin();
+    ++secondInterval;
+
+    while(secondInterval != intervals.end() && secondInterval->first < nulIndex){
+        ++firstInterval;
+        ++secondInterval;
+    }
+
+    return nulIndex > firstInterval->second;
+}
+
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 UINT32 opcode_arg, bool isFirstVisit)
 {
@@ -734,18 +759,10 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // can therefore decide which of these writes were done on the heap) the interesting ones are stored as normally.
     else if(mallocCalled && isWrite){
         currentShadow = heap.getPtr();
-        REG regBasePtr;
 
-        // If the stack pointer register is 64 bits long, than we are on an x86-64 architecture,
-        // otherwise (size is 32 bits), we are on x86 architecture.
-
-        // NOTE: intel PIN supports only intel x86 and x86-64 architectures, so there's no other possibility.
-        if(REG_Size(REG_STACK_PTR) == 8){
-            regBasePtr = REG_GBP;
-        }
-        else{
-            regBasePtr = REG_EBP;
-        }
+        // NOTE: according to Intel PIN manual, REG_GBP should be register EBP on 32 bit machines, while it is
+        // RBP on 64 bit machines.
+        REG regBasePtr = REG_GBP;
         ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
         std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
@@ -783,18 +800,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         }
     }
 
-    REG regBasePtr;
-
     // If the stack pointer register is 64 bits long, than we are on an x86-64 architecture,
     // otherwise (size is 32 bits), we are on x86 architecture.
 
     // NOTE: intel PIN supports only intel x86 and x86-64 architectures, so there's no other possibility.
-    if(REG_Size(REG_STACK_PTR) == 8){
-        regBasePtr = REG_GBP;
-    }
-    else{
-        regBasePtr = REG_EBP;
-    }
+    REG regBasePtr = REG_GBP;
     ADDRINT bp = PIN_GetContextReg(ctxt, regBasePtr);
 
     std::string* ins_disasm = static_cast<std::string*>(disasm_ptr);
@@ -845,6 +855,66 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         if(uninitializedInterval != NULL){
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
+
+            // This is an heuristics applied in order to reduce the number of reported uninitialized reads
+            // by avoiding reporting those not very significant.
+            // More specifically, this is done to try and avoid reporting those uninitialized read
+            // accesses performed due to the optimization of strings operations.
+            // Being an heuristics, this is not always precise, and may lead to false negatives (e.g. if memcpy is 
+            // is implemented using SIMD extensions as well, memcpys may be lost).
+            if(size >= 16 && opcode != XED_ICLASS_SYSCALL_AMD && (ip < textStart || ip > textEnd)){
+                char* content = (char*) malloc(sizeof(char) * size);
+                PIN_SafeCopy(content, (void*) addr, size);
+
+                // Look for an initialized nul byte in the access. If there's no initialized nul byte ('\0'), we
+                // will report the access, as it is possible that either this is not a string operation or the 
+                // string has not been initialized or a buffer overflow may be happening (e.g. the absence of '\0' in an 
+                // uninitialized read may imply the fact that a string terminator is missing, and we are reading 
+                // something more than the intended string).
+                char* nulPtr = strchr(content, '\0');
+                unsigned nulIndex = 0;
+                set<uint8_t*> toFree;
+            
+                while(nulPtr != NULL){
+                    nulIndex = nulPtr - content;
+
+                    // A null byte has been found outside the boundaries of the considered access
+                    if(nulIndex >= size){
+                        nulPtr = NULL;
+                        break;
+                    }
+                    uint8_t* byteShadowCopy = getUninitializedInterval(addr + nulIndex, 1);
+                    toFree.insert(byteShadowCopy);
+                    
+                    // The null byte has been found and has been proven to be initialized
+                    if(byteShadowCopy == NULL){
+                        break;
+                    }
+                    nulPtr = strchr(nulPtr + 1, '\0');
+                }
+
+                // Free all unused allocated memory
+                for(uint8_t* ptr : toFree){
+                    free(ptr);
+                }
+
+                // At this point, nulPtr points to the first occurrence of '\0' that is also initialized,
+                // and nulIndex is the index of that character from the beginning of the considered access
+                if(nulPtr != NULL){
+                    set<std::pair<unsigned, unsigned>> intervals = ma.computeIntervals();
+                    // If any of these conditions evaluated to true, it is likely to be executin some operation on a string
+                    if(
+                        !hasOnlyEvenIntervals(intervals) || // There's at least 1 interval with an odd number of uninitialized bytes (note that every other numeric type has at least 2 bytes in C)
+                        initUpToNullByte(nulIndex, intervals) // Everything is initialized up to the first initialized null byte '\0'
+                    ){
+                        free(content);
+                        free(uninitializedInterval);
+                        return;
+                    }
+                }
+                free(content);
+            }
+
             containsUninitializedRead.insert(ai);
 
             size_t hash = maHasher(ma);
@@ -1272,6 +1342,7 @@ VOID Fini(INT32 code, VOID *v)
 
     dumpMemTrace(fullOverlaps);
 
+    // We take the size of any register, as they have the same size (excluding SIMD extension registers)
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
     memOverlaps << regSize << ";";
