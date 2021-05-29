@@ -305,7 +305,7 @@ bool hasOverlappingUninitializedInterval(const AccessIndex& currentSetAI, set<Pa
 namespace tracer{
     // Returns true if the write access pointed to by |writeAccess| writes at least 1 byte that is later read
     // by any uninitialized read access overlapping the access represented by |ai|
-    bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>& s, const AccessIndex& ai){
+    bool isReadByUninitializedRead(set<PartialOverlapAccess>::iterator& writeAccess, set<PartialOverlapAccess>::iterator& readAccess, const AccessIndex& ai){
         ADDRINT writeStart = writeAccess->getAddress();
         UINT32 writeSize = writeAccess->getSize();
 
@@ -336,7 +336,9 @@ namespace tracer{
             overwrittenBytes[i] = false;
         }
 
-        while(following != s.end()){
+        set<PartialOverlapAccess>::iterator end = readAccess;
+        ++end;
+        while(following != end){
 
             ADDRINT folStart = following->getAddress();
             ADDRINT folEnd = folStart + following->getSize() - 1;
@@ -355,16 +357,7 @@ namespace tracer{
 
             // If |following| is an uninitialized read access, check if it reads at least a not overwritten byte of 
             // |writeAccess|
-            if(following->getType() == AccessType::READ && following->getIsUninitializedRead() && !following->getIsPartialOverlap()){
-                set<std::pair<unsigned, unsigned>> intervals = following->computeIntervals();
-                bool uninitializedOverlap = hasOverlappingUninitializedInterval(ai, following, intervals);
-                // If the uninitialized read access does not overlap |ai| access, it can overlap |writeAccess|, but it is 
-                // of no interest now.
-                if(!uninitializedOverlap){
-                    ++following;
-                    continue;
-                }
-
+            if(following == readAccess){
                 #ifdef DEBUG
                     isReadLogger << "[LOG]: " << following->getDisasm() << " reads bytes [" << std::dec << overlapBeginning << " ~ " << overlapEnd << "]" << endl;
                 #endif
@@ -1468,11 +1461,61 @@ VOID Fini(INT32 code, VOID *v)
             print_profile(analysisProfiling, "\tNew set considered");
         #endif
         
-        set<PartialOverlapAccess> v = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
-        PartialOverlapAccess::addToSet(v, fullOverlaps[it->first]);
+        set<PartialOverlapAccess> tempSet = PartialOverlapAccess::convertToPartialOverlaps(it->second, true);
+        PartialOverlapAccess::addToSet(tempSet, fullOverlaps[it->first]);
 
         if(!containsReadIns(it->first)){
             continue;
+        }
+
+        set<PartialOverlapAccess> v;
+        unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher, MemoryAccess::Comparator> reportedGroups;
+        MemoryAccess::NoOrderHasher maHasher;
+
+        // Scan tempSet, and insert in set v the uninitializd read accesses with the write accesses they read from
+        // only if the whole group (uninitialized read + write) has not been already inserted yet.
+        // NOTE: this is quite similar to what we have done during analysis in |memtrace| when an uninitialized read is found.
+        // However, in order to avoid slowing down the analysis itself, we didn't check which write accesses are actually read by
+        // the uninitialized read. While that is enough to remove most of the duplicated groups of accesses,
+        // it is possible that some are not removed. This way, we are also removing from the set of partial overlaps all those write accesses
+        // that are never read by any uninitialized read access.
+        for(set<PartialOverlapAccess>::iterator v_it = tempSet.begin(); v_it != tempSet.end(); ++v_it){
+            if(v_it->getType() == AccessType::READ && v_it->getIsUninitializedRead() && !v_it->getIsPartialOverlap()){
+                set<PartialOverlapAccess> writes;
+                
+                const MemoryAccess& ma = v_it->getAccess();
+                size_t hash = maHasher(ma);
+                for(set<PartialOverlapAccess>::iterator writeIt = tempSet.begin(); writeIt != v_it; ++writeIt){
+                    if(writeIt->getType() == AccessType::WRITE && tracer::isReadByUninitializedRead(writeIt, v_it, it->first)){
+                        hash = maHasher.lrot(hash, 4) ^ maHasher(writeIt->getAccess());
+                        writes.insert(*writeIt);
+                    }
+                }
+
+                auto overlapGroup = reportedGroups.find(ma);
+
+                if(overlapGroup == reportedGroups.end()){
+                    unordered_set<size_t> s;
+                    s.insert(hash);
+                    reportedGroups[ma] = s;
+                }
+                else{
+                     unordered_set<size_t>&  reportedHashes = overlapGroup->second;
+
+                    // If this is the first time this read access is happening within this context, store it
+                    if(reportedHashes.find(hash) == reportedHashes.end()){
+                        reportedHashes.insert(hash);
+                    }
+                    else{
+                        continue;
+                    }
+                }
+
+                v.insert(*v_it);
+                for(const PartialOverlapAccess& write : writes){
+                    v.insert(write);
+                }
+            }
         }
 
         ADDRINT tmp = it->first.getFirst();
@@ -1487,25 +1530,19 @@ VOID Fini(INT32 code, VOID *v)
         #endif
         
         for(set<PartialOverlapAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
-
-            // We do not care about partially overlapping read accesses. 
-            // They will have their own set where they will be reported together with the write accesses
-            // they read bytes from
-            if(v_it->getType() == AccessType::READ && v_it->getIsPartialOverlap())
-                continue;
-
             void* uninitializedOverlap = NULL;
             int overlapBeginning = v_it->getAddress() - it->first.getFirst();
             if(overlapBeginning < 0)
                 overlapBeginning = 0;
 
-            if(v_it->getType() == AccessType::WRITE && tracer::isReadByUninitializedRead(v_it, v, it->first)){
+            // NOTE: at this point there are only writes whose bytes are read at least by an uninitialized read access and
+            // uninitialized read accesses fully overlapping with the considered set.
+            // Moreover, uninitializedOverlap can't be NULL. Every write partially overlaps thi set, and every remained read access is an uninitialized
+            // read fully overlapping with the considered set (and so its field |uninitializedInterval| can't be NULL)
+            if(v_it->getType() == AccessType::WRITE){
                 uninitializedOverlap = getOverlappingWriteInterval(it->first, v_it);
             }
-                    
-            // If it is a READ access and it is uninitialized and execution reaches this branch,
-            // it surely is an uninitialized read fully overlapping with the considered set
-            if(v_it->getType() == AccessType::READ && v_it->getIsUninitializedRead()){
+            else{
                 uninitializedOverlap = v_it->getUninitializedInterval();
             }
 
@@ -1533,10 +1570,6 @@ VOID Fini(INT32 code, VOID *v)
                     partialOverlapsLog << " {NULL interval} ";
                 partialOverlapsLog << endl;
             #endif
-
-            // It's of no interest in this table. If it is an uninitialized read, it will have its own table.
-            if(uninitializedOverlap == NULL)
-                continue;
             
             memOverlaps.write(v_it->getIsUninitializedRead() ? "\x0a" : "\x0b", 1);
             tmp = v_it->getIP();
