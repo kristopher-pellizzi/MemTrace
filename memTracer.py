@@ -38,13 +38,13 @@ def parse_executable(exec_str):
     splitted_exec = exec_str.split(" ")
     exec_path = splitted_exec[0]
     exec_path = adjust_exec_path(exec_path)
+    splitted_exec[0] = exec_path
     executable = [exec_path] + splitted_exec[1:]
     executable = " ".join(executable)
 
     if not os.path.exists(exec_path):
         raise IOError("Executable {0} does not exist. Check the executable path and try again".format(exec_path))
-
-    return executable
+    return splitted_exec
 
 
 def parse_args(args):
@@ -82,6 +82,17 @@ def parse_args(args):
 
 
     parser = ap.ArgumentParser(formatter_class = HelpFormatter)
+
+    parser.add_argument("--single-execution", "-x",
+        action = "store_true",
+        help =  "Flag used to specify that the program should be executed only once with the given parameters."
+                "This may be useful in case the program does not read any input (it is useless to run the fuzzer in these "
+                "cases) and it requires to run with very specific argv arguments (e.g. utility cp from coreutils requires "
+                "correctly formatted, existing paths to work).\n "
+                "Options -f, -d, -i, -b, -a, -t, -s, -p, --ignore-cpu-count, -e and --no-fuzzing (i.e. all options related "
+                "to the fuzzing task) will be ignored.",
+        dest = "single_exec"
+    )
 
     parser.add_argument("--str-opt-heuristic", "-u",
         default = "LIBS",
@@ -253,7 +264,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
     tracer_out = os.path.join(fuzz_dir, args.tracer_out)
     inputs_dir = os.path.join(fuzz_out, "Main", "queue")
     launcher_path = os.path.join(os.getcwd(), "launcher")
-    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + [exec_cmd]
+    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + exec_cmd
     traced_inputs = set()
     # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
     # already exists, so he probably already launched the script.
@@ -402,7 +413,7 @@ def main():
         ALREADY_LAUNCHED_SCHED.update({selected})
 
         print("Launching slave instance nr {0} with power schedule {1}".format(slave_id, selected))
-        cmd = ["afl-fuzz", "-Q", "-S", "Slave_{0}".format(slave_id), "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--", executable, "@@"]
+        cmd = ["afl-fuzz", "-Q", "-S", "Slave_{0}".format(slave_id), "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable + ["@@"]
         return cmd
 
 
@@ -504,6 +515,17 @@ def main():
         launchTracer(executable, args, e)
         return
 
+    if args.single_exec:
+        tracer_out = args.tracer_out
+        tracer_out = os.path.realpath(tracer_out)
+        if not os.path.exists(tracer_out):
+            raise IOError("Folder {0} must exist".format(tracer_out))
+        launcher_path = os.path.join(os.getcwd(), "launcher")
+        tracer_cmd = [launcher_path, "-o", os.path.join(tracer_out, "overlaps.bin"), "-u", args.heuristic_status, "--"] + executable
+        proc = subp.Popen(tracer_cmd) #, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
+        proc.wait()
+        return
+
     WORKING_DIR = os.getcwd()
     FUZZ_DIR = os.path.join(WORKING_DIR, args.fuzz_dir)
     FUZZ_OUT = os.path.join(FUZZ_DIR, args.fuzz_out)
@@ -568,7 +590,7 @@ def main():
         p = subp.Popen(["sudo", "afl-system-config"])
         p.wait()
     launch_single_instance = args.slaves == 0
-    fuzz_cmd = ["afl-fuzz", "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--", executable, "@@"]
+    fuzz_cmd = ["afl-fuzz", "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--"] +  executable + ["@@"]
 
     cpus = os.cpu_count()
     if cpus is None:
