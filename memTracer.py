@@ -77,8 +77,39 @@ def parse_args(args):
         return val
 
 
+    def parse_heuristic_status(s: str):
+        return s.upper()
+
 
     parser = ap.ArgumentParser(formatter_class = HelpFormatter)
+
+    parser.add_argument("--str-opt-heuristic", "-u",
+        default = "LIBS",
+        help =  "Option used to specify whether to enable the heuristic thought to remove the high number of not "
+                "relevant uninitialized reads due to the optimized versions of string operations (e.g. strcpy).\n"
+                "The aforementioned heuristic can be either disabled, enabled or partially enabled.\n"
+                "If the heuristic is disabled, it will never be applied.\n"
+                "If it is enabled, it will be always applied.\n"
+                "If it is partially enabled, it is applied only for accesses performed by code from libraries (e.g. libc).\n"
+                "By default, the heuristic is partially enabled.\n"
+                "Possible choices are:\n"
+                "OFF => Disabled,\n"
+                "\tON => Enabled,\n"
+                "\tLIBS => Partially enabled.\n"
+                "WARNING: when the heuristic is enabled, many false negatives may arise. If you want to avoid false negatives "
+                "due to the application of the heuristic, you can simply disable it, but at a cost. "
+                "Indeed, in a single program there may be many string operations, and almost all of them will generate "
+                "uninitialized reads due to the optimizations (e.g. strcpy usually loads 32 bytes at a time, but then checks "
+                "are performed on the loaded bytes to avoid copying junk).\n"
+                "So, the execution of the program with the heuristic disabled may generate a huge number of uninitialized reads.\n"
+                "Those are not false positives (those reads actually load uninitialized bytes from memory to registers), but they "
+                "may be not relevant.\n"
+                "Example: strcpy(dest, src), where |src| is a 4 bytes string, may load 32 bytes from memory to SIMD registers. Then, "
+                "after some checks performed on the loaded bytes, only the 4 bytes belonging to |src| are copied in the pointer |dest|.",
+                dest = "heuristic_status",
+                type = parse_heuristic_status,
+                choices = ("OFF", "ON", "LIBS")
+    )
 
     parser.add_argument("--fuzz-out", "-f", 
         default = "out", 
@@ -222,7 +253,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
     tracer_out = os.path.join(fuzz_dir, args.tracer_out)
     inputs_dir = os.path.join(fuzz_out, "Main", "queue")
     launcher_path = os.path.join(os.getcwd(), "launcher")
-    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "--"] + [exec_cmd]
+    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + [exec_cmd]
     traced_inputs = set()
     # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
     # already exists, so he probably already launched the script.
