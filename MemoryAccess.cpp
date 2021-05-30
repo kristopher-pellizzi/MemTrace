@@ -74,7 +74,6 @@ std::string MemoryAccess::toString() const{
 
 void MemoryAccess::freeMemory() const{
     free(uninitializedInterval);
-    delete instructionDisasm;
 }
 
 bool MemoryAccess::operator<(const MemoryAccess &other) const{
