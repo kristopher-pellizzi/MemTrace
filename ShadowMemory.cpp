@@ -327,7 +327,7 @@ StackShadow::StackShadow(){
     // The address contained by the stack pointer at the beginning of the application entry point is initialized
     // outside the function itself (i.e. by the loader) but the entry point reads it through a pop instruction.
     // In order to avoid to report a false positive, set as initialized the shadow memory mirroring that address.
-    *shadow[0] = 0xff;
+    *shadow[0] = STACK_SHADOW_INIT;
     dirtyPages[0] = true;
 }
 

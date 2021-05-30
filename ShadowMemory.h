@@ -13,6 +13,7 @@
 
 #include "pin.H"
 #include "HeapEnum.h"
+#include "Platform.h"
 
 using std::map;
 using std::vector;

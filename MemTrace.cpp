@@ -1017,7 +1017,7 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     // The requested size is overridden by the size passed as an argument to mmap
     // (which must be a multiple of the page size). This way, we can store the
     // exact allocated size
-    if(sysNum == 9 && mallocCalled){
+    if(sysNum == MMAP_NUM && mallocCalled){
         mmapMallocCalled = true;
         mallocRequestedSize = PIN_GetSyscallArgument(ctxt, std, 1);
     }
