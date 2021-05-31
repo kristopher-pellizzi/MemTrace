@@ -516,6 +516,7 @@ VOID FreeAfter(ADDRINT ptr){
     ADDRINT page_start = ptr & ~(PAGE_SIZE - 1);
     if(freeBlockSize == mmapMallocated[page_start]){
         mmapMallocated[page_start] = 0;
+        mmapShadows.erase(page_start);
     }
 
     for(auto iter = mallocTemporaryWriteStorage.begin(); iter != mallocTemporaryWriteStorage.end(); ++iter){
@@ -602,6 +603,12 @@ VOID MallocAfter(ADDRINT ret)
             lowestHeapAddr = ret & ~ (PAGE_SIZE - 1);
             heap.setBaseAddr(lowestHeapAddr);
             imgs_base.insert(std::pair<std::string, ADDRINT>("Heap", lowestHeapAddr));
+
+            // If there has been any malloc before the execution of the entry point, set every already allocated byte
+            // as initialized, so that eventual reads to that chunks are not considered uninitialized
+            if(ret != lowestHeapAddr){
+                heap.set_as_initialized(lowestHeapAddr, ret - lowestHeapAddr);
+            }
         }
         size_t blockSize = malloc_get_block_size(ret);
         mallocatedPtrs[ret] = blockSize;
