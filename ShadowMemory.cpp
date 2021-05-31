@@ -491,9 +491,7 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
         // If it is a heap allocated through mmap, it is due to a big allocation request.
         // These kind of requests are very rare, and when they happen it is likely to have a long life.
         // For these reasons, it is simpler to simply remove its shadow memory, so that it also reduces memory usage
-        mmapShadows.find(addr)->second.freeMemory();
-        mmapShadows.erase(addr);
-        mallocatedPtrs[addr] = 0;
+        freeMemory();
         return;
     }
     // Remember the ShadowMemory model keeps 1 byte for each 8 bytes of application memory
