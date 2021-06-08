@@ -123,6 +123,8 @@ bool argIsStackAddr;
 // Global variables required to keep track of malloc/calloc/realloc returned pointers
 bool mallocCalled = false;
 bool freeCalled = false;
+bool memalignCalled = false;
+void** memalignPtr = NULL;
 ADDRINT mallocRequestedSize = 0;
 ADDRINT freeRequestedAddr = 0;
 ADDRINT freeBlockSize = 0;
@@ -133,6 +135,7 @@ ADDRINT highestHeapAddr = 0;
 unordered_map<ADDRINT, size_t> mallocatedPtrs;
 unordered_map<ADDRINT, size_t> mmapMallocated;
 bool mmapMallocCalled = false;
+bool firstMallocCalled = false;
 
 #ifdef DEBUG
     std::ofstream isReadLogger("isReadLog.log");
@@ -443,9 +446,15 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
 // Analysis routines
 /* ===================================================================== */
 
+VOID MemalignBefore(void** memptr, size_t size){
+    memalignCalled = true;
+    memalignPtr = memptr;
+    mallocRequestedSize = size;
+}
+
 // Malloc related analysis routined
 VOID MallocBefore(ADDRINT size){
-    if(!entryPointExecuted || size == 0)
+    if(size == 0)
         return;
 
     mallocRequestedSize = size;
@@ -453,7 +462,7 @@ VOID MallocBefore(ADDRINT size){
 }
 
 VOID CallocBefore(ADDRINT nmemb, ADDRINT size){
-    if(!entryPointExecuted || nmemb == 0 || size == 0)
+    if(nmemb == 0 || size == 0)
         return;
 
     mallocRequestedSize = nmemb * size;
@@ -542,7 +551,7 @@ VOID FreeAfter(ADDRINT ptr){
 }
 
 VOID ReallocBefore(ADDRINT ptr, ADDRINT size){
-    if(!entryPointExecuted || size == 0)
+    if(size == 0)
         return;
         
     mallocRequestedSize = size;
@@ -559,62 +568,99 @@ VOID MallocAfter(ADDRINT ret)
     // If this is a malloc performed by a call to realloc and the returned ptr
     // is different from the previous ptr, the previous ptr has been freed.
     if(oldReallocPtr != 0 && oldReallocPtr != ret){
+        freeBlockSize = malloc_get_block_size(malloc_get_block_beginning(oldReallocPtr));
         FreeAfter(oldReallocPtr);
     }
 
-    ret = malloc_get_block_beginning(ret);
+    size_t blockSize;
+    ShadowBase* heapShadow;
 
     // This kind of allocation should be the same for every platform
     if(mmapMallocCalled){
         // NOTE: mallocRequestedSize has been overridden by the size passed as an argument to mmap
         ADDRINT page_start = ret & ~(PAGE_SIZE - 1);
-        mmapMallocated[page_start] = mallocRequestedSize;
+        ret = malloc_get_block_beginning(ret);
+
+        // This may happen on Linux. Before the entry point is executed, the loader needs to allocate
+        // memory pages. When this happen, the allocations are not the same that happen during
+        // application execution. These allocated pages won't have a chunk header. In this very specific
+        // case, function malloc_get_block_beginning returns a pointer which is lower than the memory page
+        // returned by this malloc. We must handle this corner case, because if that happens, the tool
+        // will try to access possibly not allocated memory, thus causing a segmentation fault.
+        if(ret < page_start){
+            mallocTemporaryWriteStorage.clear();
+            return;
+        }
+        blockSize = malloc_get_block_size(ret);
         HeapShadow newShadowMem(HeapEnum::MMAP);
         newShadowMem.setBaseAddr(page_start);
-        size_t blockSize = malloc_get_block_size(ret);
-        mallocatedPtrs[ret] = blockSize;
         // If the blockSize is equal to the size allocated by mmap, this malloc dedicated the whole allocated memory
         // to a single block.
-        if(blockSize == mallocRequestedSize){
+        bool isSingleChunk = blockSize == mallocRequestedSize;
+        if(isSingleChunk){
             newShadowMem.setAsSingleChunk();
         }
-        mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(ret, newShadowMem));
+
+        // We ignore any malloc/free that happens before the entry point is executed, so if this mmap allocates
+        // a single chunk, avoid inserting it in any data structure.
+        // NOTE: if it is a normal malloc, or a mmap malloc that is not allocated for a single chunk, instead, we need
+        // at least to create the corresponding shadow memory page, if it does not exist yet, but we'll
+        // set the allocated areas to be ignored as initialized, and we'll never reset them.
+        if(!entryPointExecuted && isSingleChunk){
+            mallocTemporaryWriteStorage.clear();
+            return;
+        }
+        mmapMallocated[page_start] = mallocRequestedSize;
+        mallocatedPtrs[ret] = blockSize;
+        auto insertRet = mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(ret, newShadowMem));
+        // Set heapShadow to be the pointer of the just inserted HeapShadow object
+        heapShadow = insertRet.first->second.getPtr();
     }
     else {
+        ret = malloc_get_block_beginning(ret);
+        blockSize = malloc_get_block_size(ret);
         HeapType type = isHeapAddress(ret);
 
         // If we are already aware it is a mmap heap address, it means we don't have to update anything
         // as through the mmap we already know the boundaries of the allocated memory. However, we have to
         // insert the returned pointer inside the |mallocatedPtrs| map, with the size of its block
         if(type.isMmap()){
-            mallocatedPtrs[ret] = malloc_get_block_size(ret);
-            return;
+            heapShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
         }
-        
-        // Otherwise, it means the malloc returned an address of the main heap, which was not allocated through mmap
-        // (e.g. glibc allocates it through sbrk system call). In that case, we may need to update the information
-        // about the main heap boundaries
-        // NOTE: in case the first address returned by malloc is not contained in the first allocated
-        // memory page, the following assignment to lowestHeapAddr may invalidate the whole main heap shadow 
-        // memory. This is true only if the allocation happened without using mmap. In that case, everything should 
-        // work well
-        if(ret < lowestHeapAddr){
-            // lowestHeapAddr is set to the start address of the memory page the return address belongs to
-            lowestHeapAddr = ret & ~ (PAGE_SIZE - 1);
-            heap.setBaseAddr(lowestHeapAddr);
-            imgs_base.insert(std::pair<std::string, ADDRINT>("Heap", lowestHeapAddr));
-
-            // If there has been any malloc before the execution of the entry point, set every already allocated byte
-            // as initialized, so that eventual reads to that chunks are not considered uninitialized
-            if(ret != lowestHeapAddr){
-                heap.set_as_initialized(lowestHeapAddr, ret - lowestHeapAddr);
+        else{
+            // If this is a normal malloc, but the brk system call is never called, this is performed before
+            // the entry point is actually executed, and won't give a heap pointer, so ignore it
+            if(!firstMallocCalled){
+                mallocTemporaryWriteStorage.clear();
+                return;
             }
+            // Otherwise, it means the malloc returned an address of the main heap, which was not allocated through mmap
+            // (i.e. through brk system call). In that case, we may need to update the information
+            // about the main heap boundaries.
+            // NOTE: in case the first address returned by malloc is not contained in the first allocated
+            // memory page, the following assignment to lowestHeapAddr may invalidate the whole main heap shadow 
+            // memory. This is true only if the allocation happened without using mmap. In that case, everything should 
+            // work well
+            if(ret < lowestHeapAddr){
+                // lowestHeapAddr is set to the start address of the memory page the return address belongs to
+                lowestHeapAddr = ret & ~ (PAGE_SIZE - 1);
+                heap.setBaseAddr(lowestHeapAddr);
+                imgs_base.insert(std::pair<std::string, ADDRINT>("Heap", lowestHeapAddr));
+            }
+
+            ADDRINT lastByte = malloc_get_main_heap_upper_bound(ret, blockSize);
+            if(lastByte > highestHeapAddr)
+                highestHeapAddr = lastByte;
+
+            heapShadow = heap.getPtr();
         }
-        size_t blockSize = malloc_get_block_size(ret);
+
         mallocatedPtrs[ret] = blockSize;
-        ADDRINT lastByte = malloc_get_main_heap_upper_bound(ret, blockSize);
-        if(lastByte > highestHeapAddr)
-            highestHeapAddr = lastByte;
+    }
+
+    // If this malloc happened before the entry point is executed, simply consider it as completely initialized.
+    if(!entryPointExecuted){
+        heapShadow->set_as_initialized(ret, blockSize);
     }
 
     // NOTE: |mallocTemporaryWriteStorage| only contains write accesses happened during the execution of malloc
@@ -638,8 +684,17 @@ VOID MallocAfter(ADDRINT ret)
     mallocTemporaryWriteStorage.clear();
 }
 
+VOID MemalignAfter(){
+    void* returnedPtr;
+    PIN_SafeCopy(&returnedPtr, memalignPtr, sizeof(void*));
+    if(returnedPtr == NULL){
+        return;
+    }
+    MallocAfter((ADDRINT) returnedPtr);
+}
+
 VOID mallocRet(CONTEXT* ctxt){
-    if(!mallocCalled && !freeCalled)
+    if(!mallocCalled && !freeCalled && !memalignCalled)
         return;
 
     if(nestedCalls > 0){
@@ -651,24 +706,30 @@ VOID mallocRet(CONTEXT* ctxt){
     // According to which of these is set, we should call either MallocAfter or FreeAfter.
     // In any case, we must reinitialize the flags
 
-    if(mallocCalled && !freeCalled){
+    if(mallocCalled && !freeCalled && !memalignCalled){
         ADDRINT ret = PIN_GetContextReg(ctxt, REG_GAX);
         MallocAfter(ret);
     }
 
-    if(!mallocCalled && freeCalled){
+    if(!mallocCalled && freeCalled && !memalignCalled){
         FreeAfter(freeRequestedAddr);
+    }
+
+    if(!mallocCalled && !freeCalled && memalignCalled){
+        MemalignAfter();
     }
 
     oldReallocPtr = 0;
     mallocCalled = false;
+    memalignCalled = false;
+    memalignPtr = NULL;
     mmapMallocCalled = false;
     freeCalled = false;
     freeRequestedAddr = 0;
 }
 
 VOID mallocNestedCall(){
-    if(!mallocCalled && !freeCalled)
+    if(!mallocCalled && !freeCalled && !memalignCalled)
         return;
     ++nestedCalls;
 }
@@ -725,7 +786,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
     // If malloc has been called and it is a write access, save it temporarily. After the malloc completed (and we 
     // can therefore decide which of these writes were done on the heap) the interesting ones are stored as normally.
-    else if(mallocCalled && isWrite){
+    else if((mallocCalled || memalignCalled) && isWrite){
         currentShadow = heap.getPtr();
 
         // NOTE: according to Intel PIN manual, REG_GBP should be register EBP on 32 bit machines, while it is
@@ -810,7 +871,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         // memory written by the free itself, thus possibly causing many false positives with following malloc calls.
         // To avoid that, after the shadow memory is re-initialized, every write that the free performed on the heap is virtually "re-executed"
         // re-setting the corresponding shadow memory, thus avoiding those aforementioned false positives
-        if(freeCalled && !ma.isStackAccess()){
+        if((oldReallocPtr != 0 || freeCalled || memalignCalled) && !ma.isStackAccess()){
             mallocTemporaryWriteStorage[ai] = ma;
         }
     }
@@ -898,7 +959,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
                 ADDRINT maLastAccessedByte = ma.getAddress() + ma.getSize() - 1;
 
-                while(iterFirstAccessedByte <= maLastAccessedByte){
+                while(iter != lastWriteInstruction.end() && iterFirstAccessedByte <= maLastAccessedByte){
 
                     const auto& lastWrite = iter->second;
 
@@ -923,7 +984,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
                 ADDRINT maLastAccessedByte = ma.getAddress() + ma.getSize() - 1;
 
-                while(iterFirstAccessedByte <= maLastAccessedByte){
+                while(iter != lastWriteInstruction.end() && iterFirstAccessedByte <= maLastAccessedByte){
 
                     const auto& lastWrite = iter->second;
 
@@ -1028,6 +1089,14 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
         mmapMallocCalled = true;
         mallocRequestedSize = PIN_GetSyscallArgument(ctxt, std, 1);
     }
+
+    if(sysNum == BRK_NUM && (mallocCalled || memalignCalled)){
+        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, 0);
+        if(arg != 0){
+            highestHeapAddr = arg;
+            firstMallocCalled = true;
+        }
+    }
     unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
     vector<ADDRINT> actualArgs;
     for(int i = 0; i < argsCount; ++i){
@@ -1106,6 +1175,16 @@ VOID Image(IMG img, VOID* v){
                     IARG_END);
 
         RTN_Close(mallocRtn);
+    }
+
+    RTN memalignRtn = RTN_FindByName(img, "posix_memalign");
+    if(RTN_Valid(memalignRtn)){
+        RTN_Open(memalignRtn);
+        RTN_InsertCall( memalignRtn, IPOINT_BEFORE, (AFUNPTR) MemalignBefore,
+                        IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                        IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+                        IARG_END);
+        RTN_Close(memalignRtn);
     }
 
     mallocRtn = RTN_FindByName(img, CALLOC);
