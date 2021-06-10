@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+import argparse as ap
 from collections import deque
 from binascii import b2a_hex
+from functools import reduce
 
 from parsedData import * 
 
@@ -124,6 +126,80 @@ def print_table_footer(rw):
     rw.writelines([l1, l1, "", "", "", ""])
 
 
+def intervals_overlap(first_interval, second_interval):
+    first_lower, first_upper = first_interval
+    second_lower, second_upper = second_interval
+
+    if first_lower <= second_lower:
+        return second_lower <= first_upper
+    else:
+        return first_lower <= second_upper
+
+
+def check_for_overlapping_writes(overlaps, uninitialized_read):
+    read_intervals = uninitialized_read.uninitializedIntervals
+    writes = list(filter(lambda x: x.accessType == AccessType.WRITE, overlaps))
+    for entry in writes:
+        # NOTE: write accesses are supposed to have only 1 uninitialized interval
+        write_overlaps_read = lambda x: intervals_overlap(entry.uninitializedIntervals[0], x)
+        has_overlapping_writes = reduce(lambda acc, x: acc or x, map(write_overlaps_read, read_intervals), False)
+        if has_overlapping_writes:
+            return True
+
+    return False
+
+
+def is_read_by_uninitialized_read(write, overlaps):
+    write_interval = write.uninitializedIntervals[0]
+    write_lower, write_upper = write_interval
+    not_overwritten_bytes = set(range(write_lower, write_upper + 1))
+
+    for entry in overlaps:
+        if len(not_overwritten_bytes) == 0:
+            return False
+
+        if entry.accessType == AccessType.WRITE:
+            entry_interval = entry.uninitializedIntervals[0]
+            if not intervals_overlap(write_interval, entry_interval):
+                continue
+
+            entry_lower, entry_upper = entry_interval
+            not_overwritten_bytes.difference_update(set(range(entry_lower, entry_upper + 1)))
+        else:
+            entry_intervals = entry.uninitializedIntervals
+            read_overlaps = reduce(lambda acc, x: acc or x, map(lambda x: intervals_overlap(write_interval, x), entry_intervals), False)
+            if not read_overlaps:
+                continue
+
+            intersections = reduce(lambda acc, x: acc or x, map(lambda x: len(x) > 0, map(lambda x: not_overwritten_bytes.intersection(x), map(lambda x: set(range(x[0], x[1] + 1)), entry_intervals))), False)
+            if intersections:
+                return True
+    
+    return False
+
+
+def remove_useless_writes(overlaps):
+    ret = deque()
+
+    # If there are no more read accesses left in the set, just dreturn an empty set
+    if len(list(filter(lambda x: x.accessType == AccessType.READ, overlaps))) <= 0:
+        return ret
+
+    # Deque objects have a constant time append/remove methods, but a O(n)
+    # lookup and has no random access (access is performed by scanning the list)
+    # So, it is more convenient to pop entries and insert them again in a new deque
+    # instead of removing the bad ones
+    while(len(overlaps) > 0):
+        entry = overlaps.popleft()
+
+        if entry.accessType == AccessType.READ:
+            ret.append(entry) 
+        elif is_read_by_uninitialized_read(entry, overlaps):
+            ret.append(entry)
+
+    return ret
+
+
 def parse_full_overlap_entry(f, reg_size, exec_order):    
     is_uninitialized_read = True if f.read(1) == b"\x0a" else False
     ip = parse_address(f, reg_size)
@@ -151,7 +227,7 @@ def parse_full_overlap_entry(f, reg_size, exec_order):
     return ma
 
 
-def parse_full_overlap(f, reg_size):
+def parse_full_overlap(f, reg_size, ignore_if_no_overlapping_write):
     overlaps = deque()
     exec_order = 0
 
@@ -162,10 +238,20 @@ def parse_full_overlap(f, reg_size):
     
     while(not accept(f, b"\x00\x00\x00\x01")):
         entry = parse_full_overlap_entry(f, reg_size, exec_order)
+        if ignore_if_no_overlapping_write and entry.isUninitializedRead:
+            has_overlapping_writes = len(list(filter(lambda x: x.accessType == AccessType.WRITE, overlaps))) != 0
+            if not has_overlapping_writes:
+                continue
         overlaps.append(entry)
         exec_order += 1
 
-    return (ai, overlaps)
+    if ignore_if_no_overlapping_write:
+        overlaps = remove_useless_writes(overlaps)
+
+    if len(overlaps) > 0:
+        return (ai, overlaps)
+    
+    return None
 
 
 def parse_partial_overlap_entry(f, reg_size, exec_order):
@@ -192,7 +278,7 @@ def parse_partial_overlap_entry(f, reg_size, exec_order):
     return ma
 
 
-def parse_partial_overlap(f, reg_size):
+def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write):
     exec_order = 0
     overlaps = deque()
 
@@ -203,13 +289,23 @@ def parse_partial_overlap(f, reg_size):
 
     while not accept(f, b"\x00\x00\x00\03"):
         entry = parse_partial_overlap_entry(f, reg_size, exec_order)
+        if ignore_if_no_overlapping_write and entry.isUninitializedRead:
+            has_overlapping_writes = check_for_overlapping_writes(overlaps, entry)
+            if not has_overlapping_writes:
+                continue
         overlaps.append(entry)
         exec_order += 1
 
-    return (ai, overlaps)
+    if ignore_if_no_overlapping_write:
+        overlaps = remove_useless_writes(overlaps)
+    
+    if len(overlaps) > 0:
+        return (ai, overlaps)
+    
+    return None
 
 
-def parse()->ParseResult:
+def parse(ignore_if_no_overlapping_write: bool = True)->ParseResult:
     ret = ParseResult()
 
     with open("overlaps.bin", "rb") as f:
@@ -238,33 +334,70 @@ def parse()->ParseResult:
 
         # While there are full overlaps...
         while not accept(f, b"\x00\x00\x00\x02"):
-            overlaps = parse_full_overlap(f, reg_size)
-            ret.full_overlaps.append(overlaps)
+            overlaps = parse_full_overlap(f, reg_size, ignore_if_no_overlapping_write)
+            if overlaps is not None:
+                ret.full_overlaps.append(overlaps)
 
         # While there are partial overlaps...
         while not accept(f, b"\x00\x00\x00\x04"):
-            overlaps = parse_partial_overlap(f, reg_size)
-            ret.partial_overlaps.append(overlaps)
+            overlaps = parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write)
+            if overlaps is not None:
+                ret.partial_overlaps.append(overlaps)
 
         return ret
 
 
+def parse_args():
+    parser = ap.ArgumentParser()
+
+    parser.add_argument('-a', '--all',
+        action = "store_false",
+        help =  "If this flag is enabled, then the parser will return all the memory accesses, avoiding discarding " 
+                "those uninitialized read accesses that don't have any write overlapping the uninitialized interval. "
+                "By default, this is disabled, so that the tool only reports actual memory overlaps. "
+                "NOTE: with this flag enabled, most of the uninitialized reads performed "
+                "by the program are reported. The tool, however, is not a memory sanitizer. The uninitialized reads "
+                "reported by the tool, are all the instructions loading from memory at least 1 byte that has not been "
+                "initialized. During program execution, this might happen many times (e.g. string operations almost "
+                "always read something beyond the initialized string), so reintroducing all the uninitialized reads "
+                "may generate huge reports.",
+        dest = "ignore_if_no_overlap"
+    )
+
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    ignore_if_no_overlapping_write = args.ignore_if_no_overlap
     fo = FullOverlapsWriter()
     po = PartialOverlapsWriter()
 
-    fo.writelines([get_fo_legend(), "\n"])
-    fo.writelines(["LOAD ADDRESSES:"])
-    po.writelines(["LOAD ADDRESSES:"])
 
-    parse_res = parse()
+    parse_res = parse(ignore_if_no_overlapping_write)
 
-    for (name, addr) in parse_res.load_bases:
-        fo.writelines([name + " base address: " + addr])
-        po.writelines([name + " base address: " + addr])
+    is_full_overlaps_empty = len(parse_res.full_overlaps) == 0
+    is_partial_overlaps_empty = len(parse_res.partial_overlaps) == 0
 
-    fo.writelines(["Stack base address: " + parse_res.stack_base, "\n"])
-    po.writelines(["Stack base address: " + parse_res.stack_base, "\n"])
+    if not is_full_overlaps_empty:
+        fo.writelines([get_fo_legend(), "\n"])
+        fo.writelines(["LOAD ADDRESSES:"])
+
+        for (name, addr) in parse_res.load_bases:
+            fo.writelines([name + " base address: " + addr])
+        fo.writelines(["Stack base address: " + parse_res.stack_base, "\n"])
+    else:
+        fo.writelines(["** NO OVERLAPS DETECTED **"])
+    
+    if not is_partial_overlaps_empty:
+        po.writelines(["LOAD ADDRESSES:"])
+
+        for (name, addr) in parse_res.load_bases:
+            po.writelines([name + " base address: " + addr])
+
+        po.writelines(["Stack base address: " + parse_res.stack_base, "\n"])
+    else:
+        po.writelines(["** NO OVERLAPS DETECTED **"])
 
     # Print textual report
 
