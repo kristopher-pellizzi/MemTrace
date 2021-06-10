@@ -3,6 +3,8 @@
 from collections import deque
 from binascii import b2a_hex
 
+from parsedData import * 
+
 class ParseError(Exception):
     def __init__(self, file, message="Error while parsing"):
         super().__init__(message)
@@ -122,16 +124,16 @@ def print_table_footer(rw):
     rw.writelines([l1, l1, "", "", "", ""])
 
 
-def parse_full_overlap_entry(f, reg_size):
-    global fo
-    
+def parse_full_overlap_entry(f, reg_size, exec_order):    
     is_uninitialized_read = True if f.read(1) == b"\x0a" else False
     ip = parse_address(f, reg_size)
     actual_ip = parse_address(f, reg_size)
     disassembled_inst = parse_string(f)
     access_type = expect(f, [b"\x1a", b"\x1b"])
+    access_type = AccessType.WRITE if access_type == b"\x1a" else AccessType.READ
     access_size = parse_integer(f)
     mem_type = expect(f, [b'\x1c', b'\x1d'])
+    mem_type = MemType.STACK if mem_type == b"\x1c" else MemType.HEAP
     sp_offset = parse_integer(f)
     bp_offset = parse_integer(f)
     uninitialized_intervals = deque()
@@ -145,83 +147,37 @@ def parse_full_overlap_entry(f, reg_size):
             interval_upper_bound = parse_integer(f)
             uninitialized_intervals.append((interval_lower_bound, interval_upper_bound))
 
-    # Emit full overlap table entry
-    str_list = []
-    str_list.append("*" if is_uninitialized_read else "")
-    str_list.append(ip + " (" + actual_ip + "):")
-    str_list.append("\t" if len(disassembled_inst) > 0 else " ")
-    str_list.append(disassembled_inst)
-    str_list.append(" W " if access_type == b"\x1a" else " R ")
-    str_list.append(str(access_size) + " B ")
-    # if it is a stack access, write also sp and bp offsets
-    if mem_type == b'\x1c':
-        str_list.append("@ (sp ")
-        str_list.append("+ " if sp_offset >= 0 else "- ")
-        str_list.append(str(abs(sp_offset)) + "); ")
-        str_list.append("(bp ")
-        str_list.append("+ " if bp_offset >= 0 else "- ")
-        str_list.append(str(abs(bp_offset)) + ")")
-    while len(uninitialized_intervals) > 0:
-        lower_bound, upper_bound = uninitialized_intervals.popleft()
-        str_list.append(" [" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
-
-    print_table_entry(fo, "".join(str_list))
-
+    ma = MemoryAccess(exec_order, ip, actual_ip, sp_offset, bp_offset, access_type, access_size, disassembled_inst, is_uninitialized_read, uninitialized_intervals, mem_type, False)
+    return ma
 
 
 def parse_full_overlap(f, reg_size):
-    global fo
+    overlaps = deque()
+    exec_order = 0
 
     addr = parse_address(f, reg_size)
     access_size = parse_integer(f)
-    # Emit table header
-    header = addr + " - " + str(access_size)
-    print_table_header(fo, header)
+
+    ai = AccessIndex(addr, access_size)
+    
     while(not accept(f, b"\x00\x00\x00\x01")):
-        parse_full_overlap_entry(f, reg_size)
-    print_table_footer(fo)
+        entry = parse_full_overlap_entry(f, reg_size, exec_order)
+        overlaps.append(entry)
+        exec_order += 1
+
+    return (ai, overlaps)
 
 
-def parse_partial_overlap_accessing_instr(f, reg_size):
-    global po
-
-    is_uninitialized_read = True if f.read(1) == b"\x0a" else False
-    ip = parse_address(f, reg_size)
-    actual_ip = parse_address(f, reg_size)
-    disassembled_inst = parse_string(f)
-    access_type = expect(f, [b"\x1a", b"\x1b"])
-    access_size = parse_integer(f)
-    sp_offset = parse_integer(f)
-    bp_offset = parse_integer(f)
-
-    # Emit full overlap table entry
-    str_list = []
-    str_list.append("*" if is_uninitialized_read else "")
-    str_list.append(ip + " (" + actual_ip + "):")
-    str_list.append("\t" if len(disassembled_inst) > 0 else " ")
-    str_list.append(disassembled_inst)
-    str_list.append(" W " if access_type == b"\x1a" else " R ")
-    str_list.append(str(access_size) + " B @ ")
-    str_list.append("(sp ")
-    str_list.append("+ " if sp_offset >= 0 else "- ")
-    str_list.append(str(abs(sp_offset)) + "); ")
-    str_list.append("(bp ")
-    str_list.append("+ " if bp_offset >= 0 else "- ")
-    str_list.append(str(abs(bp_offset)) + ")")
-
-    print_table_entry(po, "".join(str_list))
-
-
-def parse_partial_overlap_entry(f, reg_size):
-    global po
-
+def parse_partial_overlap_entry(f, reg_size, exec_order):
     is_uninitialized_read = True if expect(f, [b"\x0a", b"\x0b"]) == b"\x0a" else False
     ip = parse_address(f, reg_size)
     actual_ip = parse_address(f, reg_size)
     disassembled_instr = parse_string(f)
     access_type = expect(f, [b"\x1a", b"\x1b"])
+    access_type = AccessType.WRITE if access_type == b"\x1a" else AccessType.READ
     access_size = parse_integer(f)
     mem_type = expect(f, [b'\x1c', b'\x1d'])
+    mem_type = MemType.STACK if mem_type == b"\x1c" else MemType.HEAP
     sp_offset = parse_integer(f)
     bp_offset = parse_integer(f)
     is_partial_overlap = accept(f, b"\xab\xcd\xef\xff")
@@ -232,91 +188,160 @@ def parse_partial_overlap_entry(f, reg_size):
         upper_bound = parse_integer(f)
         uninitialized_intervals.append((lower_bound, upper_bound))
 
-    str_list = []
-    if is_partial_overlap:
-        str_list.append("=> ")
-    else:
-        str_list.append("   ")
-
-    if is_uninitialized_read:
-        str_list.append("*")
-
-    str_list.append(ip + " (" + actual_ip + "):")
-    str_list.append("\t" if len(disassembled_instr) > 0 else " ")
-    str_list.append(disassembled_instr)
-    str_list.append(" W " if access_type == b"\x1a" else " R ")
-    str_list.append(str(access_size) + " B ")
-    if mem_type == b'\x1c':
-        str_list.append("@ (sp ")
-        str_list.append("+ " if sp_offset >= 0 else "- ")
-        str_list.append(str(abs(sp_offset)))
-        str_list.append("); ")
-        str_list.append("(bp ")
-        str_list.append("+ " if bp_offset >= 0 else "- ")
-        str_list.append(str(abs(bp_offset)))
-        str_list.append("); ")
-    
-    while len(uninitialized_intervals) > 0:
-        lower_bound, upper_bound = uninitialized_intervals.popleft()
-        str_list.append("[" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
-
-    print_table_entry(po, "".join(str_list))
-    # print("[LOG]: parsed ", "".join(str_list))
+    ma = MemoryAccess(exec_order, ip, actual_ip, sp_offset, bp_offset, access_type, access_size, disassembled_instr, is_uninitialized_read, uninitialized_intervals, mem_type, is_partial_overlap)
+    return ma
 
 
 def parse_partial_overlap(f, reg_size):
-    global po
+    exec_order = 0
+    overlaps = deque()
 
     addr = parse_address(f, reg_size)
     access_size = parse_integer(f)
-    # Emit table header
-    header = addr + " - " + str(access_size)
-    print_table_header(po, header)
+
+    ai = AccessIndex(addr, access_size)
+
     while not accept(f, b"\x00\x00\x00\03"):
-        parse_partial_overlap_entry(f, reg_size)
-    print_table_footer(po)
+        entry = parse_partial_overlap_entry(f, reg_size, exec_order)
+        overlaps.append(entry)
+        exec_order += 1
+
+    return (ai, overlaps)
 
 
-fo = FullOverlapsWriter()
-po = PartialOverlapsWriter()
+def parse()->ParseResult:
+    ret = ParseResult()
 
-with open("overlaps.bin", "rb") as f:
-    read_bytes = b"\xff"
-    while(read_bytes != b"\x00\x00\x00\x00"):
-        while(read_bytes != b"\x00"):
-            if(read_bytes == b""):
-                raise ParseError(f, "Report beginning (byte 0x00) not found")
-            read_bytes = f.read(1)
-        f.seek(-1, 1)
-        read_bytes = f.read(4)
-    
-    reg_size = parse_integer(f)
+    with open("overlaps.bin", "rb") as f:
+        read_bytes = b"\xff"
+        while(read_bytes != b"\x00\x00\x00\x00"):
+            while(read_bytes != b"\x00"):
+                if(read_bytes == b""):
+                    raise ParseError(f, "Report beginning (byte 0x00) not found")
+                read_bytes = f.read(1)
+            f.seek(-1, 1)
+            read_bytes = f.read(4)
+        
+        reg_size = parse_integer(f)
 
-    load_bases = set()
-    while not accept(f, b"\x00\x00\x00\x05"):
-        load_bases.add((parse_string(f), parse_address(f, reg_size)))
-    stack_base = parse_address(f, reg_size)
+        load_bases = set()
+        while not accept(f, b"\x00\x00\x00\x05"):
+            load_bases.add((parse_string(f), parse_address(f, reg_size)))
+        stack_base = parse_address(f, reg_size)
+
+        # Order images base addresses in increasing order of their load address
+        load_bases = list(load_bases)
+        load_bases.sort(key = lambda x: x[1])
+
+        ret.load_bases = load_bases
+        ret.stack_base = stack_base
+
+        # While there are full overlaps...
+        while not accept(f, b"\x00\x00\x00\x02"):
+            overlaps = parse_full_overlap(f, reg_size)
+            ret.full_overlaps.append(overlaps)
+
+        # While there are partial overlaps...
+        while not accept(f, b"\x00\x00\x00\x04"):
+            overlaps = parse_partial_overlap(f, reg_size)
+            ret.partial_overlaps.append(overlaps)
+
+        return ret
+
+
+def main():
+    fo = FullOverlapsWriter()
+    po = PartialOverlapsWriter()
 
     fo.writelines([get_fo_legend(), "\n"])
     fo.writelines(["LOAD ADDRESSES:"])
     po.writelines(["LOAD ADDRESSES:"])
-    # Order images base addresses in increasing order of their load address
-    load_bases = list(load_bases)
-    load_bases.sort(key = lambda x: x[1])
 
-    for (name, addr) in load_bases:
+    parse_res = parse()
+
+    for (name, addr) in parse_res.load_bases:
         fo.writelines([name + " base address: " + addr])
         po.writelines([name + " base address: " + addr])
 
-    fo.writelines(["Stack base address: " + stack_base, "\n"])
-    po.writelines(["Stack base address: " + stack_base, "\n"])
+    fo.writelines(["Stack base address: " + parse_res.stack_base, "\n"])
+    po.writelines(["Stack base address: " + parse_res.stack_base, "\n"])
 
-    # While there are full overlaps...
-    while not accept(f, b"\x00\x00\x00\x02"):
-        parse_full_overlap(f, reg_size)
+    # Print textual report
 
-    # While there are partial overlaps...
-    while not accept(f, b"\x00\x00\x00\x04"):
-        parse_partial_overlap(f, reg_size)
+    # Print Full Overlaps
+    for ai, ma_set in parse_res.full_overlaps:
+        header = ai.address + " - " + str(ai.size)
+        print_table_header(fo, header)
 
-print("Finished parsing binary file. Textual reports created")
+        for entry in ma_set:
+            # Emit full overlap table entry
+            str_list = []
+            str_list.append("*" if entry.isUninitializedRead else "")
+            str_list.append(entry.ip + " (" + entry.actualIp + "):")
+            str_list.append("\t" if len(entry.disasm) > 0 else " ")
+            str_list.append(entry.disasm)
+            str_list.append(" W " if entry.accessType == AccessType.WRITE else " R ")
+            str_list.append(str(entry.accessSize) + " B ")
+            # if it is a stack access, write also sp and bp offsets
+            if entry.memType == MemType.STACK:
+                str_list.append("@ (sp ")
+                str_list.append("+ " if entry.spOffset >= 0 else "- ")
+                str_list.append(str(abs(entry.spOffset)) + "); ")
+                str_list.append("(bp ")
+                str_list.append("+ " if entry.bpOffset >= 0 else "- ")
+                str_list.append(str(abs(entry.bpOffset)) + ")")
+            while len(entry.uninitializedIntervals) > 0:
+                lower_bound, upper_bound = entry.uninitializedIntervals.popleft()
+                str_list.append(" [" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
+
+            print_table_entry(fo, "".join(str_list))
+
+        print_table_footer(fo)
+
+
+    # Print Partial Overlaps
+    # Emit PO table header
+    for ai, ma_set in parse_res.partial_overlaps:
+        header = ai.address + " - " + str(ai.size)
+        print_table_header(po, header)
+
+        for entry in ma_set:
+            # Print overlap entries
+            str_list = []
+            if entry.isPartialOverlap:
+                str_list.append("=> ")
+            else:
+                str_list.append("   ")
+
+            if entry.isUninitializedRead:
+                str_list.append("*")
+
+            str_list.append(entry.ip + " (" + entry.actualIp + "):")
+            str_list.append("\t" if len(entry.disasm) > 0 else " ")
+            str_list.append(entry.disasm)
+            str_list.append(" W " if entry.accessType == AccessType.WRITE else " R ")
+            str_list.append(str(entry.accessSize) + " B ")
+            if entry.memType == MemType.STACK:
+                str_list.append("@ (sp ")
+                str_list.append("+ " if entry.spOffset >= 0 else "- ")
+                str_list.append(str(abs(entry.spOffset)))
+                str_list.append("); ")
+                str_list.append("(bp ")
+                str_list.append("+ " if entry.bpOffset >= 0 else "- ")
+                str_list.append(str(abs(entry.bpOffset)))
+                str_list.append("); ")
+            
+            while len(entry.uninitializedIntervals) > 0:
+                lower_bound, upper_bound = entry.uninitializedIntervals.popleft()
+                str_list.append("[" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
+
+            print_table_entry(po, "".join(str_list))
+            # print("[LOG]: parsed ", "".join(str_list))
+
+        print_table_footer(po)
+
+    print("Finished parsing binary file. Textual reports created")
+    
+
+if __name__ == "__main__":
+    main()
