@@ -206,7 +206,7 @@ set<std::pair<unsigned, unsigned>> StackShadow::computeIntervals(uint8_t* uninit
     unsigned offset = accessAddr % 8;
     UINT32 size = accessSize + offset;
     UINT32 shadowSize = (size % 8 != 0 ? (size / 8) + 1 : (size / 8));
-    uint8_t mask = 0xff << (8 - (size % 8));
+    uint8_t mask = size % 8 == 0 ? 0 : 0xff << (size % 8);
 
     while(shadowSize > 0){
         uint8_t val = *addr;
