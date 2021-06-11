@@ -166,13 +166,9 @@ def is_read_by_uninitialized_read(write, overlaps):
             entry_lower, entry_upper = entry_interval
             not_overwritten_bytes.difference_update(set(range(entry_lower, entry_upper + 1)))
         else:
-            entry_intervals = entry.uninitializedIntervals
-            read_overlaps = reduce(lambda acc, x: acc or x, map(lambda x: intervals_overlap(write_interval, x), entry_intervals), False)
-            if not read_overlaps:
-                continue
-
-            intersections = reduce(lambda acc, x: acc or x, map(lambda x: len(x) > 0, map(lambda x: not_overwritten_bytes.intersection(x), map(lambda x: set(range(x[0], x[1] + 1)), entry_intervals))), False)
-            if intersections:
+            entry_interval = (0, entry.accessSize - 1)
+            read_overlaps = intervals_overlap(write_interval, entry_interval)
+            if read_overlaps:
                 return True
     
     return False
@@ -238,15 +234,8 @@ def parse_full_overlap(f, reg_size, ignore_if_no_overlapping_write):
     
     while(not accept(f, b"\x00\x00\x00\x01")):
         entry = parse_full_overlap_entry(f, reg_size, exec_order)
-        if ignore_if_no_overlapping_write and entry.isUninitializedRead:
-            has_overlapping_writes = len(list(filter(lambda x: x.accessType == AccessType.WRITE, overlaps))) != 0
-            if not has_overlapping_writes:
-                continue
         overlaps.append(entry)
         exec_order += 1
-
-    if ignore_if_no_overlapping_write:
-        overlaps = remove_useless_writes(overlaps)
 
     if len(overlaps) > 0:
         return (ai, overlaps)
