@@ -17,10 +17,12 @@ static const unsigned long pagesize = sysconf(_SC_PAGESIZE);
 #if defined(__amd64__) || defined(_M_AMD64) || defined(_M_X64)
     #define X86_64
     #define MMAP_NUM 9
+    #define BRK_NUM 12
     #define STACK_SHADOW_INIT 0xff
 #elif defined(__i386__) || defined(_M_IX86)
     #define X86
     #define MMAP_NUM 90
+    #define BRK_NUM 45
     #define STACK_SHADOW_INIT 0xf0
 #else
     #error "Not supported architecture"
