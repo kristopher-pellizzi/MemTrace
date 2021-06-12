@@ -1,0 +1,189 @@
+##############################################################
+#
+# This file includes all the test targets as well as all the
+# non-default build rules and test recipes.
+#
+##############################################################
+
+
+##############################################################
+#
+# Test targets
+#
+##############################################################
+
+###### Place all generic definitions here ######
+
+# This defines tests which run tools of the same name.  This is simply for convenience to avoid
+# defining the test name twice (once in TOOL_ROOTS and again in TEST_ROOTS).
+# Tests defined here should not be defined in TOOL_ROOTS and TEST_ROOTS.
+TEST_TOOL_ROOTS :=
+
+# This defines the tests to be run that were not already defined in TEST_TOOL_ROOTS.
+TEST_ROOTS :=
+
+# This defines the tools which will be run during the the tests, and were not already defined in
+# TEST_TOOL_ROOTS.
+TOOL_ROOTS :=
+
+# This defines the static analysis tools which will be run during the the tests. They should not
+# be defined in TEST_TOOL_ROOTS. If a test with the same name exists, it should be defined in
+# TEST_ROOTS.
+# Note: Static analysis tools are in fact executables linked with the Pin Static Analysis Library.
+# This library provides a subset of the Pin APIs which allows the tool to perform static analysis
+# of an application or dll. Pin itself is not used when this tool runs.
+SA_TOOL_ROOTS :=
+
+# This defines all the applications that will be run during the tests.
+APP_ROOTS :=
+
+# This defines any additional object files that need to be compiled.
+OBJECT_ROOTS :=
+
+# This defines any additional dlls (shared objects), other than the pintools, that need to be compiled.
+DLL_ROOTS :=
+
+# This defines any static libraries (archives), that need to be built.
+LIB_ROOTS :=
+
+###### Handle exceptions here (OS/arch related) ######
+
+RUNNABLE_TESTS := $(TEST_TOOL_ROOTS) $(TEST_ROOTS)
+
+###### Handle exceptions here (bugs related) ######
+
+###### Define the sanity subset ######
+
+# This defines the list of tests that should run in sanity. It should include all the tests listed in
+# TEST_TOOL_ROOTS and TEST_ROOTS excluding only unstable tests.
+SANITY_SUBSET := $(TEST_TOOL_ROOTS) $(TEST_ROOTS)
+
+
+##############################################################
+#
+# Test recipes
+#
+##############################################################
+
+# This section contains recipes for tests other than the default.
+# See makefile.default.rules for the default test rules.
+# All tests in this section should adhere to the naming convention: <testname>.test
+
+
+##############################################################
+#
+# Build rules
+#
+##############################################################
+
+# This section contains the build rules for all binaries that have special build rules.
+# See makefile.default.rules for the default build rules.
+
+TOOL_CXXFLAGS += -std=c++11 -MMD
+PARENTDIR := ${CURDIR}/../
+OBJDIR := $(PARENTDIR)tool/
+BINDIR := $(PARENTDIR)bin/
+DEBUGDIR := $(PARENTDIR)debug/
+MKDIR := mkdir -p 
+PINROOTDEF := -DPIN_ROOT=\"$(PARENTDIR)third_party/PIN/pin\"
+TOOLDIRDEF := -DTOOL_DIR=
+
+.PHONY: all
+all: tool | $(OBJDIR)
+
+.PHONY: tool
+tool: $(OBJDIR)MemTrace$(PINTOOL_SUFFIX) launcher | $(OBJDIR)
+	$(MKDIR)$(OBJDIR)
+
+.PHONY: debug
+debug: $(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX) debugLauncher | $(DEBUGDIR)
+
+.PHONY: nulltool
+nulltool: $(OBJDIR)NullTool$(PINTOOL_SUFFIX)
+
+.PHONY: launcher
+launcher: $(BINDIR)launcher
+
+.PHONY: debugLauncher
+debugLauncher: $(BINDIR)launchDebug
+
+$(OBJDIR):
+	$(MKDIR)$@
+
+$(DEBUGDIR):
+	$(MKDIR)$@
+
+# Build the intermediate object file.
+$(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+$(OBJDIR)NullTool$(OBJ_SUFFIX): NullTool.cpp
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h
+	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the tool as a dll (shared object).
+$(OBJDIR)MemTrace$(PINTOOL_SUFFIX): $(OBJDIR)MemTrace$(OBJ_SUFFIX) \
+$(OBJDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
+$(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
+$(OBJDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
+$(OBJDIR)HeapType$(OBJ_SUFFIX) HeapType.h
+	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
+
+$(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)	
+	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
+
+$(BINDIR)launcher: toolLauncher.cpp
+	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(OBJDIR)\" -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
+
+
+# DEBUG ENABLED EXECUTABLES
+# Build the intermediate object file.
+$(DEBUGDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(DEBUGDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h
+	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(DEBUGDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h
+	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h
+	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(DEBUGDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h
+	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+# Build the tool as a dll (shared object).
+$(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX): $(DEBUGDIR)MemTrace$(OBJ_SUFFIX) \
+$(DEBUGDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
+$(DEBUGDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
+$(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
+$(DEBUGDIR)HeapType$(OBJ_SUFFIX) HeapType.h
+	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
+
+$BINDIR)launchDebug: toolLauncher.cpp
+	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(DEBUGDIR)\" -g -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
+
+# Syscall handling code is provided as simple header files. In order to enable re-compilation
+# on header files modifications, include the dependencies files in the makefile.
+-include $(DEBUGDIR)*.d
+-include $(OBJDIR)*.d
