@@ -13,3 +13,7 @@ $(PIN_ROOT):
 .PHONY: tool
 tool: | $(PIN_ROOT)
 	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT)
+
+.PHONY: debug
+debug: | $(PIN_ROOT)
+	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) debug

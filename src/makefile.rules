@@ -92,11 +92,10 @@ TOOLDIRDEF := -DTOOL_DIR=
 all: tool | $(OBJDIR)
 
 .PHONY: tool
-tool: $(OBJDIR)MemTrace$(PINTOOL_SUFFIX) launcher | $(OBJDIR)
-	$(MKDIR)$(OBJDIR)
+tool: $(OBJDIR)MemTrace$(PINTOOL_SUFFIX) launcher wrapper
 
 .PHONY: debug
-debug: $(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX) debugLauncher | $(DEBUGDIR)
+debug: $(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX) debugLauncher wrapper
 
 .PHONY: nulltool
 nulltool: $(OBJDIR)NullTool$(PINTOOL_SUFFIX)
@@ -107,33 +106,37 @@ launcher: $(BINDIR)launcher
 .PHONY: debugLauncher
 debugLauncher: $(BINDIR)launchDebug
 
+.PHONY: wrapper
+wrapper: $(BINDIR)wrapper | $(OBJDIR)
+
 $(OBJDIR):
 	$(MKDIR)$@
 
 $(DEBUGDIR):
+	@echo Creating folder
 	$(MKDIR)$@
 
 # Build the intermediate object file.
-$(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp
+$(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp | $(OBJDIR)
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
-$(OBJDIR)NullTool$(OBJ_SUFFIX): NullTool.cpp
+$(OBJDIR)NullTool$(OBJ_SUFFIX): NullTool.cpp | $(OBJDIR)
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(OBJDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h
+$(OBJDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h | $(OBJDIR)
 	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(OBJDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h
+$(OBJDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h | $(OBJDIR)
 	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(OBJDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h
+$(OBJDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h | $(OBJDIR)
 	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(OBJDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h
+$(OBJDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h | $(OBJDIR)
 	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the tool as a dll (shared object).
@@ -148,28 +151,35 @@ $(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 $(BINDIR)launcher: toolLauncher.cpp
-	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(OBJDIR)\" -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
+	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(OBJDIR)\" -o $@ $^
+
+$(BINDIR)wrapper: $(OBJDIR)wrapper$(OBJ_SUFFIX) Wrapper.h
+	$(LINKER) $(LINK_EXE)$@ $(^:%.h=)
+
+$(OBJDIR)wrapper$(OBJ_SUFFIX): Wrapper.cpp Wrapper.h | $(OBJDIR)
+	$(CXX) -MMD -c -o $@ $<
 
 
 # DEBUG ENABLED EXECUTABLES
 # Build the intermediate object file.
-$(DEBUGDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp
+$(DEBUGDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp | $(DEBUGDIR)
+	@echo Called debug
 	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(DEBUGDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h
+$(DEBUGDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h | $(DEBUGDIR)
 	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(DEBUGDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h
+$(DEBUGDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h | $(DEBUGDIR)
 	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h
+$(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h | $(DEBUGDIR)
 	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(DEBUGDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h
+$(DEBUGDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h | $(DEBUGDIR)
 	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the tool as a dll (shared object).
@@ -180,8 +190,8 @@ $(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
 $(DEBUGDIR)HeapType$(OBJ_SUFFIX) HeapType.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
-$BINDIR)launchDebug: toolLauncher.cpp
-	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(DEBUGDIR)\" -g -o $@ $^ $$(pkg-config --cflags r_socket --libs r_socket)
+$(BINDIR)launchDebug: toolLauncher.cpp
+	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(DEBUGDIR)\" -g -o $@ $^
 
 # Syscall handling code is provided as simple header files. In order to enable re-compilation
 # on header files modifications, include the dependencies files in the makefile.
