@@ -197,8 +197,8 @@ int main(int argc, char* argv[]){
         }
         std::cout << "Error trying to seek to the last 128 bytes of the file." << std::endl;
         std::cout << "Resetting to file beginning..." << std::endl;
-        inputFile.seekg(0, std::ios_base::beg);
         inputFile.clear();
+        inputFile.seekg(0, std::ios_base::beg);
         retried = true;
     }
 
