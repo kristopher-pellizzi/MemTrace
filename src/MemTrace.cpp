@@ -1396,8 +1396,6 @@ VOID Fini(INT32 code, VOID *v)
         std::ofstream partialOverlapsLog("partialOverlaps.dbg");
     #endif
 
-    dumpMemTrace(fullOverlaps);
-
     // We take the size of any register, as they have the same size (excluding SIMD extension registers)
     int regSize = REG_Size(REG_STACK_PTR);
     memOverlaps.write("\x00\x00\x00\x00", 4);
