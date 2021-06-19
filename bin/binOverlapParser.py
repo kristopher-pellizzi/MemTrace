@@ -2,9 +2,10 @@
 
 # Add parent folder in sys.path to allow using modules
 import sys
-sys.path.append("../python_modules")
-
 import argparse as ap
+import os
+sys.path.append(os.path.join(os.path.dirname(sys.path[0]), "python_modules"))
+
 from collections import deque
 from binascii import b2a_hex
 from functools import reduce
@@ -298,10 +299,11 @@ def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write):
     return None
 
 
-def parse(ignore_if_no_overlapping_write: bool = True)->ParseResult:
+def parse(ignore_if_no_overlapping_write: bool = True, bin_report_dir = ".")->ParseResult:
     ret = ParseResult()
 
-    with open("overlaps.bin", "rb") as f:
+    bin_report_path = os.path.join(bin_report_dir, "overlaps.bin")
+    with open(bin_report_path, "rb") as f:
         read_bytes = b"\xff"
         while(read_bytes != b"\x00\x00\x00\x00"):
             while(read_bytes != b"\x00"):
@@ -357,17 +359,24 @@ def parse_args():
         dest = "ignore_if_no_overlap"
     )
 
+    parser.add_argument("-d", "--directory",
+        default = ".",
+        help = "Path of the directory containing the binary report file",
+        dest = "bin_report_dir"
+    )
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    bin_report_dir = args.bin_report_dir
     ignore_if_no_overlapping_write = args.ignore_if_no_overlap
     fo = FullOverlapsWriter()
     po = PartialOverlapsWriter()
 
 
-    parse_res = parse(ignore_if_no_overlapping_write)
+    parse_res = parse(ignore_if_no_overlapping_write, bin_report_dir)
 
     is_full_overlaps_empty = len(parse_res.full_overlaps) == 0
     is_partial_overlaps_empty = len(parse_res.partial_overlaps) == 0
