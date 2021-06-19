@@ -11,6 +11,12 @@ import argparse as ap
 import re
 import random
 
+from binOverlapParser import parse, print_table_header, print_table_footer, PartialOverlapsWriter
+from parsedData import *
+from collections import deque
+from functools import partial, reduce
+from typing import List, Tuple, Deque, Dict
+
 class MissingExecutableError(Exception):
     pass
 
@@ -82,6 +88,12 @@ def parse_args(args):
 
 
     parser = ap.ArgumentParser(formatter_class = HelpFormatter)
+
+    parser.add_argument("--rand-argv", "-r",
+        action = "store_false",
+        help = "Flag used to disable command line argument randomization",
+        dest = "argv_rand"
+    )
 
     parser.add_argument("--single-execution", "-x",
         action = "store_true",
@@ -219,10 +231,11 @@ def parse_args(args):
         dest = "no_fuzzing"    
     )
 
-    parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it, "\
-                    "except the file it reads from, if any.\n\n"\
-                    "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1\n\n"\
-                    "Remember to NOT PASS the input file as an argument for the executable, as it will be automatically passed by the fuzzer starting "\
+    parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it. "\
+                    "If it reads from an input file, write '@@' instead of the input file path. It will be "\
+                    "automatically replaced by the fuzzer\n\n"\
+                    "Example: ./memTracer.py -- /path/to/the/executable arg1 arg2 --opt1 @@\n\n"\
+                    "Remember to NOT PASS the input file as an argument for the executable, but use @@. It will be automatically replaced by the fuzzer starting "\
                     "from the initial testcases and followed by the generated inputs."
 
     ret = parser.parse_args(args)
@@ -386,6 +399,110 @@ def adjust_exec_path(path):
     return os.path.realpath(path)
 
 
+def merge_reports(tracer_out_path: str):
+
+    def merge_ma_sets(accumulator: Deque[Tuple[Deque[str], Deque[MemoryAccess]]], element: Tuple[str, Deque[MemoryAccess]]):
+        filtered_acc = list(filter(lambda x: x[1] == element[1], accumulator))
+
+        # If there are no elements with the same ma_set as |element|
+        if len(filtered_acc) == 0:
+            refs = deque()
+            refs.append(element[0])
+            accumulator.append((refs, element[1]))
+        # If there's at least 1, we are sure there's exactly one (as a consequence of the applied reduce
+        # that uses this function)
+        else:
+            t = list(filtered_acc)[0]
+            t[0].append(element[0])
+
+        return accumulator
+
+    load_bases: Deque[Tuple[str, List[Tuple[str, str]]]] = deque()
+    stack_bases: Deque[Tuple[str, str]] = deque()
+    partial_overlaps: Dict[AccessIndex, Deque[Tuple[Deque[str], Deque[MemoryAccess]]]] = dict()
+
+    tmp_partial_overlaps: Dict[AccessIndex, Deque[Tuple[str, Deque[MemoryAccess]]]] = dict()
+    for instance in os.listdir(tracer_out_path):
+        instance_path = os.path.join(tracer_out_path, instance)
+        for input_dir in os.listdir(instance_path):
+            input_dir_path = os.path.join(instance_path, input_dir)
+            parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
+            cur_load_bases = parse_res.load_bases
+            cur_stack_base = parse_res.stack_base
+            overlaps = parse_res.partial_overlaps
+            input_ref = os.path.join(instance, input_dir)
+
+            # Fill partial_overlaps, load_bases and stack_bases
+            for ai, ma_set in overlaps:
+                if ai not in tmp_partial_overlaps:
+                    tmp_partial_overlaps[ai] = deque()
+
+                tmp_partial_overlaps[ai].append((input_ref, ma_set))
+
+            load_bases.append((input_ref, cur_load_bases))
+            stack_bases.append((input_ref, cur_stack_base))
+
+    # Sort partial_overlaps by AccessIndex (increasing address, decreasing access size)
+    sorted_partial_overlaps = sorted(tmp_partial_overlaps.items(), key=lambda x: x[0])
+
+    # Try to merge those (inputRef, MemoryAccess) tuples whose memory access set is the same
+    for ai, access_set in sorted_partial_overlaps:
+        ma_sets = reduce(merge_ma_sets, access_set, deque())
+        partial_overlaps[ai] = ma_sets
+
+    # Generate textual report files: 1 with only the accesses, 1 with address bases
+    po = PartialOverlapsWriter()
+
+    if len(partial_overlaps) == 0:
+        po.writelines(["** NO OVERLAPS DETECTED **"])
+        return
+
+    for ai, access_set in partial_overlaps.items():
+        header = " ".join([str(ai.address), "-", str(ai.size)])
+        print_table_header(po, header)
+
+        for input_refs, ma_set in access_set:
+            lines = deque()
+            lines.append("Generated by inputs:")
+            lines.extend(map(lambda x: " ".join(["[*]", x]), input_refs))
+            lines.append("***********************************************")
+
+            for entry in ma_set:
+                # Print overlap entries
+                str_list = []
+                if entry.isPartialOverlap:
+                    str_list.append("=> ")
+                else:
+                    str_list.append("   ")
+
+                if entry.isUninitializedRead:
+                    str_list.append("*")
+
+                str_list.append(entry.ip + " (" + entry.actualIp + "):")
+                str_list.append("\t" if len(entry.disasm) > 0 else " ")
+                str_list.append(entry.disasm)
+                str_list.append(" W " if entry.accessType == AccessType.WRITE else " R ")
+                str_list.append(str(entry.accessSize) + " B ")
+                if entry.memType == MemType.STACK:
+                    str_list.append("@ (sp ")
+                    str_list.append("+ " if entry.spOffset >= 0 else "- ")
+                    str_list.append(str(abs(entry.spOffset)))
+                    str_list.append("); ")
+                    str_list.append("(bp ")
+                    str_list.append("+ " if entry.bpOffset >= 0 else "- ")
+                    str_list.append(str(abs(entry.bpOffset)))
+                    str_list.append("); ")
+                
+                while len(entry.uninitializedIntervals) > 0:
+                    lower_bound, upper_bound = entry.uninitializedIntervals.popleft()
+                    str_list.append("[" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
+
+                lines.append("".join(str_list))
+
+            po.writelines(lines)
+            print_table_footer(po)
+                
+
 def main():
     global PROGRESS
     global PROGRESS_UNIT
@@ -413,7 +530,7 @@ def main():
         ALREADY_LAUNCHED_SCHED.update({selected})
 
         print("Launching slave instance nr {0} with power schedule {1}".format(slave_id, selected))
-        cmd = ["afl-fuzz", "-Q", "-S", "Slave_{0}".format(slave_id), "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable + ["@@"]
+        cmd = ["afl-fuzz", "-Q", "-S", "Slave_{0}".format(slave_id), "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable
         return cmd
 
 
@@ -431,7 +548,7 @@ def main():
         out = ["|"]
         out.append(" " * PROGRESS_LEN)
         out.append("|")
-        print("".join(out))
+        print("".join(out), end="\r")
 
         LOCK.acquire()
         LAST_PROGRESS_TASK = t.Timer(10, print_progress, [fuzz_int_ev])
@@ -458,7 +575,8 @@ def main():
         out.append("=" * progress_bar)
         out.append(" " * (PROGRESS_LEN - progress_bar))
         out.append("|")
-        print("".join(out))
+        end_char = "\n" if finished else "\r"
+        print("".join(out), end=end_char)
 
         LOCK.acquire()
         if not finished and not fuzz_int_ev.is_set():
@@ -469,6 +587,45 @@ def main():
         LOCK.release()
 
 
+    def adjust_executable(executable: list, fuzz_in: str):
+        exec_name = executable[0]
+        args = executable[1:]
+        # Append an empty string so that last argument will be terminated by a \x00 byte
+        args.append("")
+
+        initial_testcases = os.listdir(fuzz_in)
+        if len(initial_testcases) == 0:
+            print(
+                "WARNING: no initial testcases found in {0}. By default, an empty file will be created "
+                "to be used as an initial testcase (to randomize input file content and argv)."
+            )
+            initial_testcases.append("testcase")
+            path = os.path.join(fuzz_in, "testcase")
+            with open(path, "w"):
+                # Do nothing, the file is opened only to create it
+                pass
+
+        for file in os.listdir(fuzz_in):
+            file_path = os.path.join(fuzz_in, file)
+            args = list(map(lambda x: file_path if x == "@@" else x, args))
+
+            # Convert the arg list into a byte sequence, with each argument terminated by a \x00 byte
+            # Adjust length of the byte sequence to 128B (as required by the wrapper program), padding with \x00 bytes
+            # if needed. Note that longer byte sequences are truncated to 128 bytes.
+            args_bytes = b"\x00".join(map(lambda x: x.encode('utf-8'), args))
+            if len(args_bytes) <= 128:
+                args_bytes = args_bytes.ljust(128, b"\x00")
+            else:
+                args_bytes = args_bytes[:128]
+
+            # Append |args_bytes| to every initial testcase in fuzz_in folder
+            with open(file_path, "ab") as f:
+                f.write(args_bytes)
+
+        return ["./wrapper", exec_name, "@@"]
+
+
+    
     ### MAIN BEGINNING ###
     # The RNG is used in order to select a random power schedule if more than 1 slave fuzzer instance is launched
     random.seed()
@@ -532,6 +689,9 @@ def main():
     FUZZ_IN = os.path.join(FUZZ_DIR, args.fuzz_in)
     FUZZ_OLDS = os.path.join(FUZZ_DIR, args.olds_dir)
 
+    if args.argv_rand:
+        executable = adjust_executable(executable, FUZZ_IN)
+
     if not os.path.exists(FUZZ_DIR):
         raise IOError("Folder {0} must exist and must contain all the required files/folders for the fuzzer to work (e.g. initial testcases)".format(FUZZ_DIR))
 
@@ -584,13 +744,12 @@ def main():
         if os.path.exists(FUZZ_OUT):
             raise IOError("Directory {0} already exists. Please move or remove it before running the tracer.".format(FUZZ_OUT))
 
-
     # Start AFL fuzzer
     if(args.admin_priv):
         p = subp.Popen(["sudo", "afl-system-config"])
         p.wait()
     launch_single_instance = args.slaves == 0
-    fuzz_cmd = ["afl-fuzz", "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--"] +  executable + ["@@"]
+    fuzz_cmd = ["afl-fuzz", "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--"] +  executable
 
     cpus = os.cpu_count()
     if cpus is None:
@@ -640,6 +799,9 @@ def main():
 
     # Wait for the tracer thread to run with all the inputs found by the fuzzer
     tracerThread.join()
+
+    print("Generating textual report...")
+    merge_reports(tracer_out)
     print("All finished")
 
 
