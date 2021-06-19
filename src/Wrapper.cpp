@@ -2,12 +2,16 @@
 #include <forward_list>
 #include <fstream>
 #include <cerrno>
+#include <libgen.h>
+#include <set>
 
 #include "Wrapper.h"
 
 #define ARGV_SIZE 128
+#define REQUIRED_POSITIONAL_ARGUMENTS 2
 
 using std::forward_list;
+using std::set;
 
 extern char** environ;
 
@@ -142,7 +146,11 @@ unsigned char** ArgBytes::getArgs(){
 */
 
 void usage(){
-    std::cout   << "wrapper <executable_path> <input_file_path>" << std::endl;
+    std::cout   << "USAGE: ";
+    std::cout   << "\twrapper [-h] <executable_path> <input_file_path>" << std::endl << std::endl
+                << "Options:" << std::endl
+                << "\t-h:" << std::endl
+                << "\t\tPrints this help message" << std::endl;
 }
 
 void path_error(char* path){
@@ -167,15 +175,76 @@ void checkPermissions(char* path, int mode){
     }
 }
 
-int main(int argc, char* argv[]){
-    if(argc != 3){
-        std::cerr << "Required parameter missing" << std::endl << std::endl;
+static char* executablePath = NULL;
+static char* inputFilePath = NULL;
+
+void positional_args_error(int parsed){
+    std::cout << "Error: 2 positional arguments required, " << parsed << " given" << std::endl;
+    usage();
+    exit(10);
+}
+
+void incomplete_optional_arg_error(char* specifier){
+    std::cout << "Error: Optional argument specifier " << specifier << " used, but no value given" << std::endl;
+    usage();
+    exit(11);
+}
+
+void optional_args_error(char* specifier){
+    std::cout << "Error: unknown optional argument specifier " << specifier << std::endl;
+    usage();
+    exit(12);
+}
+
+void parse_optional(char** argv, int* index, int argc){
+    char* specifier = argv[*index];
+
+    if(!strncmp(specifier, "-h", 3)){
         usage();
-        exit(4);
+        exit(0);
+    }
+    else{
+        optional_args_error(specifier);
+    }
+}
+
+void parse_positional(char* arg, int parsed){
+    switch (parsed){
+        case 0:
+            executablePath = arg;
+            break;
+
+        case 1:
+            inputFilePath = arg;
+            break;
+        
+        default:
+            positional_args_error(parsed + 1);
     }
 
-    char* inputFilePath = argv[2];
-    char* executablePath = argv[1];
+    ++parsed;
+}
+
+void parse_argv(int argc, char** argv){
+    static int parsed_positional = 0;
+
+    for(int i = 1; i < argc; ++i){
+        if(argv[i][0] == '-'){
+            parse_optional(argv, &i, argc);
+        }
+        else{
+            parse_positional(argv[i], parsed_positional++);
+        }
+    }
+
+    if(parsed_positional != REQUIRED_POSITIONAL_ARGUMENTS){
+        positional_args_error(parsed_positional);
+    }
+}
+
+int main(int argc, char* argv[]){
+    
+    parse_argv(argc, argv);
 
     checkPathExistence(inputFilePath);
     checkPathExistence(executablePath);
@@ -226,5 +295,17 @@ int main(int argc, char* argv[]){
     char** args = (char**) argBytes.getArgs();
 
     args[0] = executablePath;
+
+    std::ofstream f("./log", std::ios::app | std::ios::out);
+    f << "Execve: ";
+    char** iter = args;
+    while(*iter != NULL){
+        f << *iter << " ";
+        ++iter;
+    }
+    f << std::endl;
+    f.close();
+
+    // Execute the program with arguments contained in |args|
     execve(executablePath, args, environ);
 }
