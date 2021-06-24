@@ -74,4 +74,6 @@ class ArgBytes{
         ~ArgBytes();
 
         unsigned char** getArgs();
+
+        size_t getSize();
 };

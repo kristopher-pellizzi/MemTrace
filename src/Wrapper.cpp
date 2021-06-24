@@ -62,12 +62,9 @@ ArgBytes::~ArgBytes(){
 }
 
 unsigned char** ArgBytes::split(){
-    // Set size to list length
-    // During copy, also copy the \x00 byte, so that strings are always terminated
-    // Append elements from last list element to the first
-    // Append executable name
-
-    // NOTE: not using strtok because the delimiter character may be '\x00'
+    // Split the bytes array at every byte '\x00', creating an array of strings out of it
+    // of size listLen + 2, where listLen is the length of the list containing all the strings obtained
+    // by splitting |rawBytes|. Also, set the last array element to be NULL.
 
     size_t listLen = 0;
     forward_list<unsigned char*> argList;
@@ -97,6 +94,7 @@ unsigned char** ArgBytes::split(){
 }
 
 unsigned char* ArgBytes::strip(unsigned char* s){
+    // Remove any kind of space from the beginning and the end of string |s|.
     // Avoid string de-allocation, copy and allocation. Simply return first non-space
     // character pointer and write '\x00' into the first space character following the string
     // NOTE: spaces in-between the string are kept unchanged
@@ -122,10 +120,8 @@ unsigned char** ArgBytes::getArgs(){
     // Split @ "\x00"
     // Strip strings    
     // Filter empty strings
-    // Terminate each string
-    // Append executable name at the beginning of the list
-    // Create array out of the list
-    // Return the array
+    // Create an array |args| out of the list (whose size is list_size + 2, to make space for executable path and last
+    // NULL element)
 
     unsigned char** args = 
         filter(
@@ -139,19 +135,15 @@ unsigned char** ArgBytes::getArgs(){
     return args;
 }
 
+size_t ArgBytes::getSize(){
+    return size;
+}
+
 
 
 /*
     Program functions
 */
-
-void usage(){
-    std::cout   << "USAGE: ";
-    std::cout   << "\twrapper [-h] <executable_path> <input_file_path>" << std::endl << std::endl
-                << "Options:" << std::endl
-                << "\t-h:" << std::endl
-                << "\t\tPrints this help message" << std::endl;
-}
 
 void path_error(char* path){
     std::cerr << path << " not found" << std::endl;
@@ -175,76 +167,21 @@ void checkPermissions(char* path, int mode){
     }
 }
 
-static char* executablePath = NULL;
-static char* inputFilePath = NULL;
-
 void positional_args_error(int parsed){
     std::cout << "Error: 2 positional arguments required, " << parsed << " given" << std::endl;
     usage();
     exit(10);
 }
 
-void incomplete_optional_arg_error(char* specifier){
-    std::cout << "Error: Optional argument specifier " << specifier << " used, but no value given" << std::endl;
-    usage();
-    exit(11);
-}
-
-void optional_args_error(char* specifier){
-    std::cout << "Error: unknown optional argument specifier " << specifier << std::endl;
-    usage();
-    exit(12);
-}
-
-void parse_optional(char** argv, int* index, int argc){
-    char* specifier = argv[*index];
-
-    if(!strncmp(specifier, "-h", 3)){
-        usage();
-        exit(0);
-    }
-    else{
-        optional_args_error(specifier);
-    }
-}
-
-void parse_positional(char* arg, int parsed){
-    switch (parsed){
-        case 0:
-            executablePath = arg;
-            break;
-
-        case 1:
-            inputFilePath = arg;
-            break;
-        
-        default:
-            positional_args_error(parsed + 1);
-    }
-
-    ++parsed;
-}
-
-void parse_argv(int argc, char** argv){
-    static int parsed_positional = 0;
-
-    for(int i = 1; i < argc; ++i){
-        if(argv[i][0] == '-'){
-            parse_optional(argv, &i, argc);
-        }
-        else{
-            parse_positional(argv[i], parsed_positional++);
-        }
-    }
-
-    if(parsed_positional != REQUIRED_POSITIONAL_ARGUMENTS){
-        positional_args_error(parsed_positional);
-    }
-}
 
 int main(int argc, char* argv[]){
     
-    parse_argv(argc, argv);
+    if(argc < 2){
+        positional_args_error(argc);
+    }
+
+    char* executablePath = argv[1];
+    char* inputFilePath = argv[2];
 
     checkPathExistence(inputFilePath);
     checkPathExistence(executablePath);
@@ -257,7 +194,7 @@ int main(int argc, char* argv[]){
         exit(3);
     }
 
-    inputFile.seekg(-128, std::ios_base::end);
+    inputFile.seekg(- ARGV_SIZE, std::ios_base::end);
     bool retried = false;
     while(inputFile.fail()){
         if(retried){
@@ -296,15 +233,12 @@ int main(int argc, char* argv[]){
 
     args[0] = executablePath;
 
-    std::ofstream f("./log", std::ios::app | std::ios::out);
-    f << "Execve: ";
-    char** iter = args;
-    while(*iter != NULL){
-        f << *iter << " ";
-        ++iter;
+    for(int i = 3; i < argc; ++i){
+        int index = atoi(argv[i]);
+        if(index <= argBytes.getSize()){
+            args[index] = inputFilePath;
+        }
     }
-    f << std::endl;
-    f.close();
 
     // Execute the program with arguments contained in |args|
     execve(executablePath, args, environ);
