@@ -33,6 +33,9 @@ LOCK = t.Lock()
 POWER_SCHED = {"explore", "fast", "coe", "quad", "lin", "exploit"}
 EXPERIMENTAL_POWER_SCHED = {"mmopt", "rare", "seek"}
 ALREADY_LAUNCHED_SCHED = set()
+CUSTOM_MUTATOR_DIR_PATH = os.path.join(os.path.dirname(sys.path[0]), "custom_mutators")
+CUSTOM_MUTATOR_NAME = "custom"
+ENV_VARS_COPY = dict(os.environ)
 
 
 def parse_help_flag(argv_str):
@@ -451,6 +454,26 @@ def merge_reports(tracer_out_path: str):
         partial_overlaps[ai] = ma_sets
 
     # Generate textual report files: 1 with only the accesses, 1 with address bases
+
+    # Generate base addresses report
+    with open("base_addresses.log", "w") as f:
+        while(len(load_bases) != 0):
+            imgs = load_bases.popleft()
+            stack = stack_bases.popleft()
+
+            input_ref, img_list = imgs
+            f.write("===============================================\n")
+            f.write(input_ref)
+            f.write("\n===============================================\n")
+            for img_name, img_addr in img_list:
+                f.write("{0} base address: {1}\n".format(img_name, img_addr))
+            
+            f.write("Stack base address: {0}\n".format(stack[1]))
+            f.write("===============================================\n")
+            f.write("===============================================\n\n")
+
+    # Generate partial overlaps textual report
+
     po = PartialOverlapsWriter()
 
     if len(partial_overlaps) == 0:
@@ -499,8 +522,9 @@ def merge_reports(tracer_out_path: str):
 
                 lines.append("".join(str_list))
 
+            lines.append("***********************************************\n")
             po.writelines(lines)
-            print_table_footer(po)
+        print_table_footer(po)
                 
 
 def main():
@@ -590,9 +614,21 @@ def main():
     def adjust_executable(executable: list, fuzz_in: str):
         exec_name = executable[0]
         args = executable[1:]
+        # wrapper_args is a list containing additional arguments for the wrapper program.
+        # More specifically, it will contain the indices of list args where a '@@' is found
+        wrapper_args = list()
+
+        # Append to args all the indices where a '@@' is found. Those locations will be replaced
+        # by the input file path in the wrapper program.
+        for i in range(len(args)):
+            if args[i].strip() == '@@':
+                # Append i + 1, because argv[0] is always the executable name
+                wrapper_args.append(str(i + 1))
+
         # Append an empty string so that last argument will be terminated by a \x00 byte
         args.append("")
 
+        # If there are no initial testcases provided, provide an empty one, so that the tool can at least randomize argv
         initial_testcases = os.listdir(fuzz_in)
         if len(initial_testcases) == 0:
             print(
@@ -607,7 +643,6 @@ def main():
 
         for file in os.listdir(fuzz_in):
             file_path = os.path.join(fuzz_in, file)
-            args = list(map(lambda x: file_path if x == "@@" else x, args))
 
             # Convert the arg list into a byte sequence, with each argument terminated by a \x00 byte
             # Adjust length of the byte sequence to 128B (as required by the wrapper program), padding with \x00 bytes
@@ -622,7 +657,12 @@ def main():
             with open(file_path, "ab") as f:
                 f.write(args_bytes)
 
-        return ["./wrapper", exec_name, "@@"]
+        # Add custom mutator in the environment variables of process launching fuzzer instances
+        ENV_VARS_COPY['PYTHONPATH'] = CUSTOM_MUTATOR_DIR_PATH
+        ENV_VARS_COPY['AFL_PYTHON_MODULE'] = CUSTOM_MUTATOR_NAME
+        ret = ["./wrapper", exec_name, "@@"]
+        ret.extend(wrapper_args)
+        return ret
 
 
     
@@ -768,11 +808,11 @@ def main():
         PROGRESS_UNIT = PROGRESS_LEN
 
     print("Launching Main fuzzer instance...")
-    p = subp.Popen(fuzz_cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
+    p = subp.Popen(fuzz_cmd, env = ENV_VARS_COPY, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
     slaves = list()
     for i in range(args.slaves):
         cmd = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, args.experimental, executable)
-        slaves.append(subp.Popen(cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+        slaves.append(subp.Popen(cmd, env = ENV_VARS_COPY, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
 
     print()
     print("Fuzzer will be interrupted in {0} seconds...".format(stop_after_seconds))
