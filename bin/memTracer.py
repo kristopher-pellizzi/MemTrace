@@ -92,7 +92,7 @@ def parse_args(args):
 
     parser = ap.ArgumentParser(formatter_class = HelpFormatter)
 
-    parser.add_argument("--rand-argv", "-r",
+    parser.add_argument("--disable-argv-rand", "-r",
         action = "store_false",
         help = "Flag used to disable command line argument randomization",
         dest = "argv_rand"
@@ -273,13 +273,40 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
         return ret
 
 
+    def get_argv(input_file_path):
+        with open(input_file_path, "r+b") as f:
+            try:
+                f.seek(- 128, os.SEEK_END)
+                raw_bytes = f.read(128)
+                f.truncate(f.tell() - 128)
+            except (ValueError, OSError):
+                f.seek(0, os.SEEK_SET)
+                raw_bytes = f.read(128)
+                f.truncate(0)
+
+            ret = list(filter(lambda x: len(x) != 0, map(lambda x: x.strip(), raw_bytes.split(b'\x00'))))
+            ret = list(map(lambda x: os.fsencode(os.path.realpath(input_file_path)) if x.strip() == b'@@' else x, ret))
+        return ret
+
+
+    def get_argv_from_file(file_path):
+        ret = []
+        with open(file_path, "rb") as f:
+            while True:
+                # Ignore last byte (\n)
+                line = f.readline()[:-1]
+                if not line:
+                    break
+                ret.append(line)
+        return ret
+
 
     print("Tracer thread started...")
     fuzz_dir = args.fuzz_dir
     fuzz_out = os.path.join(fuzz_dir, args.fuzz_out)
     tracer_out = os.path.join(fuzz_dir, args.tracer_out)
     inputs_dir = os.path.join(fuzz_out, "Main", "queue")
-    launcher_path = os.path.join(os.getcwd(), "launcher")
+    launcher_path = os.path.join(sys.path[0], "launcher")
     tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + exec_cmd
     traced_inputs = set()
     # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
@@ -289,12 +316,16 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
     if os.path.exists(tracer_out):
         raise IOError("Folder {0} already exists. Either remove or move it and try again.".format(tracer_out))
     os.mkdir(tracer_out)
+    args_dir = os.path.join(fuzz_dir, "args")
     new_inputs_found = True
 
     processes = list()
     inputs_dir_set = set()
 
     if not args.no_fuzzing:
+        if os.path.exists(args_dir):
+            su.rmtree(args_dir)
+        os.mkdir(args_dir)
         inputs_dir_set.add(inputs_dir)
         for i in range(args.slaves):
             slave_name = "Slave_" + str(i)
@@ -329,6 +360,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
         traced_inputs.add((directory, fuzz_artifact_path))
         new_folder = os.path.join(tracer_out, directory)
         os.mkdir(new_folder)
+        if not args.no_fuzzing:
+            os.mkdir(os.path.join(args_dir, directory))
 
     pat = r"sync"
     # Loop interrupts if and only if there are no new_inputs and the fuzzer has been interrupted
@@ -349,6 +382,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
         new_inputs = inputs.difference(traced_inputs)
         if(len(new_inputs) == 0):
             new_inputs_found = False
+            if fuzz_int_event.is_set():
+                continue
             print("Waiting the fuzzer for new inputs")
             time.sleep(10)
             continue
@@ -362,15 +397,45 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
             su.copy(t[1], input_cpy_path)
             print()
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
-            full_cmd = tracer_cmd + [input_cpy_path]
+            full_cmd = list(map(lambda x: os.path.realpath(input_cpy_path) if x.strip() == '@@' else x, tracer_cmd))
             if len(processes) == args.processes:
                 processes = wait_process_termination(processes)
-            processes.append(subp.Popen(full_cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+
+            argv_file_path = os.path.join(input_folder, "argv")
+            if args.argv_rand:
+                if args.no_fuzzing:
+                    args_file_path = os.path.join(args_dir, t[0], os.path.basename(input_folder))
+                    if not os.path.exists(args_file_path):
+                        continue
+                    argv = get_argv_from_file(args_file_path)
+                else:
+                    # Retrieve arguments from input file and cut it to remove last 128 bytes
+                    argv = get_argv(input_cpy_path)
+                    # Save used arguments in a text file called 'argv.txt' (human readable)
+                    # and a binary file called "argv" (possibly not human readable)
+                    with open(argv_file_path, "wb") as f:
+                        for cmd_arg in argv:
+                            f.write(cmd_arg)
+                            f.write(b"\n")
+
+                    with open(os.path.join(input_folder, "argv.txt"), "w") as f:
+                        for cmd_arg in argv:
+                            f.write("{0}\n".format(cmd_arg))
+
+                    su.copy(argv_file_path, os.path.join(args_dir, t[0], os.path.basename(input_folder)))
+                    
+                # Append arguments to full_cmd
+                full_cmd.extend(argv)
+            print("FULL_CMD: ", full_cmd)
+            processes.append(subp.Popen(full_cmd))
             print("{0} is running".format(t[1]))
             print()
 
         traced_inputs.update(new_inputs)
         time.sleep(10)
+
+    print("Generating textual report...")
+    merge_reports(tracer_out)
 
 
 def move_directory(src, dst_dir, new_name = None):
@@ -429,7 +494,12 @@ def merge_reports(tracer_out_path: str):
         instance_path = os.path.join(tracer_out_path, instance)
         for input_dir in os.listdir(instance_path):
             input_dir_path = os.path.join(instance_path, input_dir)
-            parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
+            
+            # If the binary report is not found, the tracer failed to be run (random argv generation may cause execve to fail)
+            try:
+                parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
+            except FileNotFoundError:
+                continue
             cur_load_bases = parse_res.load_bases
             cur_stack_base = parse_res.stack_base
             overlaps = parse_res.partial_overlaps
@@ -611,6 +681,19 @@ def main():
         LOCK.release()
 
 
+    def clean():
+        fuzzer_interrupted_event.set()
+        int_timer.cancel()
+        print("Waiting for the tracer thread to shutdown...")
+        tracerThread.join()
+        print("Cleaning files...")
+        su.rmtree(FUZZ_OUT)
+        su.rmtree(tracer_out)
+        os.remove("partialOverlaps.log")
+        os.remove("base_addresses.log")
+        exit(1)
+
+
     def adjust_executable(executable: list, fuzz_in: str):
         exec_name = executable[0]
         args = executable[1:]
@@ -660,7 +743,7 @@ def main():
         # Add custom mutator in the environment variables of process launching fuzzer instances
         ENV_VARS_COPY['PYTHONPATH'] = CUSTOM_MUTATOR_DIR_PATH
         ENV_VARS_COPY['AFL_PYTHON_MODULE'] = CUSTOM_MUTATOR_NAME
-        ret = ["./wrapper", exec_name, "@@"]
+        ret = [os.path.join(sys.path[0], "wrapper"), exec_name, "@@"]
         ret.extend(wrapper_args)
         return ret
 
@@ -822,13 +905,26 @@ def main():
     int_timer.start()
     print_empty_progress(fuzzer_interrupted_event)
 
-    tracerThread = t.Thread(target = launchTracer, args = [executable, args, fuzzer_interrupted_event])
+    tracer_executable = None
+    if args.argv_rand:
+        # if -r is not used, the executable path is the second
+        # element of the list |executable|. Arguments will be added by
+        # the tracer thread, as they will be read directly from the input file
+        tracer_executable = [executable[1]]
+    else:
+        tracer_executable = executable
+
+    tracerThread = t.Thread(target = launchTracer, args = [tracer_executable, args, fuzzer_interrupted_event])
     tracerThread.start()
 
     # Wait for the fuzzer to be interrupted
     for slave in slaves:
         slave.wait()
     p.wait()
+    if p.returncode != 0:
+        print("Fuzzer interrupted due to an error")
+        clean()
+
     fuzzer_interrupted_event.set()
     print_progress(fuzzer_interrupted_event, True)
     # If the fuzzer terminates before the requested time (e.g. if there are no initial testcases)
@@ -840,8 +936,6 @@ def main():
     # Wait for the tracer thread to run with all the inputs found by the fuzzer
     tracerThread.join()
 
-    print("Generating textual report...")
-    merge_reports(tracer_out)
     print("All finished")
 
 
