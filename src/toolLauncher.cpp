@@ -1,45 +1,22 @@
 #include <string.h>
 #include <vector>
 #include <iostream>
+#include <unistd.h>
+#include <cstring>
+#include <errno.h>
 
-char* build_cmd(const char* prefix, char* arg){
-	size_t len = strlen(prefix) + strlen(arg) + 1;
-	char* cmd = (char*) malloc(sizeof(char) * len);
-	snprintf(cmd, len, "%s%s", prefix, arg);
-	return cmd;
-}
+extern char** environ;
 
-char* append_args(const char* cmd, char** args){
+char** append_args(char** cmd, char** args){
+	unsigned index = 3;
 	char** args_index = args;
-	bool requiresQuotes = false;
-	size_t len = strlen(cmd) + 1;
+
 	while(*args_index != NULL){
-		len += strlen(*args_index) + 1;
+		cmd[index++] = *args_index;
 		++args_index;
 	}
 
-	char* ret = (char*) malloc(sizeof(char) * len);
-	snprintf(ret, len, "%s", cmd);
-	args_index = args;
-	while(*args_index != NULL){
-		if(strstr(*args_index, " ") != NULL){
-			len += 2;
-			requiresQuotes = true;
-		}
-
-		strcat(ret, " ");
-		if(requiresQuotes){
-			strcat(ret, "\"");
-		}
-		strcat(ret, *args_index);
-		if(requiresQuotes){
-			strcat(ret, "\"");
-		}
-		requiresQuotes = false;
-		++args_index;
-	}
-	printf("CMD: %s\n", ret);
-	return ret;
+	return cmd;
 }
 
 int main(int argc, char** argv) {
@@ -63,18 +40,27 @@ int main(int argc, char** argv) {
 	const char toolDir[] = TOOL_DIR;
 	const char pinExecutable[] = "/pin";
 	char toolName[] = "MemTrace.so";
-	char toolOpt[] = " -t ";
-	unsigned strlength = strlen(pinRoot) + strlen(toolDir) + strlen(toolName) + strlen(toolOpt) + strlen(pinExecutable);
-	char* pin_prefix = (char*) malloc(sizeof(char) * strlength);
-	strcpy(pin_prefix, pinRoot);
-	strcat(pin_prefix, pinExecutable);
-	strcat(pin_prefix, toolOpt);
-	strcat(pin_prefix, toolDir);
-	strcat(pin_prefix, toolName);
+	char toolOpt[] = "-t";
+	unsigned execLen = strlen(pinRoot) + strlen(pinExecutable) + 1;
+	unsigned toolLen = strlen(toolDir) + strlen(toolName) + 1;
+	char* executable = (char*) malloc(sizeof(char) * execLen);
+	char* toolPath = (char*) malloc(sizeof(char) * toolLen);
+	strcpy(executable, pinRoot);
+	strcat(executable, pinExecutable);
+	strcpy(toolPath, toolDir);
+	strcat(toolPath, toolName);
 
-	char* cmd = append_args(pin_prefix, &argv[1]);
+	int argv_num = argc - 1 + 4;
+	char** new_argv = (char**) malloc(sizeof(char*) * argv_num);
+	new_argv[0] = executable;
+	new_argv[1] = toolOpt;
+	new_argv[2] = toolPath;
+	new_argv[argv_num - 1] = NULL;
 
-	free(pin_prefix);
-	system(cmd);
+	char** cmd = append_args(new_argv, &argv[1]);
+
+	execve(executable, cmd, environ);
+	printf("%s\n", "Execve failed");
+	printf("Error: %s\n", strerror(errno));
 	return 0;
 }
