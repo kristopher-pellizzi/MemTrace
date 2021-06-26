@@ -169,7 +169,6 @@ void checkPermissions(char* path, int mode){
 
 void positional_args_error(int parsed){
     std::cout << "Error: 2 positional arguments required, " << parsed << " given" << std::endl;
-    usage();
     exit(10);
 }
 
