@@ -1,6 +1,7 @@
 PINDIR := ${CURDIR}/third_party/PIN/
 PIN_ROOT := $(PINDIR)pin
 SRCDIR := ${CURDIR}/src/
+LIBDIR := ${CURDIR}/lib/
 
 .PHONY: all
 all: tool | $(PIN_ROOT)
@@ -11,9 +12,13 @@ $(PIN_ROOT):
 	mv $(PINDIR)pin-3.17-98314-g0c048d619-gcc-linux $(PINDIR)pin
 
 .PHONY: tool
-tool: | $(PIN_ROOT)
+tool: lib | $(PIN_ROOT)
 	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT)
 
 .PHONY: debug
-debug: | $(PIN_ROOT)
+debug: lib | $(PIN_ROOT)
 	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) debug
+
+.PHONY: lib
+lib: 
+	$(MAKE) -C $(LIBDIR)

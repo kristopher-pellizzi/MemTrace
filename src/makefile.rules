@@ -92,10 +92,10 @@ TOOLDIRDEF := -DTOOL_DIR=
 all: tool | $(OBJDIR)
 
 .PHONY: tool
-tool: $(OBJDIR)MemTrace$(PINTOOL_SUFFIX) launcher wrapper
+tool: $(OBJDIR)MemTrace$(PINTOOL_SUFFIX) launcher
 
 .PHONY: debug
-debug: $(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX) debugLauncher wrapper
+debug: $(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX) debugLauncher
 
 .PHONY: nulltool
 nulltool: $(OBJDIR)NullTool$(PINTOOL_SUFFIX)
@@ -105,9 +105,6 @@ launcher: $(BINDIR)launcher
 
 .PHONY: debugLauncher
 debugLauncher: $(BINDIR)launchDebug
-
-.PHONY: wrapper
-wrapper: $(BINDIR)wrapper | $(OBJDIR)
 
 $(OBJDIR):
 	$(MKDIR)$@
@@ -151,13 +148,7 @@ $(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 $(BINDIR)launcher: toolLauncher.cpp
-	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(OBJDIR)\" -o $@ $^
-
-$(BINDIR)wrapper: $(OBJDIR)wrapper$(OBJ_SUFFIX) Wrapper.h
-	$(LINKER) $(LINK_EXE)$@ $(^:%.h=)
-
-$(OBJDIR)wrapper$(OBJ_SUFFIX): Wrapper.cpp Wrapper.h | $(OBJDIR)
-	$(CXX) -MMD -c -o $@ $<
+	$(CXX) $(PINROOTDEF) $(TOOLDIRDEF)\"$(OBJDIR)\" -g -o $@ $^
 
 
 # DEBUG ENABLED EXECUTABLES
