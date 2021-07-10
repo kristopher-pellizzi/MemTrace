@@ -336,7 +336,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
     tracer_out = os.path.join(fuzz_dir, args.tracer_out)
     inputs_dir = os.path.join(fuzz_out, "Main", "queue")
     launcher_path = os.path.join(sys.path[0], "launcher")
-    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + exec_cmd
+    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + exec_cmd[:1]
     traced_inputs = set()
     # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
     # already exists, so he probably already launched the script.
@@ -718,10 +718,14 @@ def main():
         print("Waiting for the tracer thread to shutdown...")
         tracerThread.join()
         print("Cleaning files...")
-        su.rmtree(FUZZ_OUT)
-        su.rmtree(tracer_out)
-        os.remove("partialOverlaps.log")
-        os.remove("base_addresses.log")
+        if os.path.exists(FUZZ_OUT):
+            su.rmtree(FUZZ_OUT)
+        if os.path.exists(tracer_out):
+            su.rmtree(tracer_out)
+        if os.path.exists(os.path.join(os.getcwd(), "partialOverlaps.log")):
+            os.remove("partialOverlaps.log")
+        if os.path.exists(os.path.join(os.getcwd(), "base_addresses.log")):
+            os.remove("base_addresses.log")
         exit(1)
 
 
@@ -976,3 +980,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    #merge_reports("/home/kris/Scrivania/MemTraceThesis/bin/launch_folder/out/tracer_out")
