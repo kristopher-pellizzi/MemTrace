@@ -23,6 +23,9 @@ class MissingExecutableError(Exception):
 class TooManyProcessesError(Exception):
     pass
 
+class FuzzerError(Exception):
+    pass
+
 
 PROGRESS_UNIT = 0
 PROGRESS_LEN = 30
@@ -36,6 +39,8 @@ ALREADY_LAUNCHED_SCHED = set()
 CUSTOM_MUTATOR_DIR_PATH = os.path.join(os.path.dirname(sys.path[0]), "custom_mutators")
 CUSTOM_MUTATOR_NAME = "custom"
 ENV_VARS_COPY = dict(os.environ)
+
+input_path_indices = list()
 
 
 def parse_help_flag(argv_str):
@@ -274,18 +279,42 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event):
 
 
     def get_argv(input_file_path):
-        with open(input_file_path, "r+b") as f:
-            try:
-                f.seek(- 128, os.SEEK_END)
-                raw_bytes = f.read(128)
-                f.truncate(f.tell() - 128)
-            except (ValueError, OSError):
-                f.seek(0, os.SEEK_SET)
-                raw_bytes = f.read(128)
-                f.truncate(0)
+        raw_bytes_chunks = list()
+        with open(input_file_path, "rb") as f, open("./tmp", "wb") as temp:
+            buf_size = 1024
+            args_parsed = False
+            while True:
+                buf = f.read(buf_size)
 
-            ret = list(filter(lambda x: len(x) != 0, map(lambda x: x.strip(), raw_bytes.split(b'\x00'))))
-            ret = list(map(lambda x: os.fsencode(os.path.realpath(input_file_path)) if x.strip() == b'@@' else x, ret))
+                if buf == b"":
+                    break
+
+                # If we did not finished parsing arguments (\x00\x00 not found), keep searching the delimiter
+                if not args_parsed:
+                    m = re.search(b"\x00\x00", buf)
+                    # \x00\x00 not found. Everything we have just read is to be added to the arguments raw bytes
+                    if m is None:
+                        raw_bytes_chunks.append(buf)
+                    # \x00\x00 found! Add everything up to \x00\x00 to the raw_bytes, and write the rest to the temporary file
+                    else:
+                        start_idx = m.start()
+                        raw_bytes_chunks.append(buf[:start_idx])
+                        temp.write(buf[start_idx + 2 :])
+                        args_parsed = True
+                # We already found the arguments list delimiter
+                else:
+                    temp.write(buf)
+
+        os.replace("./tmp", input_file_path)
+        raw_bytes = b"".join(raw_bytes_chunks)
+
+        ret = raw_bytes.split(b'\x00')
+        for str_index in input_path_indices:
+            # -1 is required because the list of arguments we are managing does not have the executable name as
+            # the first element
+            index = int(str_index) - 1
+            if len(ret) > index:
+                ret[index] = os.fsencode(os.path.realpath(input_file_path))
         return ret
 
 
@@ -595,11 +624,13 @@ def merge_reports(tracer_out_path: str):
             lines.append("***********************************************\n")
             po.writelines(lines)
         print_table_footer(po)
-                
+
 
 def main():
     global PROGRESS
     global PROGRESS_UNIT
+    global input_path_indices
+
 
     ### MAIN HELPER FUNCTIONS ###
 
@@ -624,8 +655,9 @@ def main():
         ALREADY_LAUNCHED_SCHED.update({selected})
 
         print("Launching slave instance nr {0} with power schedule {1}".format(slave_id, selected))
-        cmd = ["afl-fuzz", "-Q", "-S", "Slave_{0}".format(slave_id), "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable
-        return cmd
+        instance_name = "Slave_{0}".format(slave_id)
+        cmd = ["afl-fuzz", "-Q", "-S", instance_name, "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable
+        return cmd, instance_name
 
 
     def send_int(process: subp.Popen, slaves):
@@ -642,7 +674,7 @@ def main():
         out = ["|"]
         out.append(" " * PROGRESS_LEN)
         out.append("|")
-        print("".join(out), end="\r")
+        print("".join(out))
 
         LOCK.acquire()
         LAST_PROGRESS_TASK = t.Timer(10, print_progress, [fuzz_int_ev])
@@ -669,8 +701,7 @@ def main():
         out.append("=" * progress_bar)
         out.append(" " * (PROGRESS_LEN - progress_bar))
         out.append("|")
-        end_char = "\n" if finished else "\r"
-        print("".join(out), end=end_char)
+        print("".join(out))
 
         LOCK.acquire()
         if not finished and not fuzz_int_ev.is_set():
@@ -695,57 +726,63 @@ def main():
 
 
     def adjust_executable(executable: list, fuzz_in: str):
-        exec_name = executable[0]
         args = executable[1:]
-        # wrapper_args is a list containing additional arguments for the wrapper program.
+        # input_path_indices is a list containing additional arguments for the wrapper program.
         # More specifically, it will contain the indices of list args where a '@@' is found
-        wrapper_args = list()
 
         # Append to args all the indices where a '@@' is found. Those locations will be replaced
-        # by the input file path in the wrapper program.
+        # by the input file path in the __libc_start_main hook in the library.
         for i in range(len(args)):
             if args[i].strip() == '@@':
                 # Append i + 1, because argv[0] is always the executable name
-                wrapper_args.append(str(i + 1))
+                input_path_indices.append(str(i + 1))
+
+        env_var = ",".join(input_path_indices)
+        ENV_VARS_COPY['INPUT_FILE_ARGV_INDICES'] = env_var
 
         # Append an empty string so that last argument will be terminated by a \x00 byte
         args.append("")
 
-        # If there are no initial testcases provided, provide an empty one, so that the tool can at least randomize argv
+        # If there are no initial testcases provided, raise an error. We need at least 1.
         initial_testcases = os.listdir(fuzz_in)
         if len(initial_testcases) == 0:
-            print(
-                "WARNING: no initial testcases found in {0}. By default, an empty file will be created "
-                "to be used as an initial testcase (to randomize input file content and argv)."
-            )
-            initial_testcases.append("testcase")
-            path = os.path.join(fuzz_in, "testcase")
-            with open(path, "w"):
-                # Do nothing, the file is opened only to create it
-                pass
+            raise FuzzerError("ERROR: no initial testcase found in {0}. Please provide at least a valid testcase.". format(fuzz_in))
+
+        orig_testcases_dir = os.path.join(os.getcwd(), "originals")
+        if os.path.exists(orig_testcases_dir):
+            su.rmtree(orig_testcases_dir)
+        os.mkdir(orig_testcases_dir)
 
         for file in os.listdir(fuzz_in):
+            # Copy original testcases into a new folder
             file_path = os.path.join(fuzz_in, file)
+            su.copy(file_path, os.path.join(orig_testcases_dir, file))
 
             # Convert the arg list into a byte sequence, with each argument terminated by a \x00 byte
-            # Adjust length of the byte sequence to 128B (as required by the wrapper program), padding with \x00 bytes
-            # if needed. Note that longer byte sequences are truncated to 128 bytes.
+            # Terminate the sequence of arguments with a double '\x00' byte.
             args_bytes = b"\x00".join(map(lambda x: x.encode('utf-8'), args))
-            if len(args_bytes) <= 128:
-                args_bytes = args_bytes.ljust(128, b"\x00")
-            else:
-                args_bytes = args_bytes[:128]
+            args_bytes += b"\x00"
 
             # Append |args_bytes| to every initial testcase in fuzz_in folder
-            with open(file_path, "ab") as f:
-                f.write(args_bytes)
+            # The library requires to have the arguments as a first thing in the file, so
+            # we need a temporary file as a copy buffer
+            with open(file_path, "r+b") as original, open("./tmp", "wb") as temp:
+                temp.write(args_bytes)
+                size = 1024
+                while True:
+                    cont = original.read(size)
+                    if cont == b"":
+                        break
+                    temp.write(cont)
+
+            # Replace "file_path" file with the one having the arguments at the beginning
+            os.replace("./tmp", file_path)
 
         # Add custom mutator in the environment variables of process launching fuzzer instances
-        ENV_VARS_COPY['PYTHONPATH'] = CUSTOM_MUTATOR_DIR_PATH
-        ENV_VARS_COPY['AFL_PYTHON_MODULE'] = CUSTOM_MUTATOR_NAME
-        ret = [os.path.join(sys.path[0], "wrapper"), exec_name, "@@"]
-        ret.extend(wrapper_args)
-        return ret
+        #ENV_VARS_COPY['PYTHONPATH'] = CUSTOM_MUTATOR_DIR_PATH
+        #ENV_VARS_COPY['AFL_PYTHON_MODULE'] = CUSTOM_MUTATOR_NAME
+        ENV_VARS_COPY['AFL_PRELOAD'] = os.path.realpath(os.path.join(sys.path[0], "..", "lib", "argvfuzz64.so"))
+        return executable
 
 
     
@@ -891,10 +928,12 @@ def main():
         PROGRESS_UNIT = PROGRESS_LEN
 
     print("Launching Main fuzzer instance...")
+    ENV_VARS_COPY['FUZZ_INSTANCE_NAME'] = 'Main'
     p = subp.Popen(fuzz_cmd, env = ENV_VARS_COPY, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
     slaves = list()
     for i in range(args.slaves):
-        cmd = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, args.experimental, executable)
+        cmd, instance_name = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, args.experimental, executable)
+        ENV_VARS_COPY['FUZZ_INSTANCE_NAME'] = instance_name
         slaves.append(subp.Popen(cmd, env = ENV_VARS_COPY, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
 
     print()
@@ -905,16 +944,7 @@ def main():
     int_timer.start()
     print_empty_progress(fuzzer_interrupted_event)
 
-    tracer_executable = None
-    if args.argv_rand:
-        # if -r is not used, the executable path is the second
-        # element of the list |executable|. Arguments will be added by
-        # the tracer thread, as they will be read directly from the input file
-        tracer_executable = [executable[1]]
-    else:
-        tracer_executable = executable
-
-    tracerThread = t.Thread(target = launchTracer, args = [tracer_executable, args, fuzzer_interrupted_event])
+    tracerThread = t.Thread(target = launchTracer, args = [executable, args, fuzzer_interrupted_event])
     tracerThread.start()
 
     # Wait for the fuzzer to be interrupted
@@ -932,6 +962,11 @@ def main():
     int_timer.cancel()
     print("Fuzzer interrupted")
     print()
+
+    orig_testcases_dir = os.path.join(os.getcwd(), "originals")
+    for file in os.listdir(orig_testcases_dir):
+        su.copy(os.path.join(orig_testcases_dir, file), os.path.join(FUZZ_IN, file))
+    su.rmtree(orig_testcases_dir)
 
     # Wait for the tracer thread to run with all the inputs found by the fuzzer
     tracerThread.join()
