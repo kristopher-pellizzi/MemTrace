@@ -957,9 +957,18 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
-                ADDRINT maLastAccessedByte = ma.getAddress() + ma.getSize() - 1;
+                ADDRINT maFirstAccessedByte = ma.getAddress();
+                ADDRINT maLastAccessedByte = maFirstAccessedByte + ma.getSize() - 1;
 
-                while(iter != lastWriteInstruction.end() && iterFirstAccessedByte <= maLastAccessedByte){
+                while(iter != lastWriteInstruction.end()){
+                    
+                    // NOTE: according to how the map is sorted, it is not possible that |iterLastAccessedByte| < |maFirstAccessedByte|
+                    // However, we still need to check whether |iterFirstAccessedByte| is higher than |maLastAccessedByte|
+                    if(iterFirstAccessedByte > maLastAccessedByte){
+                        ++iter;
+                        iterFirstAccessedByte = iter->first.getFirst();
+                        continue;
+                    }
 
                     const auto& lastWrite = iter->second;
 
@@ -982,9 +991,18 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
-                ADDRINT maLastAccessedByte = ma.getAddress() + ma.getSize() - 1;
+                ADDRINT maFirstAccessedByte = ma.getAddress();
+                ADDRINT maLastAccessedByte = maFirstAccessedByte + ma.getSize() - 1;
 
-                while(iter != lastWriteInstruction.end() && iterFirstAccessedByte <= maLastAccessedByte){
+                while(iter != lastWriteInstruction.end()){
+
+                    // NOTE: according to how the map is sorted, it is not possible that |iterLastAccessedByte| < |maFirstAccessedByte|
+                    // However, we still need to check whether |iterFirstAccessedByte| is higher than |maLastAccessedByte|
+                    if(iterFirstAccessedByte > maLastAccessedByte){
+                        ++iter;
+                        iterFirstAccessedByte = iter->first.getFirst();
+                        continue;
+                    }
 
                     const auto& lastWrite = iter->second;
 
