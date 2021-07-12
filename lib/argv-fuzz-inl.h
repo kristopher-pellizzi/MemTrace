@@ -85,6 +85,8 @@ static char **afl_init_argv(int *argc, int fd) {
       if(ptr >= in_buf + MAX_CMDLINE_LEN){
         *(ptr - 1) = '\x00';
         *(ptr - 2) = '\x00';
+        ptr -= 2;
+        break;
       }
     }
     ptr++;
