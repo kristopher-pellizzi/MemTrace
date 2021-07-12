@@ -240,6 +240,13 @@ def parse_args(args):
         dest = "no_fuzzing"    
     )
 
+    parser.add_argument("--store-tracer-out",
+        action = "store_true",
+        help =  "This option allows the tracer thread to redirect both stdout and stdin of every spawned tracer process to a file saved in the same folder where "
+                "the input file resides.",
+        dest = "store_tracer_out"
+    )
+
     parser.epilog = "After the arguments for the script, the user must pass '--' followed by the executable path and the arguments that should be passed to it. "\
                     "If it reads from an input file, write '@@' instead of the input file path. It will be "\
                     "automatically replaced by the fuzzer\n\n"\
@@ -331,7 +338,6 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         return ret
 
 
-    global t
     print("[Tracer Thread] Tracer thread started...")
     if fuzzer_error_event is None:
         fuzzer_error_event = t.Event()
@@ -423,14 +429,14 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
 
         new_inputs_found = True
 
-        for t in new_inputs:
+        for el in new_inputs:
             if fuzzer_error_event.is_set():
                 print("[Tracer Thread] Tracer thread stopped due to fuzzer error")
                 return
-            input_folder = os.path.join(tracer_out, t[0], os.path.basename(t[1]))
+            input_folder = os.path.join(tracer_out, el[0], os.path.basename(el[1]))
             os.mkdir(input_folder)
             input_cpy_path = os.path.join(input_folder, "input")
-            su.copy(t[1], input_cpy_path)
+            su.copy(el[1], input_cpy_path)
             print()
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
             full_cmd = list(map(lambda x: os.path.realpath(input_cpy_path) if x.strip() == '@@' else x, tracer_cmd))
@@ -440,7 +446,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             argv_file_path = os.path.join(input_folder, "argv")
             if args.argv_rand:
                 if args.no_fuzzing:
-                    args_file_path = os.path.join(args_dir, t[0], os.path.basename(input_folder))
+                    args_file_path = os.path.join(args_dir, el[0], os.path.basename(input_folder))
                     if not os.path.exists(args_file_path):
                         continue
                     argv = get_argv_from_file(args_file_path)
@@ -458,13 +464,19 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                         for cmd_arg in argv:
                             f.write("{0}\n".format(cmd_arg))
 
-                    su.copy(argv_file_path, os.path.join(args_dir, t[0], os.path.basename(input_folder)))
+                    su.copy(argv_file_path, os.path.join(args_dir, el[0], os.path.basename(input_folder)))
                     
                 # Append arguments to full_cmd
                 full_cmd.extend(argv)
-            print("[Tracer Thread] FULL_CMD: ", full_cmd)
-            processes.append(subp.Popen(full_cmd))
-            print("[Tracer Thread] {0} is running".format(t[1]))
+            #print("[Tracer Thread] FULL_CMD: ", full_cmd)
+            if args.store_tracer_out:
+                output_file_path = os.path.join(input_folder, "output")
+                with open(output_file_path, "w") as out:
+                    processes.append(subp.Popen(full_cmd, stdout = out, stderr = subp.STDOUT))
+            else:
+                processes.append(subp.Popen(full_cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+            
+            print("[Tracer Thread] {0} is running".format(el[1]))
             print()
 
         traced_inputs.update(new_inputs)
@@ -519,8 +531,8 @@ def merge_reports(tracer_out_path: str):
         # If there's at least 1, we are sure there's exactly one (as a consequence of the applied reduce
         # that uses this function)
         else:
-            t = list(filtered_acc)[0]
-            t[0].append(element[0])
+            tup = list(filtered_acc)[0]
+            tup[0].append(element[0])
 
         return accumulator
 
