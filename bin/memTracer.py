@@ -531,7 +531,7 @@ def merge_reports(tracer_out_path: str):
         # If there's at least 1, we are sure there's exactly one (as a consequence of the applied reduce
         # that uses this function)
         else:
-            tup = list(filtered_acc)[0]
+            tup = filtered_acc[0]
             tup[0].append(element[0])
 
         return accumulator
@@ -571,7 +571,8 @@ def merge_reports(tracer_out_path: str):
 
     # Try to merge those (inputRef, MemoryAccess) tuples whose memory access set is the same
     for ai, access_set in sorted_partial_overlaps:
-        ma_sets = reduce(merge_ma_sets, access_set, deque())
+        initial = partial_overlaps[ai] if ai in partial_overlaps else deque()
+        ma_sets = reduce(merge_ma_sets, access_set, initial)
         partial_overlaps[ai] = ma_sets
 
     # Generate textual report files: 1 with only the accesses, 1 with address bases

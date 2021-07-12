@@ -53,11 +53,8 @@ class MemoryAccess(object):
         if not isinstance(other, MemoryAccess):
             return False
         return  (
-                self.executionOrder == other.executionOrder and
                 self.ip == other.ip and
                 self.actualIp == other.actualIp and
-                self.spOffset == other.spOffset and
-                self.bpOffset == other.bpOffset and
                 self.accessType == other.accessType and
                 self.accessSize == other.accessSize and
                 self.isUninitializedRead == other.isUninitializedRead and
