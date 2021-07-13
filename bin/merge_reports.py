@@ -10,7 +10,7 @@ from typing import Deque, Tuple
 from binOverlapParser import *
 from parsedData import *
 
-def merge_reports(tracer_out_path: str):
+def merge_reports(tracer_out_path: str, ignored_addresses = set()):
     def merge_ma_sets(accumulator: Deque[Tuple[Deque[str], Deque[MemoryAccess]]], element: Tuple[str, Deque[MemoryAccess]]):
         filtered_acc = list(filter(lambda x: x[1] == element[1], accumulator))
 
@@ -26,6 +26,21 @@ def merge_reports(tracer_out_path: str):
             tup[0].append(element[0])
 
         return accumulator
+
+
+    def remove_ignored_addresses(ma_set: Deque[MemoryAccess]) -> Deque[MemoryAccess]:
+        ret = deque()
+
+        for ma in ma_set:
+            if ma.isUninitializedRead and int(ma.actualIp, 16) in ignored_addresses:
+                print(ma.actualIp, " ignored")
+                continue
+
+            ret.append(ma)
+
+        ret = remove_useless_writes(ret)
+
+        return ret
 
     load_bases: Deque[Tuple[str, List[Tuple[str, str]]]] = deque()
     stack_bases: Deque[Tuple[str, str]] = deque()
@@ -65,6 +80,22 @@ def merge_reports(tracer_out_path: str):
         initial = partial_overlaps[ai] if ai in partial_overlaps else deque()
         ma_sets = reduce(merge_ma_sets, access_set, initial)
         partial_overlaps[ai] = ma_sets
+
+    # Remove ignored addresses and related writes
+    for ai in partial_overlaps:
+        access_set = partial_overlaps[ai]
+        new_access_set: Deque[Tuple[Deque[str], Deque[MemoryAccess]]] = deque()
+
+        for instances, ma_set in access_set:
+            ma_set = remove_ignored_addresses(ma_set)
+            if len(ma_set) > 0:
+                new_access_set.append((instances, ma_set))
+
+        if len(new_access_set) > 0:
+            partial_overlaps[ai] = new_access_set
+        else:
+            del partial_overlaps[ai]
+
 
     # Generate textual report files: 1 with only the accesses, 1 with address bases
 
@@ -141,10 +172,30 @@ def merge_reports(tracer_out_path: str):
 
 
 def parse_args():
+
+    def parse_hex_addr(hex_str):
+        return int(hex_str, 16)
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("tracer_out_path",
         help = "Path of the directory containing the output of the tracer"
+    )
+
+    parser.add_argument("-i", "--ignore",
+        default = [],
+        action = 'append',
+        type = parse_hex_addr,
+        dest = "ignored_addresses",
+        help =  "This option allows to specify addresses of instructions to be ignored during parsing."
+                "This option is mainly to be used when the user already verified some of the reported overlaps, and "
+                "has selected some not relevant ones. So, it is possible to use this option to re-generate the "
+                "report ignoring those instructions."
+                "The addresses to be provided, are the actual Instruction Pointer of the uninitialized reads you want to ignore."
+                "All the write accesses only related to those reads will be automatically removed."
+                "Each option '-i' can be used to specify only 1 address, but the option can be used multiple times "
+                "(e.g. './binOverlapParser.py -i 0xdeadbeef -i 0xcafebabe'. "
+                "NOTE: addresses must be provided in hexadecimal form."
     )
 
     return parser.parse_args()
@@ -152,7 +203,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    merge_reports(os.path.realpath(args.tracer_out_path))
+    ignored_addresses = set(args.ignored_addresses)
+    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses)
 
 
 if __name__ == "__main__":
