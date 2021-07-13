@@ -272,8 +272,9 @@ def parse_partial_overlap_entry(f, reg_size, exec_order):
     return ma
 
 
-def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write):
+def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write, ignored_addresses):
     exec_order = 0
+    ignored = 0
     overlaps = deque()
 
     addr = parse_address(f, reg_size)
@@ -283,14 +284,21 @@ def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write):
 
     while not accept(f, b"\x00\x00\x00\03"):
         entry = parse_partial_overlap_entry(f, reg_size, exec_order)
-        if ignore_if_no_overlapping_write and entry.isUninitializedRead:
-            has_overlapping_writes = check_for_overlapping_writes(overlaps, entry)
-            if not has_overlapping_writes:
+        if entry.isUninitializedRead:
+            if ignore_if_no_overlapping_write:
+                has_overlapping_writes = check_for_overlapping_writes(overlaps, entry)
+                if not has_overlapping_writes:
+                    continue
+
+            if int(entry.actualIp, 16) in ignored_addresses:
+                print(entry.actualIp, " ignored")
+                ignored += 1
                 continue
+
         overlaps.append(entry)
         exec_order += 1
 
-    if ignore_if_no_overlapping_write:
+    if ignore_if_no_overlapping_write or ignored > 0:
         overlaps = remove_useless_writes(overlaps)
     
     if len(overlaps) > 0:
@@ -299,7 +307,7 @@ def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write):
     return None
 
 
-def parse(ignore_if_no_overlapping_write: bool = True, bin_report_dir = ".")->ParseResult:
+def parse(ignore_if_no_overlapping_write: bool = True, bin_report_dir = ".", ignored_addresses = set())->ParseResult:
     ret = ParseResult()
 
     bin_report_path = os.path.join(bin_report_dir, "overlaps.bin")
@@ -335,7 +343,7 @@ def parse(ignore_if_no_overlapping_write: bool = True, bin_report_dir = ".")->Pa
 
         # While there are partial overlaps...
         while not accept(f, b"\x00\x00\x00\x04"):
-            overlaps = parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write)
+            overlaps = parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write, ignored_addresses)
             if overlaps is not None:
                 ret.partial_overlaps.append(overlaps)
 
@@ -343,6 +351,10 @@ def parse(ignore_if_no_overlapping_write: bool = True, bin_report_dir = ".")->Pa
 
 
 def parse_args():
+
+    def parse_hex_addr(hex_str):
+        return int(hex_str, 16)
+
     parser = ap.ArgumentParser()
 
     parser.add_argument('-a', '--all',
@@ -365,18 +377,36 @@ def parse_args():
         dest = "bin_report_dir"
     )
 
+    parser.add_argument("-i", "--ignore",
+        default = [],
+        action = 'append',
+        type = parse_hex_addr,
+        help =  "This option allows to specify addresses of instructions to be ignored during parser."
+                "The main usage of this option is that the user already verified some of the reported overlaps, and "
+                "has selected some not relevant ones. So, it is possible to use this option to re-generate the "
+                "report ignoring those instructions."
+                "The addresses to be provided, are the actual Instruction Pointer of the uninitialized reads you want to ignore."
+                "All the write accesses only related to those reads will be automatically removed."
+                "Each option '-i' can be used to specify only 1 address, but the option can be used multiple times "
+                "(e.g. './binOverlapParser.py -i 0xdeadbeef -i 0xcafebabe'. "
+                "NOTE: addresses must be provided in hexadecimal form.",
+        dest = 'ignored_addresses'
+    )
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
     bin_report_dir = args.bin_report_dir
     ignore_if_no_overlapping_write = args.ignore_if_no_overlap
+    ignored_addresses = set(args.ignored_addresses)
     fo = FullOverlapsWriter()
     po = PartialOverlapsWriter()
 
 
-    parse_res = parse(ignore_if_no_overlapping_write, bin_report_dir)
+    parse_res = parse(ignore_if_no_overlapping_write, bin_report_dir, ignored_addresses)
 
     is_full_overlaps_empty = len(parse_res.full_overlaps) == 0
     is_partial_overlaps_empty = len(parse_res.partial_overlaps) == 0
