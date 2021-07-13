@@ -11,8 +11,38 @@ from binOverlapParser import *
 from parsedData import *
 
 def merge_reports(tracer_out_path: str, ignored_addresses = set()):
+
     def merge_ma_sets(accumulator: Deque[Tuple[Deque[str], Deque[MemoryAccess]]], element: Tuple[str, Deque[MemoryAccess]]):
-        filtered_acc = list(filter(lambda x: x[1] == element[1], accumulator))
+
+        # Returns True if 2 ma_sets are to be considered equal
+        def compare_ma_sets(accumulator_el: Tuple[Deque[str], Deque[MemoryAccess]], el: Tuple[str, Deque[MemoryAccess]]):
+            acc_el_ma_set = accumulator_el[1]
+            el_ma_set = el[1]
+            if len(acc_el_ma_set) != len(el_ma_set):
+                return False
+            
+            # Get the list of tuples (name, address) of loaded libraries for the accumulator element
+            acc_el_load_bases = list(filter(lambda x: x[0] == accumulator_el[0][0], load_bases))[0][1]
+
+            res = True
+            for _  in range(len(el_ma_set)):
+                el_ma = el_ma_set.popleft()
+                acc_el_ma = acc_el_ma_set.popleft()
+                el_ma_set.append(el_ma)
+                acc_el_ma_set.append(acc_el_ma)
+                if res:
+                    load_base1 = max(list(filter(lambda x: x <= int(el_ma.actualIp, 16), map(lambda x: int(x[1], 16), element_load_bases))))
+                    load_base2 = max(list(filter(lambda x: x <= int(acc_el_ma.actualIp, 16), map(lambda x: int(x[1], 16), acc_el_load_bases))))
+
+                    if not el_ma.compare(acc_el_ma, load_base1, load_base2):
+                        res = False
+                
+            return res
+            
+
+        # |merge_ma_sets| beginning
+        element_load_bases = list(filter(lambda x: x[0] == element[0], load_bases))[0][1]
+        filtered_acc = list(filter(lambda x: compare_ma_sets(x, element), accumulator))
 
         # If there are no elements with the same ma_set as |element|
         if len(filtered_acc) == 0:
@@ -31,7 +61,8 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
     def remove_ignored_addresses(ma_set: Deque[MemoryAccess]) -> Deque[MemoryAccess]:
         ret = deque()
 
-        for ma in ma_set:
+        while len(ma_set) > 0:
+            ma = ma_set.popleft()
             if ma.isUninitializedRead and int(ma.actualIp, 16) in ignored_addresses:
                 print(ma.actualIp, " ignored")
                 continue
@@ -205,6 +236,7 @@ def main():
     args = parse_args()
     ignored_addresses = set(args.ignored_addresses)
     merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses)
+    print("Finished parsing binary file. Textual reports created")
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ class MemoryAccess(object):
             return False
         return  (
                 self.ip == other.ip and
-                self.actualIp == other.actualIp and
+                #self.actualIp == other.actualIp and
                 self.accessType == other.accessType and
                 self.accessSize == other.accessSize and
                 self.isUninitializedRead == other.isUninitializedRead and
@@ -62,6 +62,20 @@ class MemoryAccess(object):
                 self.memType == other.memType and
                 self.isPartialOverlap == other.isPartialOverlap
         )
+
+    def compare(self, ma2, load_base1, load_base2):
+
+        # Returns True if the offset of the actualIP from the library base address is the same
+        # for both the MemoryAccess objects
+        def compare_actualIP():
+            if self.actualIp == ma2.actualIp and load_base1 == load_base2:
+                return True
+                
+            lib_offset1 = int(self.actualIp, 16) - load_base1
+            lib_offset2 = int(ma2.actualIp, 16) - load_base2
+            return lib_offset1 == lib_offset2
+
+        return self == ma2 and compare_actualIP()
 
 
 class AccessIndex(object):
