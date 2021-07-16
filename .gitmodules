@@ -1,0 +1,3 @@
+[submodule "third_party/AFLPlusPlus"]
+	path = third_party/AFLPlusPlus
+	url = https://github.com/AFLPlusPlus/AFLPlusPlus
