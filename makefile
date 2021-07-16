@@ -25,9 +25,13 @@ lib:
 	$(MAKE) -C $(LIBDIR)
 
 .PHONY: fuzzer
-fuzzer:
-	ifeq (0, $(ls $(AFLDIR) | wc -l))
-		git submodule init
-		git submodule update
-		$(MAKE) -C $(AFLDIR)
-		$(MAKE) -C $(AFLDIR) binary-only
+fuzzer: fuzzer_repo
+	$(MAKE) -C $(AFLDIR)
+	$(MAKE) -C $(AFLDIR) binary-only
+
+.PHONY: fuzzer_rep
+fuzzer_repo: 
+ifeq (0, $(shell ls $(AFLDIR) | wc -l))
+	git submodule init
+	git submodule update
+endif
