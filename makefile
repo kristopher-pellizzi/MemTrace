@@ -1,4 +1,5 @@
 PINDIR := ${CURDIR}/third_party/PIN/
+AFLDIR := ${CURDIR}/third_party/AFLPlusPlus/
 PIN_ROOT := $(PINDIR)pin
 SRCDIR := ${CURDIR}/src/
 LIBDIR := ${CURDIR}/lib/
@@ -12,13 +13,21 @@ $(PIN_ROOT):
 	mv $(PINDIR)pin-3.17-98314-g0c048d619-gcc-linux $(PINDIR)pin
 
 .PHONY: tool
-tool: lib | $(PIN_ROOT)
+tool: lib fuzzer | $(PIN_ROOT)
 	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT)
 
 .PHONY: debug
-debug: lib | $(PIN_ROOT)
+debug: lib fuzzer | $(PIN_ROOT)
 	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) debug
 
 .PHONY: lib
 lib: 
 	$(MAKE) -C $(LIBDIR)
+
+.PHONY: fuzzer
+fuzzer:
+	ifeq (0, $(ls $(AFLDIR) | wc -l))
+		git submodule init
+		git submodule update
+		$(MAKE) -C $(AFLDIR)
+		$(MAKE) -C $(AFLDIR) binary-only

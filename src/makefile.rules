@@ -154,7 +154,6 @@ $(BINDIR)launcher: toolLauncher.cpp
 # DEBUG ENABLED EXECUTABLES
 # Build the intermediate object file.
 $(DEBUGDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp | $(DEBUGDIR)
-	@echo Called debug
 	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
