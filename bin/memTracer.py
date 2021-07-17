@@ -36,6 +36,7 @@ ALREADY_LAUNCHED_SCHED = set()
 CUSTOM_MUTATOR_DIR_PATH = os.path.join(os.path.dirname(sys.path[0]), "custom_mutators")
 CUSTOM_MUTATOR_NAME = "custom"
 ENV_VARS_COPY = dict(os.environ)
+AFL_PATH = os.path.join(sys.path[0], "..", "third_party", "AFLPlusPlus", "afl-fuzz")
 
 input_path_indices = list()
 
@@ -284,7 +285,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
 
     def get_argv(input_file_path):
         raw_bytes_chunks = list()
-        with open(input_file_path, "rb") as f, open("./tmp", "wb") as temp:
+        with open(input_file_path, "rb") as f, open(tmp_file_path, "wb") as temp:
             buf_size = 1024
             args_parsed = False
             while True:
@@ -309,7 +310,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 else:
                     temp.write(buf)
 
-        os.replace("./tmp", input_file_path)
+        os.replace(tmp_file_path, input_file_path)
         raw_bytes = b"".join(raw_bytes_chunks)
 
         ret = raw_bytes.split(b'\x00')
@@ -338,6 +339,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     if fuzzer_error_event is None:
         fuzzer_error_event = t.Event()
     fuzz_dir = args.fuzz_dir
+    tmp_file_path = os.path.join(fuzz_dir, "tmp")
     fuzz_out = os.path.join(fuzz_dir, args.fuzz_out)
     tracer_out = os.path.join(fuzz_dir, args.tracer_out)
     inputs_dir = os.path.join(fuzz_out, "Main", "queue")
@@ -544,7 +546,7 @@ def main():
 
         print("[Main Thread] Launching slave instance nr {0} with power schedule {1}".format(slave_id, selected))
         instance_name = "Slave_{0}".format(slave_id)
-        cmd = ["afl-fuzz", "-Q", "-S", instance_name, "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable
+        cmd = [AFL_PATH, "-Q", "-S", instance_name, "-p", selected, "-i", fuzz_in, "-o", fuzz_out, "--"] + executable
         return cmd, instance_name
 
 
@@ -670,7 +672,7 @@ def main():
             # Append |args_bytes| to every initial testcase in fuzz_in folder
             # The library requires to have the arguments as a first thing in the file, so
             # we need a temporary file as a copy buffer
-            with open(file_path, "r+b") as original, open("./tmp", "wb") as temp:
+            with open(file_path, "r+b") as original, open(TMP_FILE_PATH, "wb") as temp:
                 temp.write(args_bytes)
                 size = 1024
                 while True:
@@ -680,7 +682,7 @@ def main():
                     temp.write(cont)
 
             # Replace "file_path" file with the one having the arguments at the beginning
-            os.replace("./tmp", file_path)
+            os.replace(TMP_FILE_PATH, file_path)
 
         # Add custom mutator in the environment variables of process launching fuzzer instances
         #ENV_VARS_COPY['PYTHONPATH'] = CUSTOM_MUTATOR_DIR_PATH
@@ -749,6 +751,7 @@ def main():
 
     WORKING_DIR = os.getcwd()
     FUZZ_DIR = os.path.join(WORKING_DIR, args.fuzz_dir)
+    TMP_FILE_PATH = os.path.join(FUZZ_DIR, "tmp")
     FUZZ_OUT = os.path.join(FUZZ_DIR, args.fuzz_out)
     FUZZ_IN = os.path.join(FUZZ_DIR, args.fuzz_in)
     FUZZ_OLDS = os.path.join(FUZZ_DIR, args.olds_dir)
@@ -813,7 +816,7 @@ def main():
         p = subp.Popen(["sudo", "afl-system-config"])
         p.wait()
     launch_single_instance = args.slaves == 0
-    fuzz_cmd = ["afl-fuzz", "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--"] +  executable
+    fuzz_cmd = [AFL_PATH, "-Q", "-S" if launch_single_instance else "-M", "Main", "-i", FUZZ_IN, "-o", FUZZ_OUT, "--"] +  executable
 
     cpus = os.cpu_count()
     if cpus is None:
