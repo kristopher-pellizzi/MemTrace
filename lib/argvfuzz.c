@@ -57,6 +57,12 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
   char* inputFilePath;
   unsigned long index;
 
+  char* ptr = inputIndices;
+  char digits[] = "0123456789";
+  unsigned indices_num = 16;
+  unsigned long* indices = (unsigned long*) malloc(sizeof(unsigned long) * indices_num);
+  unsigned counter = 0;
+
   if(inputIndices != NULL){
     sscanf(inputIndices, "%lu", &index);
     inputFilePath = argv[index];
@@ -66,26 +72,20 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
       fprintf(stderr, "%s\n", strerror(errno));
       exit(EXIT_FAILURE);
     }
+
+    do{
+      if(counter >= indices_num){
+        indices_num *= 2;
+        indices = (unsigned long*) realloc(indices, sizeof(unsigned long) * indices_num);
+      }
+      indices[counter++] = index;
+      size_t len = strspn(ptr, digits);
+      ptr += len;
+      len = strcspn(ptr, digits);
+      ptr += len;
+      sscanf(ptr, "%lu", &index);
+    } while(*ptr != '\x00');
   }
-
-  char* ptr = inputIndices;
-  char digits[] = "0123456789";
-  unsigned indices_num = 16;
-  unsigned long* indices = (unsigned long*) malloc(sizeof(unsigned long) * indices_num);
-  unsigned counter = 0;
-
-  do{
-    if(counter >= indices_num){
-      indices_num *= 2;
-      indices = (unsigned long*) realloc(indices, sizeof(unsigned long) * indices_num);
-    }
-    indices[counter++] = index;
-    size_t len = strspn(ptr, digits);
-    ptr += len;
-    len = strcspn(ptr, digits);
-    ptr += len;
-    sscanf(ptr, "%lu", &index);
-  } while(*ptr != '\x00');
 
   sub_argv = afl_init_argv(&sub_argc, fd);
 
@@ -100,6 +100,8 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
       sub_argv[index] = new_file_path;
     }
   }
+
+  free(indices);
 
   sub_argv[0] = argv[0];
 

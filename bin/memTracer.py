@@ -437,7 +437,16 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             su.copy(el[1], input_cpy_path)
             print()
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
-            full_cmd = list(map(lambda x: os.path.realpath(input_cpy_path) if x.strip() == '@@' else x, tracer_cmd))
+
+            input_file_placeholders = functools.reduce(lambda acc, el: acc or (el.strip() == '@@'), tracer_cmd, False)
+            tracer_stdin = None
+
+            if input_file_placeholders:
+                full_cmd = list(map(lambda x: os.path.realpath(input_cpy_path) if x.strip() == '@@' else x, tracer_cmd))
+            else:
+                full_cmd = tracer_cmd
+                tracer_stdin = open(input_cpy_path, "r")
+            
             if len(processes) == args.processes:
                 processes = wait_process_termination(processes)
 
@@ -470,10 +479,13 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             if args.store_tracer_out:
                 output_file_path = os.path.join(input_folder, "output")
                 with open(output_file_path, "w") as out:
-                    processes.append(subp.Popen(full_cmd, stdout = out, stderr = subp.STDOUT))
+                    processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = out, stderr = subp.STDOUT))
             else:
-                processes.append(subp.Popen(full_cmd, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+                processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
             
+            if tracer_stdin is not None:
+                tracer_stdin.close()
+
             print("[Tracer Thread] {0} is running".format(el[1]))
             print()
 
@@ -633,8 +645,10 @@ def main():
 
     def adjust_executable(executable: list, fuzz_in: str):
         args = executable[1:]
-        # input_path_indices is a list containing additional arguments for the wrapper program.
-        # More specifically, it will contain the indices of list args where a '@@' is found
+        # If there are no arguments passed, append an empty string, so that
+        # a double null byte is added to the beginning of the input file
+        if len(args) == 0:
+            args.append("")
 
         # Append to args all the indices where a '@@' is found. Those locations will be replaced
         # by the input file path in the __libc_start_main hook in the library.
@@ -643,8 +657,9 @@ def main():
                 # Append i + 1, because argv[0] is always the executable name
                 input_path_indices.append(str(i + 1))
 
-        env_var = ",".join(input_path_indices)
-        ENV_VARS_COPY['INPUT_FILE_ARGV_INDICES'] = env_var
+        if len(input_path_indices) > 0:
+            env_var = ",".join(input_path_indices)
+            ENV_VARS_COPY['INPUT_FILE_ARGV_INDICES'] = env_var
 
         # Append an empty string so that last argument will be terminated by a \x00 byte
         args.append("")
