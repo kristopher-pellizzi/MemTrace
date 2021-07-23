@@ -85,8 +85,14 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
             
             # If the binary report is not found, the tracer failed to be run (random argv generation may cause execve to fail)
             try:
+                print("Parsing binary report from {0}".format(input_dir_path))
                 parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
             except FileNotFoundError:
+                print("Binary report not found in {0}".format(input_dir_path))
+                continue
+            except ParseError as e:
+                print("ParseError raised for {0}".format(input_dir_path))
+                print(str(e))
                 continue
             cur_load_bases = parse_res.load_bases
             cur_stack_base = parse_res.stack_base
@@ -106,30 +112,35 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
     # Sort partial_overlaps by AccessIndex (increasing address, decreasing access size)
     sorted_partial_overlaps = sorted(tmp_partial_overlaps.items(), key=lambda x: x[0])
 
+    print("Starting merging sets...")
+
     # Try to merge those (inputRef, MemoryAccess) tuples whose memory access set is the same
     for ai, access_set in sorted_partial_overlaps:
         initial = partial_overlaps[ai] if ai in partial_overlaps else deque()
         ma_sets = reduce(merge_ma_sets, access_set, initial)
         partial_overlaps[ai] = ma_sets
 
-    # Remove ignored addresses and related writes
-    for ai in partial_overlaps:
-        access_set = partial_overlaps[ai]
-        new_access_set: Deque[Tuple[Deque[str], Deque[MemoryAccess]]] = deque()
+    if len(ignored_addresses) > 0:
+        print("Removing ignored addresses...")
 
-        for instances, ma_set in access_set:
-            ma_set = remove_ignored_addresses(ma_set)
-            if len(ma_set) > 0:
-                new_access_set.append((instances, ma_set))
+        # Remove ignored addresses and related writes
+        for ai in partial_overlaps:
+            access_set = partial_overlaps[ai]
+            new_access_set: Deque[Tuple[Deque[str], Deque[MemoryAccess]]] = deque()
 
-        if len(new_access_set) > 0:
-            partial_overlaps[ai] = new_access_set
-        else:
-            del partial_overlaps[ai]
+            for instances, ma_set in access_set:
+                ma_set = remove_ignored_addresses(ma_set)
+                if len(ma_set) > 0:
+                    new_access_set.append((instances, ma_set))
+
+            if len(new_access_set) > 0:
+                partial_overlaps[ai] = new_access_set
+            else:
+                del partial_overlaps[ai]
 
 
     # Generate textual report files: 1 with only the accesses, 1 with address bases
-
+    print("Generating textual report...")
     # Generate base addresses report
     with open("base_addresses.log", "w") as f:
         while(len(load_bases) != 0):
