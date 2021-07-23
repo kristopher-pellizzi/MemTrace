@@ -438,14 +438,16 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             print()
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
 
-            input_file_placeholders = functools.reduce(lambda acc, el: acc or (el.strip() == '@@'), tracer_cmd, False)
-            tracer_stdin = None
-
-            if input_file_placeholders:
-                full_cmd = list(map(lambda x: os.path.realpath(input_cpy_path) if x.strip() == '@@' else x, tracer_cmd))
+            full_cmd = list(tracer_cmd)
+            # If there isn't any fuzzed input file, use the generated file as stdin
+            if len(input_path_indices) == 0:
+                tracer_stdin = open(input_cpy_path, "rb")
+            # otherwise, set stdin to an empty file, so that if the program tries to read from that
+            # it won't stuck waiting for input
             else:
-                full_cmd = tracer_cmd
-                tracer_stdin = open(input_cpy_path, "r")
+                empty_file = open("empty_file", "w")
+                empty_file.close()
+                tracer_stdin = open("empty_file", "rb")
             
             if len(processes) == args.processes:
                 processes = wait_process_termination(processes)
@@ -479,11 +481,27 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             if args.store_tracer_out:
                 output_file_path = os.path.join(input_folder, "output")
                 with open(output_file_path, "w") as out:
-                    processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = out, stderr = subp.STDOUT))
+                    try:
+                        processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = out, stderr = subp.STDOUT))
+                    except Exception as e:
+                        print("Exception happened while launching the tracer")
+                        out.write("Exception happened while launching the tracer\n")
+                        out.write("Exception:\n")
+                        out.write(str(e) + "\n\n")
+                        out.write("Exception raised with command:\n")
+                        out.write(str(full_cmd))
             else:
-                processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
-            
-            if tracer_stdin is not None:
+                try:
+                    processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+                except Exception as e:
+                    print("Exception happened while launching the tracer")
+                    print("Exception:")
+                    print(str(e))
+                    print()
+                    print("Exception raised with command:")
+                    print(str(full_cmd))
+
+            if not tracer_stdin.closed:
                 tracer_stdin.close()
 
             print("[Tracer Thread] {0} is running".format(el[1]))
