@@ -16,8 +16,11 @@ class ParseError(Exception):
     def __init__(self, file, message="Error while parsing"):
         super().__init__(message)
         print("Error @ byte " + str(file.tell()))
-        file.seek(-6, 1)
-        print(b"... " + file.read(50))
+        try:
+            file.seek(-6, 1)
+            print(b"... " + file.read(50))
+        except:
+            file.seek(0,0)
         print("            ^")
         print("            |")
 
@@ -320,6 +323,13 @@ def parse(ignore_if_no_overlapping_write: bool = True, bin_report_dir = ".", ign
                 read_bytes = f.read(1)
             f.seek(-1, 1)
             read_bytes = f.read(4)
+
+            if len(read_bytes) < 4:
+                raise ParseError(f, "Report beginning (sequence \\x00\\x00\\x00\\x00) not found")
+            # If this is True, the first byte is indeed a \x00, but the sequence is not correct.
+            # Starting from the second byte of the sequence, try again to find \x00\x00\x00\x00
+            if read_bytes != b"\x00\x00\x00\x00":
+                f.seek(-3, 1)
         
         reg_size = parse_integer(f)
 
