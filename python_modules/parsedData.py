@@ -1,5 +1,5 @@
 from collections import deque
-from typing import *
+from typing import Deque, Tuple
 
 class InvalidConstructorError(Exception):
     pass
@@ -36,18 +36,18 @@ class MemoryAccess(object):
                 memType,
                 isPartialOverlap
                 ):
-        self.executionOrder = executionOrder
-        self.ip = ip
-        self.actualIp = actualIp
-        self.spOffset = spOffset
-        self.bpOffset = bpOffset
-        self.accessType = accessType
-        self.accessSize = accessSize
-        self.disasm = disasm
-        self.isUninitializedRead = isUninitializedRead
-        self.uninitializedIntervals = uninitializedIntervals
-        self.memType = memType
-        self.isPartialOverlap = isPartialOverlap
+        self.executionOrder: int = executionOrder
+        self.ip: str = ip
+        self.actualIp: str = actualIp
+        self.spOffset: int = spOffset
+        self.bpOffset: int = bpOffset
+        self.accessType: AccessType = accessType
+        self.accessSize: int = accessSize
+        self.disasm: str = disasm
+        self.isUninitializedRead: bool = isUninitializedRead
+        self.uninitializedIntervals: Deque[Tuple[int, int]] = uninitializedIntervals
+        self.memType: MemType = memType
+        self.isPartialOverlap: bool = isPartialOverlap
 
     def __eq__(self, other):
         if not isinstance(other, MemoryAccess):
@@ -76,6 +76,40 @@ class MemoryAccess(object):
             return lib_offset1 == lib_offset2
 
         return self == ma2 and compare_actualIP()
+
+
+    def __str__(self):
+        str_list = deque()
+        if self.isPartialOverlap:
+            str_list.append("=> ")
+        else:
+            str_list.append("   ")
+
+        if self.isUninitializedRead:
+            str_list.append("*")
+
+        str_list.append(self.ip + " (" + self.actualIp + "):")
+        str_list.append("\t" if len(self.disasm) > 0 else " ")
+        str_list.append(self.disasm)
+        str_list.append(" W " if self.accessType == AccessType.WRITE else " R ")
+        str_list.append(str(self.accessSize) + " B ")
+        if self.memType == MemType.STACK:
+            str_list.append("@ (sp ")
+            str_list.append("+ " if self.spOffset >= 0 else "- ")
+            str_list.append(str(abs(self.spOffset)))
+            str_list.append("); ")
+            str_list.append("(bp ")
+            str_list.append("+ " if self.bpOffset >= 0 else "- ")
+            str_list.append(str(abs(self.bpOffset)))
+            str_list.append("); ")
+
+        for _ in range(len(self.uninitializedIntervals)):
+            interval = self.uninitializedIntervals.popleft()
+            lower_bound, upper_bound = interval
+            str_list.append("[" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
+            self.uninitializedIntervals.append(interval)
+
+        return "".join(str_list)
 
 
 class AccessIndex(object):

@@ -450,26 +450,7 @@ def main():
 
         for entry in ma_set:
             # Emit full overlap table entry
-            str_list = []
-            str_list.append("*" if entry.isUninitializedRead else "")
-            str_list.append(entry.ip + " (" + entry.actualIp + "):")
-            str_list.append("\t" if len(entry.disasm) > 0 else " ")
-            str_list.append(entry.disasm)
-            str_list.append(" W " if entry.accessType == AccessType.WRITE else " R ")
-            str_list.append(str(entry.accessSize) + " B ")
-            # if it is a stack access, write also sp and bp offsets
-            if entry.memType == MemType.STACK:
-                str_list.append("@ (sp ")
-                str_list.append("+ " if entry.spOffset >= 0 else "- ")
-                str_list.append(str(abs(entry.spOffset)) + "); ")
-                str_list.append("(bp ")
-                str_list.append("+ " if entry.bpOffset >= 0 else "- ")
-                str_list.append(str(abs(entry.bpOffset)) + ")")
-            while len(entry.uninitializedIntervals) > 0:
-                lower_bound, upper_bound = entry.uninitializedIntervals.popleft()
-                str_list.append(" [" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
-
-            print_table_entry(fo, "".join(str_list))
+            print_table_entry(fo, str(entry))
 
         print_table_footer(fo)
 
