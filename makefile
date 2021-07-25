@@ -26,8 +26,12 @@ lib:
 
 .PHONY: fuzzer
 fuzzer: fuzzer_repo
-	$(MAKE) -C $(AFLDIR)
-	$(MAKE) -C $(AFLDIR) binary-only
+	@if ! ([ -e "$(AFLDIR)afl-qemu-trace" ] && [ -e "$(AFLDIR)afl-fuzz" ]); then \
+		$(MAKE) -C $(AFLDIR); \
+		$(MAKE) -C $(AFLDIR) binary-only; \
+	else \
+		echo "Fuzzer already compiled"; \
+	fi
 
 .PHONY: fuzzer_rep
 fuzzer_repo: 
