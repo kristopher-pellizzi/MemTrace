@@ -1,59 +1,72 @@
 #!/usr/bin/env python3
 
+import functools
 import os
 import argparse
-import sys
 
 from functools import reduce
 from collections import deque
-from typing import Deque, Tuple
-from binOverlapParser import *
-from parsedData import *
+from typing import Deque, Tuple, Dict, List
+from binOverlapParser import remove_useless_writes, parse, ParseError, print_table_header, print_table_footer, PartialOverlapsWriter
+from parsedData import MemoryAccess, ParseResult, AccessType, MemType
+from instructionAddress import InstructionAddress
+from maSet import MASet
 
 def merge_reports(tracer_out_path: str, ignored_addresses = set()):
 
-    def merge_ma_sets(accumulator: Deque[Tuple[Deque[str], Deque[MemoryAccess]]], element: Tuple[str, Deque[MemoryAccess]]):
+    def merge_ma_sets(accumulator: Deque[MASet], element: MASet):
 
         # Returns True if 2 ma_sets are to be considered equal
-        def compare_ma_sets(accumulator_el: Tuple[Deque[str], Deque[MemoryAccess]], el: Tuple[str, Deque[MemoryAccess]]):
-            acc_el_ma_set = accumulator_el[1]
-            el_ma_set = el[1]
+        def compare_ma_sets(accumulator_el: MASet):
+            acc_el_ma_set = accumulator_el.set
+            el_ma_set = element.set
             if len(acc_el_ma_set) != len(el_ma_set):
                 return False
             
             # Get the list of tuples (name, address) of loaded libraries for the accumulator element
-            acc_el_load_bases = list(filter(lambda x: x[0] == accumulator_el[0][0], load_bases))[0][1]
+            # Note that the accumulator element may have more than 1 origin at this time. However,
+            # the reported set comes from the first origin. Sets from other origins may be identical,
+            # unless they may have different addresses due to ASLR or different library load address.
+            # This means we need to use the load_bases of the first origins to compare offsets.
+            acc_el_load_bases = load_bases[accumulator_el.origins[0]]
 
             res = True
+            # We already know el_ma_set and acc_el_ma_set have the same length.
+            # Since we are using a deque, it is less expensive to pop and re-append 
+            # elements circularly than performing random access.
             for _  in range(len(el_ma_set)):
                 el_ma = el_ma_set.popleft()
                 acc_el_ma = acc_el_ma_set.popleft()
                 el_ma_set.append(el_ma)
                 acc_el_ma_set.append(acc_el_ma)
+                # If we have already found that the sets are not identical, it is useless to
+                # try and keep comparing them. However, we need to complete the whole loop,
+                # as we must leave the deques |el_ma_set| and |acc_el_ma_set| untouched.
                 if res:
-                    load_base1 = max(list(filter(lambda x: x <= int(el_ma.actualIp, 16), map(lambda x: int(x[1], 16), element_load_bases))))
-                    load_base2 = max(list(filter(lambda x: x <= int(acc_el_ma.actualIp, 16), map(lambda x: int(x[1], 16), acc_el_load_bases))))
+                    el_load_base = int(findLib(el_ma.actualIp, element_load_bases)[1], 16)
+                    acc_el_load_base = int(findLib(acc_el_ma.actualIp, acc_el_load_bases)[1], 16)
 
-                    if not el_ma.compare(acc_el_ma, load_base1, load_base2):
+                    if not el_ma.compare(acc_el_ma, el_load_base, acc_el_load_base):
                         res = False
                 
             return res
             
 
         # |merge_ma_sets| beginning
-        element_load_bases = list(filter(lambda x: x[0] == element[0], load_bases))[0][1]
-        filtered_acc = list(filter(lambda x: compare_ma_sets(x, element), accumulator))
 
-        # If there are no elements with the same ma_set as |element|
+        # Note that the element comes from |tmp_partial_overlaps|, which has 1 origin for each entry
+        element_origin = element.origins[0] 
+        element_load_bases = load_bases[element_origin]
+        filtered_acc = list(filter(compare_ma_sets, accumulator))
+
+        # If there are no elements with the same ma_set as |element|, insert |element| itself
         if len(filtered_acc) == 0:
-            refs = deque()
-            refs.append(element[0])
-            accumulator.append((refs, element[1]))
+            accumulator.append(element)
         # If there's at least 1, we are sure there's exactly one (as a consequence of the applied reduce
         # that uses this function)
         else:
-            tup = filtered_acc[0]
-            tup[0].append(element[0])
+            maSet = filtered_acc[0]
+            maSet.addOrigins(element.origins)
 
         return accumulator
 
@@ -73,11 +86,36 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
 
         return ret
 
-    load_bases: Deque[Tuple[str, List[Tuple[str, str]]]] = deque()
-    stack_bases: Deque[Tuple[str, str]] = deque()
-    partial_overlaps: Dict[AccessIndex, Deque[Tuple[Deque[str], Deque[MemoryAccess]]]] = dict()
 
-    tmp_partial_overlaps: Dict[AccessIndex, Deque[Tuple[str, Deque[MemoryAccess]]]] = dict()
+    def remove_masked_writes(writes: Deque[MemoryAccess], readSize: int):
+        ret = deque()
+        bitMap = list([0] * readSize)
+        for _ in range(len(writes)):
+            ma = writes.pop()
+            lower, upper = ma.uninitializedIntervals[0]
+            upper += 1
+            portion = bitMap[lower:upper]
+            size = upper - lower
+            if reduce(lambda acc, el: acc + el, portion, 0) < size:
+                bitMap[lower:upper] = [1] * size
+                ret.appendleft(ma)
+            
+        return ret
+
+
+    def findLib(ip_str: str, load_bases: List[Tuple[str, str]]):
+        ip = int(ip_str, 16)
+        name, addr = max(filter(lambda x: x[1] <= ip, map(lambda x: (x[0], int(x[1], 16)), load_bases)), key = lambda x: x[1])
+        return (name, hex(addr))
+
+    load_bases: Dict[str, List[Tuple[str, str]]] = dict()
+    stack_bases: Dict[str, str] = dict()
+    partial_overlaps: Dict[InstructionAddress, Deque[MASet]] = dict()
+
+    # Although |tmp_partial_overlaps| has the same type of |partial_overlaps|, this is thought to contain MASets
+    # containing, in turns, only 1 input reference (origin). Afterwards, this will be processed to merge all MASets having the same set of 
+    # MemoryAccess objects into 1 single MASet containing all the identical origins.
+    tmp_partial_overlaps: Dict[InstructionAddress, Deque[MASet]] = dict()
     for instance in os.listdir(tracer_out_path):
         instance_path = os.path.join(tracer_out_path, instance)
         for input_dir in os.listdir(instance_path):
@@ -100,58 +138,78 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
             input_ref = os.path.join(instance, input_dir)
 
             # Fill partial_overlaps, load_bases and stack_bases
-            for ai, ma_set in overlaps:
-                if ai not in tmp_partial_overlaps:
-                    tmp_partial_overlaps[ai] = deque()
+            for ia, ma_set in overlaps:
+                writes: Deque[MemoryAccess] = deque()
+                last_read = None
+                for _ in range(len(ma_set)):
+                    ma = ma_set.popleft()
+                    if ma.accessType == AccessType.WRITE:
+                        writes.append(ma)
+                    else:
+                        if last_read is not None:
+                            writes = remove_masked_writes(writes, ma.accessSize)
+                        last_read = ma
+                        libName, baseAddr = findLib(ma.actualIp, cur_load_bases)
+                        instrAddr = InstructionAddress(ma.ip, ma.actualIp, libName, baseAddr)
+                        # Temporarily append the read access to the deque (cost O(1))
+                        writes.append(ma)
 
-                tmp_partial_overlaps[ai].append((input_ref, ma_set))
+                        if instrAddr in tmp_partial_overlaps:
+                            maSet = tmp_partial_overlaps[instrAddr]
+                            maSet.append(MASet.create(input_ref, writes))
+                        else:
+                            newSet = deque()
+                            newSet.append(MASet.create(input_ref, writes))
+                            tmp_partial_overlaps[instrAddr] = newSet
 
-            load_bases.append((input_ref, cur_load_bases))
-            stack_bases.append((input_ref, cur_stack_base))
+                        # Remove the read access from |writes| (cost O(1))
+                        writes.pop()
+
+            load_bases.update([(input_ref, cur_load_bases)])
+            stack_bases.update([(input_ref, cur_stack_base)])
 
     # Sort partial_overlaps by AccessIndex (increasing address, decreasing access size)
-    sorted_partial_overlaps = sorted(tmp_partial_overlaps.items(), key=lambda x: x[0])
+    # sorted_partial_overlaps = sorted(tmp_partial_overlaps.items(), key=lambda x: x[0])
 
     print("Starting merging sets...")
 
-    # Try to merge those (inputRef, MemoryAccess) tuples whose memory access set is the same
-    for ai, access_set in sorted_partial_overlaps:
-        initial = partial_overlaps[ai] if ai in partial_overlaps else deque()
+    for ia, access_set in tmp_partial_overlaps.items():
+        initial = partial_overlaps[ia] if ia in partial_overlaps else deque()
         ma_sets = reduce(merge_ma_sets, access_set, initial)
-        partial_overlaps[ai] = ma_sets
+        partial_overlaps[ia] = ma_sets
 
     if len(ignored_addresses) > 0:
         print("Removing ignored addresses...")
 
         # Remove ignored addresses and related writes
-        for ai in partial_overlaps:
-            access_set = partial_overlaps[ai]
-            new_access_set: Deque[Tuple[Deque[str], Deque[MemoryAccess]]] = deque()
+        for ia in partial_overlaps:
+            access_set = partial_overlaps[ia]
+            new_access_set: Deque[MASet] = deque()
 
-            for instances, ma_set in access_set:
-                ma_set = remove_ignored_addresses(ma_set)
-                if len(ma_set) > 0:
-                    new_access_set.append((instances, ma_set))
+            for maSet in access_set:
+                newSet = remove_ignored_addresses(maSet.set)
+                if len(newSet) > 0:
+                    maSet.replaceMASet(newSet)
+                    new_access_set.append(maSet)
 
             if len(new_access_set) > 0:
-                partial_overlaps[ai] = new_access_set
+                partial_overlaps[ia] = new_access_set
             else:
-                del partial_overlaps[ai]
+                del partial_overlaps[ia]
 
 
     # Generate textual report files: 1 with only the accesses, 1 with address bases
     print("Generating textual report...")
     # Generate base addresses report
     with open("base_addresses.log", "w") as f:
-        while(len(load_bases) != 0):
-            imgs = load_bases.popleft()
-            stack = stack_bases.popleft()
+        for input_ref in load_bases:
+            imgs = load_bases[input_ref]
+            stack = stack_bases[input_ref]
 
-            input_ref, img_list = imgs
             f.write("===============================================\n")
             f.write(input_ref)
             f.write("\n===============================================\n")
-            for img_name, img_addr in img_list:
+            for img_name, img_addr in imgs:
                 f.write("{0} base address: {1}\n".format(img_name, img_addr))
             
             f.write("Stack base address: {0}\n".format(stack[1]))
@@ -166,47 +224,21 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
         po.writelines(["** NO OVERLAPS DETECTED **"])
         return
 
-    for ai, access_set in partial_overlaps.items():
-        header = " ".join([str(ai.address), "-", str(ai.size)])
+    for ia, access_set in partial_overlaps.items():
+        if len(access_set) < 2:
+            continue
+        header = str(ia)
         print_table_header(po, header)
 
-        for input_refs, ma_set in access_set:
+        for maSet in access_set:
             lines = deque()
             lines.append("Generated by inputs:")
-            lines.extend(map(lambda x: " ".join(["[*]", x]), input_refs))
+            lines.extend(map(lambda x: " ".join(["[*]", x]), maSet.origins))
             lines.append("***********************************************")
 
-            for entry in ma_set:
-                # Print overlap entries
-                str_list = []
-                if entry.isPartialOverlap:
-                    str_list.append("=> ")
-                else:
-                    str_list.append("   ")
-
-                if entry.isUninitializedRead:
-                    str_list.append("*")
-
-                str_list.append(entry.ip + " (" + entry.actualIp + "):")
-                str_list.append("\t" if len(entry.disasm) > 0 else " ")
-                str_list.append(entry.disasm)
-                str_list.append(" W " if entry.accessType == AccessType.WRITE else " R ")
-                str_list.append(str(entry.accessSize) + " B ")
-                if entry.memType == MemType.STACK:
-                    str_list.append("@ (sp ")
-                    str_list.append("+ " if entry.spOffset >= 0 else "- ")
-                    str_list.append(str(abs(entry.spOffset)))
-                    str_list.append("); ")
-                    str_list.append("(bp ")
-                    str_list.append("+ " if entry.bpOffset >= 0 else "- ")
-                    str_list.append(str(abs(entry.bpOffset)))
-                    str_list.append("); ")
-                
-                while len(entry.uninitializedIntervals) > 0:
-                    lower_bound, upper_bound = entry.uninitializedIntervals.popleft()
-                    str_list.append("[" + str(lower_bound) + " ~ " + str(upper_bound) + "]")
-
-                lines.append("".join(str_list))
+            for entry in maSet.set:
+                # Print overlap entries 
+                lines.append(str(entry))
 
             lines.append("***********************************************\n")
             po.writelines(lines)
