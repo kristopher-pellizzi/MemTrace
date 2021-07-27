@@ -39,6 +39,7 @@ using std::map;
 using std::tr1::unordered_set;
 using std::unordered_map;
 using std::vector;
+using std::list;
 using std::set;
 
 /* ===================================================================== */
@@ -68,7 +69,8 @@ std::ostream * out = &cerr;
 // pointer) and simultaneously allows us to free them all at the end of the analysis avoiding double delete on the pointers 
 // NOTE: more than 1 MemoryAccess object may contain the same pointer, because Intel PIN uses an instruction cache to re-instrument instructions
 // that it recently instrumented (e.g. in loops)
-std::list<std::string*> disasmList;
+std::list<std::string*> disasmPtrs;
+std::list<std::list<REG>*> regsPtrs;
 
 bool heuristicEnabled = false;
 bool heuristicLibsOnly = false;
@@ -81,6 +83,7 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
+map<REG, std::pair<AccessIndex, MemoryAccess>> pendingUninitializedReads;
 
 // The following map is used as a temporary storage for write accesses: instead of 
 // directly insert them inside |memAccesses|, we insert them here (only 1 for each AccessIndex). Every 
@@ -203,6 +206,77 @@ bool isCallInstruction(OPCODE opcode){
     return
         opcode == XED_ICLASS_CALL_FAR ||
         opcode == XED_ICLASS_CALL_NEAR;
+}
+
+bool isCmpInstruction(OPCODE opcode){
+    /*
+    Not included instructions:
+    [*] XED_ICLASS_CMPXCHG (all variants)
+    [*] XED_ICLASS_REP[E | NE]_CMP (all variants)
+    */
+
+    switch(opcode){
+        case XED_ICLASS_CMP:
+        case XED_ICLASS_CMPPD:
+        case XED_ICLASS_CMPPS:
+        case XED_ICLASS_CMPSB:
+        case XED_ICLASS_CMPSD:
+        case XED_ICLASS_CMPSD_XMM:
+        case XED_ICLASS_CMPSQ:
+        case XED_ICLASS_CMPSS:
+        case XED_ICLASS_CMPSW:
+        case XED_ICLASS_PCMPEQB:
+        case XED_ICLASS_PCMPEQD:
+        case XED_ICLASS_PCMPEQQ:
+        case XED_ICLASS_PCMPEQW:
+        case XED_ICLASS_PCMPESTRI:
+        case XED_ICLASS_PCMPESTRI64:
+        case XED_ICLASS_PCMPESTRM:
+        case XED_ICLASS_PCMPESTRM64:
+        case XED_ICLASS_PCMPGTB:
+        case XED_ICLASS_PCMPGTD:
+        case XED_ICLASS_PCMPGTQ:
+        case XED_ICLASS_PCMPGTW:
+        case XED_ICLASS_PCMPISTRI:
+        case XED_ICLASS_PCMPISTRI64:
+        case XED_ICLASS_PCMPISTRM:
+        case XED_ICLASS_PFCMPEQ:
+        case XED_ICLASS_PFCMPGE:
+        case XED_ICLASS_PFCMPGT:
+        case XED_ICLASS_VCMPPD:
+        case XED_ICLASS_VCMPPS:
+        case XED_ICLASS_VCMPSD:
+        case XED_ICLASS_VCMPSS:
+        case XED_ICLASS_VPCMPB:
+        case XED_ICLASS_VPCMPD:
+        case XED_ICLASS_VPCMPEQB:
+        case XED_ICLASS_VPCMPEQD:
+        case XED_ICLASS_VPCMPEQQ:
+        case XED_ICLASS_VPCMPEQW:
+        case XED_ICLASS_VPCMPESTRI:
+        case XED_ICLASS_VPCMPESTRI64:
+        case XED_ICLASS_VPCMPESTRM:
+        case XED_ICLASS_VPCMPESTRM64:
+        case XED_ICLASS_VPCMPGTB:
+        case XED_ICLASS_VPCMPGTD:
+        case XED_ICLASS_VPCMPGTQ:
+        case XED_ICLASS_VPCMPGTW:
+        case XED_ICLASS_VPCMPISTRI:
+        case XED_ICLASS_VPCMPISTRI64:
+        case XED_ICLASS_VPCMPISTRM:
+        case XED_ICLASS_VPCMPQ:
+        case XED_ICLASS_VPCMPUB:
+        case XED_ICLASS_VPCMPUD:
+        case XED_ICLASS_VPCMPUQ:
+        case XED_ICLASS_VPCMPUW:
+        case XED_ICLASS_VPCMPW:
+            return true;
+
+        default:
+            return false;
+
+
+    }
 }
 
 // This function can be quite expensive if there are many malloc allocating
@@ -439,6 +513,13 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
         unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
         v.insert(ma);
         memAccesses[ai] = v;
+    }
+}
+
+void addPendingRead(list<REG> regs, AccessIndex ai, MemoryAccess ma){
+    std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
+    for(auto iter = regs.begin(); iter != regs.end(); ++iter){
+        pendingUninitializedReads[*iter] = entry;
     }
 }
 
@@ -763,15 +844,16 @@ bool initUpToNullByte(unsigned nulIndex, set<std::pair<unsigned, unsigned>> inte
 }
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                UINT32 opcode_arg, bool isFirstVisit)
+                UINT32 opcode_arg, VOID* dstRegs)
 {
     #ifdef DEBUG
         static std::ofstream mtrace("mtrace.log");
         print_profile(applicationTiming, "Tracing new memory access");
     #endif
 
-    if(size == 0)
+    if(size == 0){
         return;
+    }
     ADDRINT sp = PIN_GetContextReg(ctxt, REG_STACK_PTR);
     OPCODE opcode = opcode_arg;
 
@@ -805,10 +887,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         mallocTemporaryWriteStorage[ai] = ma;
         return;
     }
-    else
+    else{
         // The access is not to the stack, nor to the heap, nor is a write access happening during a malloc
         // Therefore, it is of no interest for the tool
         return;
+    }
 
     // This is an application instruction
     if(ip >= textStart && ip <= textEnd){
@@ -876,6 +959,12 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         }
     }
     else{
+
+        // Ignore reads performed during the execution of any variant of a cmp instruction
+        if(isCmpInstruction(opcode)){
+            return;
+        }
+
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing read access");
         #endif
@@ -953,7 +1042,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             auto overlapGroup = reportedGroups.find(ma);
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
-                storeMemoryAccess(ai, ma);
+                if (dstRegs != NULL)
+                    addPendingRead(*static_cast<list<REG>*>(dstRegs), ai, ma);
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
@@ -1021,7 +1111,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 // If this is the first time this read access is happening within this context, store it
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
-                    storeMemoryAccess(ai, ma);
+                    if(dstRegs != NULL)
+                        addPendingRead(*static_cast<list<REG>*>(dstRegs), ai, ma);
 
                     for(std::pair<AccessIndex, MemoryAccess>& write_access : writes){
                         storeMemoryAccess(write_access.first, write_access.second);
@@ -1037,28 +1128,30 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
 // for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                    UINT32 opcode, bool isFirstVisit)
+                    UINT32 opcode, VOID* dstRegs)
 {
-    if(!entryPointExecuted)
+    if(!entryPointExecuted){
         return;
+    }
 
     // The procedure call pushes the return address on the stack
     currentShadow = stack.getPtr();
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs);
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                UINT32 opcode, bool isFirstVisit)
+                UINT32 opcode, VOID* dstRegs)
 {
-    if(!entryPointExecuted)
+    if(!entryPointExecuted){
         return;
+    }
         
     // The return instruction, pops the return address from the stack
     currentShadow = stack.getPtr();
 
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, isFirstVisit);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs);
 
     // Reset the shadow memory of the "freed" stack frame.
     // NOTE: at this point we are sure currentShadow is an instance of StackShadow, so we can perform
@@ -1073,7 +1166,7 @@ void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v)
     #ifdef DEBUG
         string* disasm = new string("syscall");
         // Constant complexity insertion
-        disasmList.insert(disasmList.end(), disasm);
+        disasmPtrs.insert(disasmPtrs.end(), disasm);
     #else
         string* disasm = NULL;
     #endif
@@ -1083,7 +1176,7 @@ void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v)
     // does not make any difference
     OPCODE opcode = XED_ICLASS_SYSCALL_AMD;
     for(auto i = v.begin(); i != v.end(); ++i){
-        memtrace(tid, ctxt, i->getType(), syscallIP, i->getAddress(), i->getSize(), disasm, opcode, false);    
+        memtrace(tid, ctxt, i->getType(), syscallIP, i->getAddress(), i->getSize(), disasm, opcode, NULL);    
     }
 }
 
@@ -1151,6 +1244,48 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
     #endif
     set<SyscallMemAccess> accesses = SyscallHandler::getInstance().getReadsWrites();
     addSyscallToAccesses(threadIndex, ctxt, accesses);
+}
+
+VOID checkDestRegisters(VOID* dstRegs){
+    if(pendingUninitializedReads.size() == 0)
+        return;
+        
+    list<REG> regs = *static_cast<list<REG>*>(dstRegs);
+
+    for(auto iter = regs.begin(); iter != regs.end(); ++iter){
+        /*
+        If the destination register is a key in the pending reads map,
+        remove its entry, as it is going to be overwritten, and it has never
+        been used as a source register (possible false positive)
+        */
+        auto readIter = pendingUninitializedReads.find(*iter);
+        if(readIter != pendingUninitializedReads.end()){
+            pendingUninitializedReads.erase(readIter);
+        }
+    }
+}
+
+VOID checkSourceRegisters(VOID* srcRegs){
+    if(pendingUninitializedReads.size() == 0)
+        return;
+
+    list<REG> regs = *static_cast<list<REG>*>(srcRegs);
+
+    for(auto iter = regs.begin(); iter != regs.end(); ++iter){
+        /*
+        If the instruction is reading from
+        a register previously loaded with an uninitialized read,
+        permanently store the read to the memAccesses map, and remove it 
+        from the pending reads map.
+        */
+        auto readIter = pendingUninitializedReads.find(*iter);
+
+        if(readIter != pendingUninitializedReads.end()){
+            auto& access = readIter->second;
+            storeMemoryAccess(access.first, access.second);
+            pendingUninitializedReads.erase(readIter);
+        }
+    }
 }
 
 /* ===================================================================== */
@@ -1269,6 +1404,47 @@ VOID Instruction(INS ins, VOID* v){
     bool isProcedureCall = INS_IsProcedureCall(ins);
     bool isRet = INS_IsRet(ins);
     UINT32 memoperands = INS_MemoryOperandCount(ins);
+    OPCODE opcode = INS_Opcode(ins);
+    UINT32 readRegisters = INS_MaxNumRRegs(ins);
+    UINT32 writtenRegisters = INS_MaxNumWRegs(ins);
+    list<REG>* srcRegs = new list<REG>(readRegisters);
+    list<REG>* dstRegs = new list<REG>(writtenRegisters);
+    regsPtrs.push_back(srcRegs);
+    regsPtrs.push_back(dstRegs);
+
+    if(!isCmpInstruction(opcode)){
+        for(UINT32 regop = 0; regop < readRegisters; ++regop){
+            REG src = INS_RegR(ins, regop);
+            if(!REG_is_flags(src)){
+                srcRegs->push_front(src);
+            }
+        }
+    }
+
+    INS_InsertPredicatedCall(
+        ins,
+        IPOINT_BEFORE,
+        (AFUNPTR) checkSourceRegisters,
+        IARG_PTR, srcRegs,
+        IARG_CALL_ORDER, CALL_ORDER_FIRST,
+        IARG_END
+    );
+
+    for(UINT32 regop = 0; regop < writtenRegisters; ++regop){
+        REG dst = INS_RegW(ins, regop);
+        if(!REG_is_flags(dst)){
+            dstRegs->push_front(dst);
+        }
+    }
+
+    INS_InsertPredicatedCall(
+        ins, 
+        IPOINT_BEFORE,
+        (AFUNPTR) checkDestRegisters,
+        IARG_PTR, dstRegs,
+        IARG_CALL_ORDER, CALL_ORDER_FIRST + 1,
+        IARG_END
+    );
 
     // If it is not an instruction accessing memory, it is of no interest.
     // Return without doing anything else.
@@ -1280,12 +1456,10 @@ VOID Instruction(INS ins, VOID* v){
         #ifdef DEBUG
             std::string* disassembly = new std::string(INS_Disassemble(ins));
             // Constant complexity insertion
-            disasmList.insert(disasmList.end(), disassembly);
+            disasmPtrs.insert(disasmPtrs.end(), disassembly);
         #else
             std::string* disassembly = NULL;
         #endif
-
-        OPCODE opcode = INS_Opcode(ins);
 
         for(UINT32 memop = 0; memop < memoperands; memop++){
             // Write memory access
@@ -1304,7 +1478,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYWRITE_SIZE,
                         IARG_PTR, disassembly, 
                         IARG_UINT32, opcode, 
-                        IARG_BOOL, memop == 0,
+                        IARG_PTR, dstRegs,
                         IARG_END
                     );
 
@@ -1328,7 +1502,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYWRITE_SIZE,
                         IARG_PTR, disassembly, 
                         IARG_UINT32, opcode, 
-                        IARG_BOOL, memop == 0,
+                        IARG_PTR, dstRegs,
                         IARG_END
                     ); 
                 }          
@@ -1350,7 +1524,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYREAD_SIZE,
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
-                        IARG_BOOL, memop == 0,
+                        IARG_PTR, dstRegs,
                         IARG_END
                     );
 
@@ -1375,7 +1549,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYREAD_SIZE, 
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
-                        IARG_BOOL, memop == 0,
+                        IARG_PTR, dstRegs,
                         IARG_END
                     );
                 }
@@ -1714,8 +1888,12 @@ VOID Fini(INT32 code, VOID *v)
         }
     }
 
-    // Free all strings allocated to contain instruction disassembly, if any
-    for(auto iter = disasmList.begin(); iter != disasmList.end(); ++iter){
+    // Free all ptrs allocated to pass data structures to analysis functions
+    for(auto iter = disasmPtrs.begin(); iter != disasmPtrs.end(); ++iter){
+        delete *iter;
+    }
+
+    for(auto iter = regsPtrs.begin(); iter != regsPtrs.end(); ++iter){
         delete *iter;
     }
 
