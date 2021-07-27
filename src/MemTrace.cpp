@@ -74,6 +74,7 @@ std::list<std::list<REG>*> regsPtrs;
 
 bool heuristicEnabled = false;
 bool heuristicLibsOnly = false;
+bool heuristicAlreadyApplied = false;
 
 ADDRINT textStart;
 ADDRINT textEnd;
@@ -984,6 +985,19 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             // Being an heuristics, this is not always precise, and may lead to false negatives (e.g. if memcpy is 
             // is implemented using SIMD extensions as well, memcpys may be lost).
             if(heuristicEnabled && size >= 16 && opcode != XED_ICLASS_SYSCALL_AMD && (!heuristicLibsOnly || ip < textStart || ip > textEnd)){
+                set<std::pair<unsigned, unsigned>> intervals = ma.computeIntervals();
+
+                if(intervals.size() == 1){
+                    std::pair<unsigned, unsigned> interval = *(intervals.begin());
+                    bool isCompletelyUninitialized = (interval.first == 0 && interval.second == size - 1);
+
+                    if(isCompletelyUninitialized && heuristicAlreadyApplied){
+                        return;
+                    }
+                }
+
+                heuristicAlreadyApplied = false;
+
                 char* content = (char*) malloc(sizeof(char) * size);
                 PIN_SafeCopy(content, (void*) addr, size);
 
@@ -1022,7 +1036,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 // At this point, nulPtr points to the first occurrence of '\0' that is also initialized,
                 // and nulIndex is the index of that character from the beginning of the considered access
                 if(nulPtr != NULL){
-                    set<std::pair<unsigned, unsigned>> intervals = ma.computeIntervals();
                     // If any of these conditions evaluated to true, it is likely to be executin some operation on a string
                     if(
                         !hasOnlyEvenIntervals(intervals) || // There's at least 1 interval with an odd number of uninitialized bytes (note that every other numeric type has at least 2 bytes in C)
@@ -1030,6 +1043,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     ){
                         free(content);
                         free(uninitializedInterval);
+                        heuristicAlreadyApplied = true;
                         return;
                     }
                 }
@@ -1151,6 +1165,7 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
+    heuristicAlreadyApplied = false;
     memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs);
 
     // Reset the shadow memory of the "freed" stack frame.
@@ -1249,7 +1264,7 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
 VOID checkDestRegisters(VOID* dstRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
-        
+
     list<REG> regs = *static_cast<list<REG>*>(dstRegs);
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
