@@ -1284,6 +1284,7 @@ VOID checkSourceRegisters(VOID* srcRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
 
+    set<MemoryAccess> alreadyInserted;
     list<REG> regs = *static_cast<list<REG>*>(srcRegs);
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
@@ -1297,7 +1298,11 @@ VOID checkSourceRegisters(VOID* srcRegs){
 
         if(readIter != pendingUninitializedReads.end()){
             auto& access = readIter->second;
-            storeMemoryAccess(access.first, access.second);
+            // Avoid inserting the same read access more than once (in case it has written more than 1 dst register)
+            if(alreadyInserted.find(access.second) == alreadyInserted.end()){
+                storeMemoryAccess(access.first, access.second);
+                alreadyInserted.insert(access.second);
+            }
             pendingUninitializedReads.erase(readIter);
         }
     }
@@ -1422,8 +1427,8 @@ VOID Instruction(INS ins, VOID* v){
     OPCODE opcode = INS_Opcode(ins);
     UINT32 readRegisters = INS_MaxNumRRegs(ins);
     UINT32 writtenRegisters = INS_MaxNumWRegs(ins);
-    list<REG>* srcRegs = new list<REG>(readRegisters);
-    list<REG>* dstRegs = new list<REG>(writtenRegisters);
+    list<REG>* srcRegs = new list<REG>();
+    list<REG>* dstRegs = new list<REG>();
     regsPtrs.push_back(srcRegs);
     regsPtrs.push_back(dstRegs);
 
@@ -1447,7 +1452,7 @@ VOID Instruction(INS ins, VOID* v){
 
     for(UINT32 regop = 0; regop < writtenRegisters; ++regop){
         REG dst = INS_RegW(ins, regop);
-        if(!REG_is_flags(dst)){
+        if(!REG_is_flags(dst) && dst != REG_STACK_PTR && dst != REG_INST_PTR){
             dstRegs->push_front(dst);
         }
     }
