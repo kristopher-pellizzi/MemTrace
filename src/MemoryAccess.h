@@ -151,7 +151,7 @@ class MemoryAccess{
                 }
 
                 size_t operator()(const MemoryAccess& ma) const{
-                    size_t ret = ma.executionOrder ^ (ma.executionOrder >> (size * 8));
+                    size_t ret = ma.executionOrder ^ (ma.executionOrder >> size);
                     return ret;
                 }
         };
