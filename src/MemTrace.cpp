@@ -79,6 +79,8 @@ bool heuristicAlreadyApplied = false;
 ADDRINT textStart;
 ADDRINT textEnd;
 ADDRINT loadOffset;
+ADDRINT loaderBaseAddr = -1;
+ADDRINT loaderHighestAddr = -1;
 
 ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
@@ -1325,12 +1327,21 @@ VOID Image(IMG img, VOID* v){
             }
         }
 
-        loadOffset = IMG_LoadOffset(img);
+        loadOffset = IMG_LowAddress(img);
     }
 
     const std::string& name = IMG_Name(img);
-    ADDRINT offset = IMG_LoadOffset(img);
+    ADDRINT offset = IMG_LowAddress(img);
     *out << name << " loaded @ 0x" << std::hex << offset << endl;
+    /*
+    If the image is the loader (library ld.so for Linux), store its address, as it will be needed during analysis
+    to ignore its instructions. This is done because the writes performed by the loader, seen by the same uninitialized 
+    read, may change between different execution of the same command.
+    */
+    if(IMG_IsInterpreter(img)){
+        loaderBaseAddr = offset;
+        loaderHighestAddr = IMG_HighAddress(img);
+    }
 
     imgs_base.insert(std::pair<std::string, ADDRINT>(name, offset));
 
@@ -1428,12 +1439,26 @@ bool isZeroingXor(INS ins, OPCODE opcode, UINT32 readRegisters){
     return firstOperand == secondOperand;
 }
 
+bool isLoaderInstruction(INS ins){
+    /*
+    If no loader library has been loaded, the instruction can't be
+    a loader instruction
+    */
+    if(loaderBaseAddr == loaderHighestAddr)
+        return false;
+
+    ADDRINT addr = INS_Address(ins);
+    return addr >= loaderBaseAddr && addr <= loaderHighestAddr;
+}
+
 VOID Instruction(INS ins, VOID* v){
     // Prefetch instruction is used to simply trigger memory areas in order to
     // move them to processor's cache. It does not affect program behaviour,
     // but PIN detects it as a memory read operation, thus producing
     // an uninitialized read.
-    if(INS_IsPrefetch(ins))
+    // Loader instructions create confusion, as it seems that the executed instructions
+    // may change even if we execute the same command again. So, let's ignore them.
+    if(INS_IsPrefetch(ins) || isLoaderInstruction(ins))
         return;
 
     
