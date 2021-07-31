@@ -1412,6 +1412,22 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
     #endif
 }
 
+/*
+Return true if the xor instruction is a zeroing xor, i.e. an instruction of type "xor rdi, rdi"
+*/
+bool isZeroingXor(INS ins, OPCODE opcode, UINT32 readRegisters){
+    /*
+    If the instruction is not a xor or the xor instruction has only 1 source register 
+    (the other operand is an immediate), then it can't be a zeroing xor.
+    */
+    if(opcode != XED_ICLASS_XOR || readRegisters < 2)
+        return false;
+
+    REG firstOperand = INS_RegR(ins, 0);
+    REG secondOperand = INS_RegR(ins, 1);
+    return firstOperand == secondOperand;
+}
+
 VOID Instruction(INS ins, VOID* v){
     // Prefetch instruction is used to simply trigger memory areas in order to
     // move them to processor's cache. It does not affect program behaviour,
@@ -1432,7 +1448,14 @@ VOID Instruction(INS ins, VOID* v){
     regsPtrs.push_back(srcRegs);
     regsPtrs.push_back(dstRegs);
 
-    if(!isCmpInstruction(opcode)){
+    /*
+    We are ignoring 2 kind of register usage:
+    [*] If the register is used by a cmp instruction, it is not so relevant, as we are interested in
+        leaks, not uninitialized memory usage in general
+    [*] If the register is used by a zeroing xor, it is not relevant, because the only effect of such kind of an 
+        instruction is to set the register to 0, thus throwing away any value it contains.
+    */
+    if(!isCmpInstruction(opcode) && !isZeroingXor(ins, opcode, readRegisters)){
         for(UINT32 regop = 0; regop < readRegisters; ++regop){
             REG src = INS_RegR(ins, regop);
             if(!REG_is_flags(src)){
