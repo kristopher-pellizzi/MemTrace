@@ -15,6 +15,10 @@ def parse_args():
     return parser.parse_args()
 
 
+def isInputPath(arg, testcase_path):
+    return b"input" in arg and os.path.basename(testcase_path) in arg
+
+
 def main():
     args = parse_args()
     
@@ -27,7 +31,10 @@ def main():
     with open(args_path, "rb") as f:
         arg = f.readline()
         while len(arg) > 0:
-            argv.append(arg[:-1])
+            if isInputPath(arg, testcase_path):
+                argv.append(os.path.join(testcase_path, b"input"))
+            else:
+                argv.append(arg[:-1])
             arg = f.readline()
 
     with open("output", "w") as f:
