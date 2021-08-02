@@ -1439,7 +1439,7 @@ bool isZeroingXor(INS ins, OPCODE opcode, UINT32 readRegisters){
     return firstOperand == secondOperand;
 }
 
-bool isLoaderInstruction(INS ins){
+bool isLoaderInstruction(ADDRINT addr){
     /*
     If no loader library has been loaded, the instruction can't be
     a loader instruction
@@ -1447,7 +1447,6 @@ bool isLoaderInstruction(INS ins){
     if(loaderBaseAddr == loaderHighestAddr)
         return false;
 
-    ADDRINT addr = INS_Address(ins);
     return addr >= loaderBaseAddr && addr <= loaderHighestAddr;
 }
 
@@ -1456,9 +1455,7 @@ VOID Instruction(INS ins, VOID* v){
     // move them to processor's cache. It does not affect program behaviour,
     // but PIN detects it as a memory read operation, thus producing
     // an uninitialized read.
-    // Loader instructions create confusion, as it seems that the executed instructions
-    // may change even if we execute the same command again. So, let's ignore them.
-    if(INS_IsPrefetch(ins) || isLoaderInstruction(ins))
+    if(INS_IsPrefetch(ins))
         return;
 
     
@@ -1701,6 +1698,10 @@ VOID Fini(INT32 code, VOID *v)
             memOverlaps << it->first.getSecond() << ";";
 
             for(set<MemoryAccess>::iterator v_it = v.begin(); v_it != v.end(); v_it++){
+                // Do not report instructions coming from the loader's library
+                if(isLoaderInstruction(v_it->getActualIP()))
+                    continue;
+                
                 memOverlaps.write((v_it->getIsUninitializedRead() ? "\x0a" : "\x0b"), 1);
                 tmp = v_it->getIP();
                 memOverlaps.write(reinterpret_cast<const char*>(&tmp), regSize);
@@ -1846,6 +1847,10 @@ VOID Fini(INT32 code, VOID *v)
         #endif
         
         for(set<PartialOverlapAccess>::iterator v_it = v.begin(); v_it != v.end(); ++v_it){
+            if(isLoaderInstruction(v_it->getActualIP())){
+                continue;
+            }
+            
             void* uninitializedOverlap = NULL;
             int overlapBeginning = v_it->getAddress() - it->first.getFirst();
             if(overlapBeginning < 0)
