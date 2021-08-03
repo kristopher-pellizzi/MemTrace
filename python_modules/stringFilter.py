@@ -16,7 +16,15 @@ debug_folders = {"/usr/lib/debug", "/lib/debug", "/usr/bin/.debug"}
 
 detected_debug_file = None
 
-def find_debug_path(name):
+def find_debug_path(name, feellucky = False):
+    '''
+    Searches for the debug symbols file of libc library inside the commonly used folders.
+    Returns the detected debug symbols file, if any, or the path passed as argument.
+    Since there may be many locations for the same debug symbols file, or many files containing
+    "libc" as part of their name, this is thought to be an interactive function (requires user's interaction).
+    However, it is possible to set the flag |feellucky| to disable interactive mode, and accept the first library
+    detected. Note that in this way, it is possible that the wrong library is selected.
+    '''
     global detected_debug_file
 
     if detected_debug_file is None:
@@ -26,17 +34,63 @@ def find_debug_path(name):
                 continue
 
             full_path = os.path.join(path, dirname)
+            libs = []
             for lib_name in os.listdir(full_path):
                 if 'libc' in lib_name:
-                    detected_debug_file = os.path.join(full_path, lib_name)
-                    print("Debug file detected: " , detected_debug_file)
+                    libs.append(lib_name)
+
+            libs_num = len(libs)
+
+            if libs_num == 0:
+                continue
+            elif libs_num == 1:
+                debug_path = os.path.join(full_path, libs[0])
+                print("Debug file detected: ", debug_path)
+                valid_choice = False
+                selected = False
+                while not valid_choice:
+                    res = input("Use this file? [y/n]: ")
+                    if res.lower() == "y":
+                        detected_debug_file = debug_path
+                        print(debug_path, " selected")
+                        selected = True
+                        valid_choice = True
+                    elif res.lower() == "n":
+                        valid_choice = True
+                        
+                if selected:
                     break
-            
-            if detected_debug_file is not None:
-                break
+            else:
+                print("Many libraries found with 'libc' as part of its name:")
+                for i in range(libs_num):
+                    debug_path = os.path.join(full_path, libs[i])
+                    print("[", i, "] ", debug_path)
+                print("[", libs_num, "] Cancel")
+                
+                print()
+                valid_choice = False
+                selected = False
+                while not valid_choice:
+                    res = input("Please select a library, or 'cancel' to search in the other folders: ")
+                    try:
+                        int_res = int(res, 10)
+                    except ValueError as e:
+                        print("Invalid input: ", e)
+                        continue
+                    if int_res < libs_num:
+                        detected_debug_file = os.path.join(full_path, libs[int_res])
+                        print(detected_debug_file, " selected")
+                        selected = True
+                        valid_choice = True
+                    elif int_res == libs_num:
+                        valid_choice = True
+
+                if selected:
+                    break
 
         if detected_debug_file is None:
             detected_debug_file = name
+            print("No debug symbols file found. Using library's path: ", name)
 
     return detected_debug_file
 
