@@ -112,6 +112,26 @@ def parse_args(args):
         dest = "single_exec"
     )
 
+    parser.add_argument("--keep-ld",
+        action = "store_true",
+        help =  "Flag used to specify the tool should not ignore instructions executed from the loader's library "
+                "(ld.so in Linux). By default, they are ignored because there may be a degree of randomness which makes "
+                "the instructions from that library always change between executions of the same command."
+                "This may cause some confusion in the final report, for this reason they are ignored.",
+        dest = "keep_ld"
+    )
+
+    parser.add_argument("--disable-string-filter",
+        action = "store_true",
+        help =  "This flag allows to disable the filter which removes all the uninitialized read accesses "
+                "which come from a string function (e.g. strcpy, strcmp...). This filter has been designed because "
+                "string functions are optimized, and because of that, they very often read uninitialized bytes, but "
+                "those uninitialized reads are not relevant. An heuristic is already used to try and reduce this kind of "
+                "false positives. However, when we use the fuzzer and merge all the results, the final report may still "
+                "contain a lot of them.",
+        dest = "disable_string_filter"
+    )
+
     parser.add_argument("--str-opt-heuristic", "-u",
         default = "LIBS",
         help =  "Option used to specify whether to enable the heuristic thought to remove the high number of not "
@@ -344,7 +364,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     tracer_out = os.path.join(fuzz_dir, args.tracer_out)
     inputs_dir = os.path.join(fuzz_out, "Main", "queue")
     launcher_path = os.path.join(sys.path[0], "launcher")
-    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--"] + exec_cmd[:1]
+    tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--keep-ld", args.keep_ld, "--"] + exec_cmd[:1]
     traced_inputs = set()
     # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
     # already exists, so he probably already launched the script.
@@ -514,7 +534,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         time.sleep(10)
 
     print("[Tracer Thread] Generating textual report...")
-    merge_reports(tracer_out)
+    apply_string_filter = not args.disable_string_filter
+    merge_reports(tracer_out, apply_string_filter = apply_string_filter)
 
 
 def move_directory(src, dst_dir, new_name = None):
@@ -761,6 +782,8 @@ def main():
 
     # args is a Namespace object, containing the arguments parsed by parse_args
     args = parse_args(sys_args[0].split(" ")[1:])
+    # Change keep_ld argument to reflect the type Intel PIN expects for the same flag
+    args.keep_ld = "1" if args.keep_ld else "0"
 
     # executable is a string specifying the executable path followed by the arguments to be passed to it
     executable = parse_executable(sys_args[1])
