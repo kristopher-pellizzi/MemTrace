@@ -4,13 +4,16 @@ import functools
 import os
 import argparse
 
+import stringFilter as sf
+
 from functools import reduce
 from collections import deque
 from typing import Deque, Tuple, Dict, List
-from binOverlapParser import remove_useless_writes, parse, ParseError, print_table_header, print_table_footer, PartialOverlapsWriter
+from binOverlapParser import parse, ParseError, print_table_header, print_table_footer, PartialOverlapsWriter
 from parsedData import MemoryAccess, ParseResult, AccessType, MemType
 from instructionAddress import InstructionAddress
-from maSet import MASet
+from maSet import MASet, remove_useless_writes
+from libFinder import findLib
 
 def merge_reports(tracer_out_path: str, ignored_addresses = set()):
 
@@ -103,11 +106,6 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
         return ret
 
 
-    def findLib(ip_str: str, load_bases: List[Tuple[str, str]]):
-        ip = int(ip_str, 16)
-        name, addr = max(filter(lambda x: x[1] <= ip, map(lambda x: (x[0], int(x[1], 16)), load_bases)), key = lambda x: x[1])
-        return (name, hex(addr))
-
     load_bases: Dict[str, List[Tuple[str, str]]] = dict()
     stack_bases: Dict[str, str] = dict()
     partial_overlaps: Dict[InstructionAddress, Deque[MASet]] = dict()
@@ -125,6 +123,9 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
             try:
                 print("Parsing binary report from {0}".format(input_dir_path))
                 parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
+                print("Applying filter")
+                parse_res = sf.apply_filter(parse_res)
+                print("Filter applied")
             except FileNotFoundError:
                 print("Binary report not found in {0}".format(input_dir_path))
                 continue
