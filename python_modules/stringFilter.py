@@ -117,10 +117,8 @@ def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
                 if 'libc' in name:
                     offset = int(ma.actualIp, 16) - int(addr, 16)
                     if offset in already_removed:
-                        print("String operation function was already detected")
                         continue
                     elif offset in already_checked:
-                        print("Not string operation function was already checked")
                         new_ma_set.append(ma)
                         continue
 
@@ -137,7 +135,6 @@ def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
                         print("String operation function found: ", func_name)
                         already_removed.add(int(offset, 16))
                     else:
-                        print("Function name is not a string function: ", func_name)
                         new_ma_set.append(ma)
                         already_checked.add(int(offset, 16))
                 else:
