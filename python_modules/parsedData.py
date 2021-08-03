@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Deque, Tuple
+from typing import Deque, Tuple, List
 
 class InvalidConstructorError(Exception):
     pass
