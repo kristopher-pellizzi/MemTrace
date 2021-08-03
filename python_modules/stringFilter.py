@@ -12,6 +12,9 @@ import os
 # offset is the same as a previously checked one.
 already_removed: Set[int] = set()
 
+# This set will contain the offsets that have already been checked NOT TO belong to a string function
+already_checked: Set[int] = set()
+
 debug_folders = {"/usr/lib/debug", "/lib/debug", "/usr/bin/.debug"}
 
 detected_debug_file = None
@@ -116,6 +119,10 @@ def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
                     if offset in already_removed:
                         print("String operation function was already detected")
                         continue
+                    elif offset in already_checked:
+                        print("Not string operation function was already checked")
+                        new_ma_set.append(ma)
+                        continue
 
                     offset = hex(offset)
                     debug_path = find_debug_path(name)
@@ -123,12 +130,16 @@ def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
                     out, err = p.communicate(b"".join([debug_path.encode("utf-8"), b"\n", offset.encode("utf-8"), b"\n"]))
                     p.wait()
                     func_name = out.decode("utf-8").split("\n")[-2]
-                    if "str" in func_name.lower():
+                    func_name = func_name.lower()
+                    # Cannot find stpcpy or similar functions in the list of functions in string.h header
+                    # This assumes all string related functions contain 'str' or is stpcpy
+                    if "str" in func_name or 'stpcpy' in func_name:
                         print("String operation function found: ", func_name)
                         already_removed.add(int(offset, 16))
                     else:
-                        print("Function name: ", func_name)
+                        print("Function name is not a string function: ", func_name)
                         new_ma_set.append(ma)
+                        already_checked.add(int(offset, 16))
                 else:
                     new_ma_set.append(ma)
 
