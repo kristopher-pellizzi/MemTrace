@@ -336,6 +336,17 @@ def parse_args():
         dest = 'ignored_addresses'
     )
 
+    parser.add_argument("--disable-string-filter",
+        action = "store_true",
+        help =  "This flag allows to disable the filter which removes all the uninitialized read accesses "
+                "which come from a string function (e.g. strcpy, strcmp...). This filter has been designed because "
+                "string functions are optimized, and because of that, they very often read uninitialized bytes, but "
+                "those uninitialized reads are not relevant. An heuristic is already used to try and reduce this kind of "
+                "false positives. However, when we use the fuzzer and merge all the results, the final report may still "
+                "contain a lot of them.",
+        dest = "disable_string_filter"
+    )
+
     return parser.parse_args()
 
 
@@ -344,15 +355,16 @@ def main():
 
     bin_report_dir = args.bin_report_dir
     ignore_if_no_overlapping_write = args.ignore_if_no_overlap
+    apply_string_filter = not args.disable_string_filter
     ignored_addresses = set(args.ignored_addresses)
     fo = FullOverlapsWriter()
     po = PartialOverlapsWriter()
 
 
     parse_res = parse(ignore_if_no_overlapping_write, bin_report_dir, ignored_addresses)
-    print("Applying filter...")
-    parse_res = sf.apply_filter(parse_res)
-    print("Filter applied")
+    if apply_string_filter:
+        print("Applying filter...")
+        parse_res = sf.apply_filter(parse_res)
 
     is_full_overlaps_empty = len(parse_res.full_overlaps) == 0
     is_partial_overlaps_empty = len(parse_res.partial_overlaps) == 0

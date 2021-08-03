@@ -14,7 +14,7 @@ from instructionAddress import InstructionAddress
 from maSet import MASet, remove_useless_writes
 from libFinder import findLib
 
-def merge_reports(tracer_out_path: str, ignored_addresses = set()):
+def merge_reports(tracer_out_path: str, ignored_addresses = set(), apply_string_filter: bool = True):
 
     def merge_ma_sets(accumulator: Deque[MASet], element: MASet):
 
@@ -122,9 +122,9 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set()):
             try:
                 print("Parsing binary report from {0}".format(input_dir_path))
                 parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
-                print("Applying filter")
-                parse_res = sf.apply_filter(parse_res)
-                print("Filter applied")
+                if apply_string_filter:
+                    print("Applying filter")
+                    parse_res = sf.apply_filter(parse_res)
             except FileNotFoundError:
                 print("Binary report not found in {0}".format(input_dir_path))
                 continue
@@ -257,6 +257,17 @@ def parse_args():
         help = "Path of the directory containing the output of the tracer"
     )
 
+    parser.add_argument("--disable-string-filter",
+        action = "store_true",
+        help =  "This flag allows to disable the filter which removes all the uninitialized read accesses "
+                "which come from a string function (e.g. strcpy, strcmp...). This filter has been designed because "
+                "string functions are optimized, and because of that, they very often read uninitialized bytes, but "
+                "those uninitialized reads are not relevant. An heuristic is already used to try and reduce this kind of "
+                "false positives. However, when we use the fuzzer and merge all the results, the final report may still "
+                "contain a lot of them.",
+        dest = "disable_string_filter"
+    )
+
     parser.add_argument("-i", "--ignore",
         default = [],
         action = 'append',
@@ -279,7 +290,8 @@ def parse_args():
 def main():
     args = parse_args()
     ignored_addresses = set(args.ignored_addresses)
-    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses)
+    apply_string_filter = not args.disable_string_filter
+    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses, apply_string_filter)
     print("Finished parsing binary file. Textual reports created")
 
 
