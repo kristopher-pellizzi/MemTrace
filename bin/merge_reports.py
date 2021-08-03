@@ -4,12 +4,11 @@ import functools
 import os
 import argparse
 
-import stringFilter as sf
-
 from functools import reduce
 from collections import deque
 from typing import Deque, Tuple, Dict, List
 from binOverlapParser import parse, ParseError, print_table_header, print_table_footer, PartialOverlapsWriter
+import stringFilter as sf
 from parsedData import MemoryAccess, ParseResult, AccessType, MemType
 from instructionAddress import InstructionAddress
 from maSet import MASet, remove_useless_writes
