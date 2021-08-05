@@ -12,6 +12,9 @@ import argparse as ap
 import re
 import random
 
+from psutil import Process, STATUS_RUNNING
+from collections import deque
+from typing import Deque
 from merge_reports import merge_reports
 
 class MissingExecutableError(Exception):
@@ -288,17 +291,43 @@ def parse_args(args):
 
 def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.Event = None):
 
-    def remove_terminated_processes(proc_list):
-        ongoing_indices = [i for i, el in enumerate(map(lambda x: x.poll(), proc_list)) if el is None]
-        ret = [el for i, el in enumerate(proc_list) if i in ongoing_indices]
+    def remove_terminated_processes(proc_list: Deque[subp.Popen], strikes: Deque[int]):
+        list_len = len(proc_list)
+        ret = deque()
+
+        for _ in range(list_len):
+            proc = proc_list.popleft()
+            proc_strikes = strikes.popleft()
+
+            if proc.poll() is None:
+                # Process is not terminated yet. Verify its status
+                pid = proc.pid
+                status = Process(pid).status()
+                # If the process is not running, increase its strike, otherwise reset them to 0
+                if status != STATUS_RUNNING:
+                    proc_strikes += 1
+                    print("PID {0}: strike {1}".format(pid, proc_strikes))
+                else:
+                    proc_strikes = 0
+
+                if proc_strikes >= 3:
+                    # After 3 strikes, consider the process as stuck, so terminate it
+                    print("Process {0} was stuck. It has been terminated.".format(pid))
+                    proc.terminate()
+                else:
+                    ret.append(proc)
+                    strikes.append(proc_strikes)
+
         return ret
 
-    def wait_process_termination(proc_list):
-        ret = proc_list
-        while len(ret) == len(proc_list):
+
+    def wait_process_termination(proc_list: Deque[subp.Popen], strikes:Deque[int]):
+        ret = deque(proc_list)
+        initial_len = len(proc_list)
+        while len(ret) == initial_len:
             print("[Tracer Thread] Waiting for a process to terminate")
             time.sleep(3)
-            ret = remove_terminated_processes(proc_list)
+            ret = remove_terminated_processes(ret, strikes)
         print("[Tracer Thread] Process terminated")
         return ret
 
@@ -376,7 +405,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     args_dir = os.path.join(fuzz_dir, "args")
     new_inputs_found = True
 
-    processes = list()
+    processes = deque()
+    strikes = deque()
     inputs_dir_set = set()
 
     if not args.no_fuzzing:
@@ -423,7 +453,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     pat = r"sync"
     # Loop interrupts if and only if there are no new_inputs and the fuzzer has been interrupted
     while new_inputs_found or not fuzz_int_event.is_set():
-        processes = remove_terminated_processes(processes)
+        processes = remove_terminated_processes(processes, strikes)
         # This set will contain tuples of type (<Instance_Name>, <Input_File_Name>)
         inputs = set()
         for directory in instance_names:
@@ -470,7 +500,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 tracer_stdin = open("empty_file", "rb")
             
             if len(processes) == args.processes:
-                processes = wait_process_termination(processes)
+                processes = wait_process_termination(processes, strikes)
 
             argv_file_path = os.path.join(input_folder, "argv")
             if args.argv_rand:
@@ -503,6 +533,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 with open(output_file_path, "w") as out:
                     try:
                         processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = out, stderr = subp.STDOUT))
+                        strikes.append(0)
                     except Exception as e:
                         print("Exception happened while launching the tracer")
                         out.write("Exception happened while launching the tracer\n")
@@ -513,6 +544,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             else:
                 try:
                     processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+                    strikes.append(0)
                 except Exception as e:
                     print("Exception happened while launching the tracer")
                     print("Exception:")
@@ -533,6 +565,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             return
         time.sleep(10)
 
+    # TODO: wait for all processes in deque |processes| to be terminated
     print("[Tracer Thread] Generating textual report...")
     apply_string_filter = not args.disable_string_filter
     merge_reports(tracer_out, apply_string_filter = apply_string_filter)
