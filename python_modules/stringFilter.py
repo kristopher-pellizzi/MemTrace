@@ -6,6 +6,7 @@ import subprocess as subp
 from maSet import remove_useless_writes
 import sys
 import os
+from elftools.elf.elffile import ELFFile
 
 # This set will contain the offsets that have already been checked to belong to a string function
 # and as such should be removed from the report. It is used to avoid executing a subprocess if the 
@@ -98,11 +99,29 @@ def find_debug_path(name, feellucky = False):
     return detected_debug_file
 
 
+def find_function_name(elf_path: str, address: int):
+    binary = open(elf_path, "rb")
+    elf = ELFFile(binary)
+
+    symbol_table = elf.get_section_by_name(".symtab")
+    symbols = symbol_table.iter_symbols()
+
+    for symbol in symbols:
+        symbol_info = symbol['st_info']
+        if symbol_info['type'] == 'STT_FUNC':
+            start_addr = symbol['st_value']
+            end_addr = start_addr + symbol['st_size'] - 1
+            if start_addr <= address <= end_addr:
+                return symbol.name
+               
+    return None
+
+
+
 def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
     load_bases = parsedAccesses.load_bases
     stack_base = parsedAccesses.stack_base
     partial_overlaps = parsedAccesses.partial_overlaps
-    function_finder_path = os.path.realpath(os.path.join(sys.path[0], "..", "python_modules", "libcFunctionFinder.py"))
 
     for _ in range(len(partial_overlaps)):
         overlap = partial_overlaps.popleft()
@@ -122,21 +141,25 @@ def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
                         new_ma_set.append(ma)
                         continue
 
-                    offset = hex(offset)
                     debug_path = find_debug_path(name)
-                    p = subp.Popen(["gdb", "-q", "-x", function_finder_path], stdin = subp.PIPE, stdout = subp.PIPE, stderr = subp.STDOUT)
-                    out, err = p.communicate(b"".join([debug_path.encode("utf-8"), b"\n", offset.encode("utf-8"), b"\n"]))
-                    p.wait()
-                    func_name = out.decode("utf-8").split("\n")[-2]
+                    
+                    func_name = find_function_name(debug_path, offset)
+                    
+                    if func_name is None:
+                        print("No function found for address ", hex(offset))
+                        new_ma_set.append(ma)
+                        already_checked.add(offset)
+                        continue
+
                     func_name = func_name.lower()
                     # Cannot find stpcpy or similar functions in the list of functions in string.h header
                     # This assumes all string related functions contain 'str' or is stpcpy
                     if "str" in func_name or 'stpcpy' in func_name:
                         print("String operation function found: ", func_name)
-                        already_removed.add(int(offset, 16))
+                        already_removed.add(offset)
                     else:
                         new_ma_set.append(ma)
-                        already_checked.add(int(offset, 16))
+                        already_checked.add(offset)
                 else:
                     new_ma_set.append(ma)
 
@@ -148,11 +171,33 @@ def apply_filter(parsedAccesses: ParseResult) -> ParseResult:
     return parsedAccesses
 
 
+def parse_args():
+    def parse_address(arg: str) -> int:
+        return int(arg, 16)
+
+    parser = ap.ArgumentParser()
+
+    parser.add_argument("elf_path",
+        help = "Path of the elf to be analyzed",
+    )
+
+    parser.add_argument("address", 
+        help = "Address whose function name is required",
+        type = parse_address
+    )
+
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    function_finder_path = os.path.join(sys.path[0], "libcFunctionFinder.py")
-    p = subp.Popen(["gdb", "-q", "-x", function_finder_path], stdin = subp.PIPE, stdout = subp.PIPE, stderr = subp.STDOUT)
-    out, err = p.communicate(b"".join([b"/lib/debug/lib/x86_64-linux-gnu/libc-2.31.so", b"\n", b"0x186f05", b"\n"]))
-    p.wait()
-    func_name = out.decode("utf-8").split("\n")[-2]
-    print("Instruction @ offset 0x186f05 is part of function ", func_name)
+    import argparse as ap
+    args = parse_args()
+    elf_path = args.elf_path
+    address = args.address
+    func_name = find_function_name(elf_path, address)
+
+    if func_name is None:
+        print("No function can be found for address {0} in {1}".format(hex(address), elf_path))
+    else:
+        print("Instruction @ offset {0} in {1} is part of function {2}".format(hex(address), elf_path, func_name))
 
