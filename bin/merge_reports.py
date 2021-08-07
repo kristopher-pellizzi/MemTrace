@@ -4,9 +4,9 @@ import functools
 import os
 import argparse
 
-from functools import reduce
-from collections import deque
-from typing import Deque, Tuple, Dict, List
+from functools import partial, reduce
+from collections import deque, defaultdict
+from typing import Deque, Tuple, Dict, List, Set
 from binOverlapParser import parse, ParseError, print_table_header, print_table_footer, PartialOverlapsWriter
 import stringFilter as sf
 from parsedData import MemoryAccess, ParseResult, AccessType, MemType
@@ -14,7 +14,11 @@ from instructionAddress import InstructionAddress
 from maSet import MASet, remove_useless_writes
 from libFinder import findLib
 
-def merge_reports(tracer_out_path: str, ignored_addresses = set(), apply_string_filter: bool = True):
+class ArgumentError(Exception):
+    pass
+
+
+def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] = dict(), apply_string_filter: bool = True):
 
     def merge_ma_sets(accumulator: Deque[MASet], element: MASet):
 
@@ -73,14 +77,23 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set(), apply_string_
         return accumulator
 
 
-    def remove_ignored_addresses(ma_set: Deque[MemoryAccess]) -> Deque[MemoryAccess]:
+    def remove_ignored_addresses(maSet: MASet) -> Deque[MemoryAccess]:
         ret = deque()
+        ma_set = maSet.set
+        ignored = 0
 
         while len(ma_set) > 0:
             ma = ma_set.popleft()
-            if ma.isUninitializedRead and int(ma.actualIp, 16) in ignored_addresses:
-                print(ma.actualIp, " ignored")
-                continue
+
+            if ma.isUninitializedRead and len(ignored_addresses) > 0:
+                lib_name, base_addr = findLib(ma.actualIp, load_bases)
+                if lib_name in ignored_addresses:
+                    offset = int(ma.actualIp, 16) - int(base_addr, 16)
+                    offset_set = ignored_addresses[lib_name]
+                    if offset in offset_set:
+                        print("Offset {0} of library {1} ignored".format(hex(offset), lib_name))
+                        ignored += 1
+                        continue
 
             ret.append(ma)
 
@@ -182,21 +195,17 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set(), apply_string_
         print("Removing ignored addresses...")
 
         # Remove ignored addresses and related writes
+        ia_to_ignore: Set[InstructionAddress] = set()
         for ia in partial_overlaps:
-            access_set = partial_overlaps[ia]
-            new_access_set: Deque[MASet] = deque()
+            if ia.libName in ignored_addresses:
+                ignored_set = ignored_addresses[ia.libName]
+                offset = ia.actualIp - ia.baseAddr
+                if offset in ignored_set:
+                    print("Offset {0} of library {1} ignored".format(hex(offset), ia.libName))
+                    ia_to_ignore.add(ia)
 
-            for maSet in access_set:
-                newSet = remove_ignored_addresses(maSet.set)
-                if len(newSet) > 0:
-                    maSet.replaceMASet(newSet)
-                    new_access_set.append(maSet)
-
-            if len(new_access_set) > 0:
-                partial_overlaps[ia] = new_access_set
-            else:
-                del partial_overlaps[ia]
-
+        for ia in ia_to_ignore:
+            del partial_overlaps[ia]
 
     # Generate textual report files: 1 with only the accesses, 1 with address bases
     print("Generating textual report...")
@@ -248,8 +257,42 @@ def merge_reports(tracer_out_path: str, ignored_addresses = set(), apply_string_
 
 def parse_args():
 
-    def parse_hex_addr(hex_str):
-        return int(hex_str, 16)
+    lib = None
+    ignored_addresses: Dict[str, Set[int]] = defaultdict(set)
+
+    def parse_lib(lib_name):
+        nonlocal lib
+
+        lib = lib_name
+
+    def parse_addr(addr_str):
+
+        if lib is None:
+            raise ArgumentError("No library specified before option --ignore")
+
+        toAdd = None
+
+        if '-' in addr_str:
+            operands = list(map(lambda x: x.strip(), addr_str.split('-')))
+            # If there are less or more than 2 operands, or any operand has a length of 0
+            if len(operands) != 2 or len(operands[0]) == 0 or len(operands[1]) == 0:
+                raise ArgumentError("2 operands expected, 1 given")
+            
+            # Note that we are sure len(operands) is 2 at this point
+            for i in range(2):
+                try:
+                    operands[i] = int(operands[i], 0)
+                except ValueError:
+                    raise ArgumentError("Not valid operand {0}".format(operands[i]))
+
+            toAdd = operands[0] - operands[1]
+        else:
+            try:
+                toAdd = int(addr_str, 0)
+            except ValueError:
+                raise ArgumentError("Not valid address: {0}".format(addr_str))
+
+        ignored_addresses[lib].add(toAdd)
 
     parser = argparse.ArgumentParser()
 
@@ -268,28 +311,46 @@ def parse_args():
         dest = "disable_string_filter"
     )
 
+    parser.add_argument("--into",
+        type = parse_lib,
+        help =  "Path of the library from which the next addresses passed to the option --ignore are taken from. "
+                "This paths can be found inside 'partialOverlaps.log'. "
+                "Note that the order of options --into and --ignore is important: every address passed to --ignore is considered "
+                "to be taken from the last library passed to argument --into.",
+        dest = "lib"
+    )
+
     parser.add_argument("-i", "--ignore",
-        default = [],
-        action = 'append',
-        type = parse_hex_addr,
-        dest = "ignored_addresses",
-        help =  "This option allows to specify addresses of instructions to be ignored during parsing."
-                "This option is mainly to be used when the user already verified some of the reported overlaps, and "
+        type = parse_addr,
+        help =  "This option allows to specify addresses of instructions to be ignored during parser."
+                "The main usage of this option is that the user already verified some of the reported overlaps, and "
                 "has selected some not relevant ones. So, it is possible to use this option to re-generate the "
                 "report ignoring those instructions."
-                "The addresses to be provided, are the actual Instruction Pointer of the uninitialized reads you want to ignore."
+                "The addresses to be provided, are the offsets from the corresponding library's beginning of the uninitialized reads " 
+                "you want to ignore. "
                 "All the write accesses only related to those reads will be automatically removed."
                 "Each option '-i' can be used to specify only 1 address, but the option can be used multiple times "
                 "(e.g. './binOverlapParser.py -i 0xdeadbeef -i 0xcafebabe'. "
-                "NOTE: addresses must be provided in hexadecimal form."
+                "Note that the order of options --into and --ignore is important: every address passed to --ignore is considered "
+                "to be taken from the last library passed to argument --into. "
+                "If no argument --into is passed before --ignore is found, an error is raised. "
+                "It is possible to specify addresses to be ignored from multiple libraries. For instance: "
+                "'.../binOverlapParser.py --into path/to/libc --ignore 0xdeadbeef --ignore 0xbadc0c0a --into path/to/another/library --ignore 0xcafebabe'. "
+                "This command will ignore addresses 0xdeadbeef and 0xbadc0c0a from libc and address 0xcafebabe from the other library. "
+                "NOTE: you can pass the addresses in 2 ways: either directly pass the offset from library's beginning, or pass an address subtraction "
+                "where the first operand is the actualIp of the instruction, and the second is the library base address (e.g. '0xdeadbeef - 0xcafebabe')",
+        dest = 'ignored_addresses'
     )
 
-    return parser.parse_args()
+    ret = parser.parse_args()
+    ret.ignored_addresses = ignored_addresses
+
+    return ret
 
 
 def main():
     args = parse_args()
-    ignored_addresses = set(args.ignored_addresses)
+    ignored_addresses: Dict[str, Set[int]] = args.ignored_addresses
     apply_string_filter = not args.disable_string_filter
     merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses, apply_string_filter)
     print("Finished parsing binary file. Textual reports created")
