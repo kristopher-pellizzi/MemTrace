@@ -104,6 +104,9 @@ def find_function_name(elf_path: str, address: int):
     elf = ELFFile(binary)
 
     symbol_table = elf.get_section_by_name(".symtab")
+    if symbol_table is None:
+        return None
+
     symbols = symbol_table.iter_symbols()
 
     for symbol in symbols:
