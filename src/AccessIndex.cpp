@@ -23,5 +23,12 @@ bool AccessIndex::operator!=(const AccessIndex& other) const{
 
 
 bool AccessIndex::LastAccessedByteSorter::operator()(const AccessIndex& ai1, const AccessIndex& ai2) const{
-    return ai1.getFirst() + ai1.getSecond() < ai2.getFirst() + ai2.getSecond();
+    ADDRINT lastByte1 = ai1.getFirst() + ai1.getSecond();
+    ADDRINT lastByte2 = ai2.getFirst() + ai2.getSecond();
+
+    if(lastByte1 != lastByte2){
+        return lastByte1 < lastByte2;
+    }
+    
+    return ai1 < ai2;
 }
