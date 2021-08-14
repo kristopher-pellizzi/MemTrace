@@ -1064,7 +1064,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 if (dstRegs != NULL)
                     addPendingRead(*static_cast<list<REG>*>(dstRegs), ai, ma);
 
-                auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
+                auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 0));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
                 ADDRINT maFirstAccessedByte = ma.getAddress();
                 ADDRINT maLastAccessedByte = maFirstAccessedByte + ma.getSize() - 1;
@@ -1098,7 +1098,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             else{
                 vector<std::pair<AccessIndex, MemoryAccess>> writes;
 
-                auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 1));
+                auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 0));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
                 ADDRINT maFirstAccessedByte = ma.getAddress();
                 ADDRINT maLastAccessedByte = maFirstAccessedByte + ma.getSize() - 1;
