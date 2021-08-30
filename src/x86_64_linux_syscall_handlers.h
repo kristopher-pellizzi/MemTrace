@@ -490,6 +490,27 @@ RETTYPE sys_getsockopt_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_wait4_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal == -1)
+        return ret;
+
+    int* wstatus = (int*) args[1];
+    struct rusage* rusage = (struct rusage*) args[3];
+
+    if(wstatus != NULL){
+        SyscallMemAccess statusMA(args[1], sizeof(int), AccessType::WRITE);
+        ret.insert(statusMA);
+    }
+
+    if(rusage != NULL){
+        SyscallMemAccess rusageMA(args[3], sizeof(struct rusage), AccessType::WRITE);
+        ret.insert(rusageMA);
+    }
+
+    return ret;
+}
+
 RETTYPE sys_uname_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal < 0)
@@ -950,6 +971,27 @@ RETTYPE sys_utimes_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_waitid_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((long long) retVal == -1)
+        return ret;
+
+    struct siginfo* infop = (struct siginfo*) args[2];
+    struct rusage* rusage = (struct rusage*) args[4];
+
+    if(infop != NULL){
+        SyscallMemAccess infopMA(args[2], sizeof(*infop), AccessType::WRITE);
+        ret.insert(infopMA);
+    }
+
+    if(rusage != NULL){
+        SyscallMemAccess rusageMA(args[4], sizeof(*rusage), AccessType::WRITE);
+        ret.insert(rusageMA);
+    }
+
+    return ret;
+}
+
 RETTYPE sys_utimensat_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal < 0)
@@ -1260,6 +1302,7 @@ class HandlerSelector{
             SYSCALL_ENTRY(53, 4, sys_socketpair_handler);
             SYSCALL_ENTRY(54, 5, sys_setsockopt_handler);
             SYSCALL_ENTRY(55, 5, sys_getsockopt_handler);
+            SYSCALL_ENTRY(61, 4, sys_wait4_handler);
             SYSCALL_ENTRY(63, 1, sys_uname_handler);
             SYSCALL_ENTRY(72, 3, sys_fcntl_handler);
             SYSCALL_ENTRY(76, 2, sys_truncate_handler);
@@ -1304,6 +1347,7 @@ class HandlerSelector{
             SYSCALL_ENTRY(229, 2, sys_clock_getres);
             SYSCALL_ENTRY(230, 4, sys_clock_nanosleep);
             SYSCALL_ENTRY(235, 2, sys_utimes_handler);
+            SYSCALL_ENTRY(247, 5, sys_waitid_handler);
             SYSCALL_ENTRY(257, 4, sys_openat_handler);
             SYSCALL_ENTRY(258, 3, sys_mkdirat_handler);
             SYSCALL_ENTRY(259, 4, sys_mknodat_handler);
