@@ -1313,6 +1313,17 @@ VOID checkSourceRegisters(VOID* srcRegs){
     }
 }
 
+/*
+    This analysis function is simply used to update the last executed instruction in case the instruction is a jmp
+    instruction and it is inside the .text section.
+    This is required because it is possible that a jmp instruction makes the program jump outside the .text section
+    (e.g. inside a library), and if we don't update the last executed instruction, the following memory accesses will be stored
+    with an erroneous IP.
+*/
+VOID updateLastExecutedInstruction(ADDRINT ip){
+    lastExecutedInstruction = ip - loadOffset;
+}
+
 /* ===================================================================== */
 // Instrumentation callbacks
 /* ===================================================================== */
@@ -1513,6 +1524,17 @@ VOID Instruction(INS ins, VOID* v){
         IARG_CALL_ORDER, CALL_ORDER_FIRST + 1,
         IARG_END
     );
+
+    ADDRINT ip = INS_Address(ins);
+    if(INS_IsBranch(ins) && ip >= textStart && ip <= textEnd){
+        INS_InsertPredicatedCall(
+            ins,
+            IPOINT_BEFORE,
+            (AFUNPTR) updateLastExecutedInstruction,
+            IARG_INST_PTR,
+            IARG_END
+        );
+    }
 
     // If it is not an instruction accessing memory, it is of no interest.
     // Return without doing anything else.
