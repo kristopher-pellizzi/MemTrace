@@ -18,7 +18,7 @@ class ArgumentError(Exception):
     pass
 
 
-def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] = dict(), apply_string_filter: bool = True):
+def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] = dict(), apply_string_filter: bool = True, report_unique_access_sets = False):
 
     def merge_ma_sets(accumulator: Deque[MASet], element: MASet):
 
@@ -234,7 +234,7 @@ def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] =
         return
 
     for ia, access_set in partial_overlaps.items():
-        if len(access_set) < 2:
+        if not report_unique_access_sets and len(access_set) < 2:
             continue
         header = str(ia)
         print_table_header(po, header)
@@ -342,6 +342,16 @@ def parse_args():
         dest = 'ignored_addresses'
     )
 
+    parser.add_argument("--unique-access-sets", "-q",
+        action = "store_true",
+        help =  "This flag is used to report also those uninitialized read accesses which have a unique access set. "
+                "Indeed, by default, the tool only reports read accesses that have more access sets, which are those that can read different bytes "
+                "according to the input."
+                "This behaviour is thought to report only those uninitialized reads that are more likely to be interesting. "
+                "By enabling this flag, even the uninitialized read accesses that always read from the same set of write accesses are reported in the merged report.",
+        dest = "unique_access_sets"
+    )
+
     ret = parser.parse_args()
     ret.ignored_addresses = ignored_addresses
 
@@ -352,7 +362,8 @@ def main():
     args = parse_args()
     ignored_addresses: Dict[str, Set[int]] = args.ignored_addresses
     apply_string_filter = not args.disable_string_filter
-    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses, apply_string_filter)
+    report_unique_access_sets = args.unique_access_sets
+    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses, apply_string_filter, report_unique_access_sets)
     print("Finished parsing binary file. Textual reports created")
 
 

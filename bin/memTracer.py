@@ -124,6 +124,16 @@ def parse_args(args):
         dest = "keep_ld"
     )
 
+    parser.add_argument("--unique-access-sets", "-q",
+        action = "store_true",
+        help =  "This flag is used to report also those uninitialized read accesses which have a unique access set. "
+                "Indeed, by default, the tool only reports read accesses that have more access sets, which are those that can read different bytes "
+                "according to the input."
+                "This behaviour is thought to report only those uninitialized reads that are more likely to be interesting. "
+                "By enabling this flag, even the uninitialized read accesses that always read from the same set of write accesses are reported in the merged report.",
+        dest = "unique_access_sets"
+    )
+
     parser.add_argument("--disable-string-filter",
         action = "store_true",
         help =  "This flag allows to disable the filter which removes all the uninitialized read accesses "
@@ -568,7 +578,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     # TODO: wait for all processes in deque |processes| to be terminated
     print("[Tracer Thread] Generating textual report...")
     apply_string_filter = not args.disable_string_filter
-    merge_reports(tracer_out, apply_string_filter = apply_string_filter)
+    merge_reports(tracer_out, apply_string_filter = apply_string_filter, report_unique_access_sets = args.unique_access_sets)
 
 
 def move_directory(src, dst_dir, new_name = None):
