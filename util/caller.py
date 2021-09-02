@@ -45,6 +45,12 @@ def parse_args():
         choices = ("OFF", "ON", "LIBS")
     )
 
+    parser.add_argument("--stdin",
+        action = "store_true",
+        help =  "Flag used to specify the program should read from stdin instead of from an input file",
+        dest = "stdin"
+    )
+
     return parser.parse_args()
 
 
@@ -67,18 +73,25 @@ def main():
 
 
     argv = [launcher, '-u', args.heuristic_status, '--', executable_path]
-    with open(args_path, "rb") as f:
-        arg = f.readline()
-        while len(arg) > 0:
-            if isInputPath(arg, testcase_path):
-                argv.append(os.path.join(testcase_path, b"input"))
-            else:
-                argv.append(arg[:-1])
+    if os.path.exists(args_path):
+        with open(args_path, "rb") as f:
             arg = f.readline()
+            while len(arg) > 0:
+                if isInputPath(arg, testcase_path):
+                    argv.append(os.path.join(testcase_path, b"input"))
+                else:
+                    argv.append(arg[:-1])
+                arg = f.readline()
 
-    with open("output", "w") as f:
-        p = subp.Popen(argv)
-        p.wait()
+    if args.stdin:
+        input_file_path = os.path.join(testcase_path, b"input")
+        with open(input_file_path, "rb") as f:
+            p = subp.Popen(argv, stdin = f)
+            p.wait()
+    else:
+        with open("output", "w") as f:
+            p = subp.Popen(argv)
+            p.wait()
 
 
 if __name__ == "__main__":
