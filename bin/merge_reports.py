@@ -232,10 +232,14 @@ def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] =
     if len(partial_overlaps) == 0:
         po.writelines(["** NO OVERLAPS DETECTED **"])
         return
-
+    
+    # It's possible that the partial overlaps set is not empty, but the tool discards all overlaps with a unique
+    # write access sets. In that case, we use the following boolean flag to check if we write at least 1 table in the report
+    isEmpty = True
     for ia, access_set in partial_overlaps.items():
         if not report_unique_access_sets and len(access_set) < 2:
             continue
+        isEmpty = False
         header = str(ia)
         print_table_header(po, header)
 
@@ -253,6 +257,9 @@ def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] =
             lines.append("***********************************************\n")
             po.writelines(lines)
         print_table_footer(po)
+
+    if isEmpty:
+        po.writelines(["** NO OVERLAPS DETECTED **"])
 
 
 def parse_args():
