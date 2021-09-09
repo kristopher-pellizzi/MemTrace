@@ -39,6 +39,13 @@ class MemoryAccess(object):
         self.executionOrder: int = executionOrder
         self.ip: str = ip
         self.actualIp: str = actualIp
+
+        # The following attribute is used only for uninitialized read accesses in order to store
+        # the memory location it reads from.
+        # This is used in the merging script in order to check if 2 identical read accesses also read 
+        # from the same location or not
+        self.accessedAddress: AccessIndex = None
+
         self.spOffset: int = spOffset
         self.bpOffset: int = bpOffset
         self.accessType: AccessType = accessType
@@ -63,7 +70,7 @@ class MemoryAccess(object):
                 self.isPartialOverlap == other.isPartialOverlap
         )
 
-    def compare(self, ma2, load_base1, load_base2):
+    def compare(self, ma2, load_base1: int, load_base2: int) -> bool:
 
         # Returns True if the offset of the actualIP from the library base address is the same
         # for both the MemoryAccess objects
@@ -76,6 +83,14 @@ class MemoryAccess(object):
             return lib_offset1 == lib_offset2
 
         return self == ma2 and compare_actualIP()
+
+
+    def compare_mem_location(self, ma2, mem_base1: int, mem_base2: int) -> bool:
+        self_addr, self_size = self.accessedAddress
+        other_addr, other_size = ma2.accessedAddress
+        self_addr = int(self_addr, 16) - mem_base1
+        other_addr = int(other_addr, 16) - mem_base2
+        return self_addr == other_addr and self_size == other_size
 
 
     def __str__(self):
@@ -116,6 +131,9 @@ class AccessIndex(object):
     def __init__(self, address, size):
         self.address = address
         self.size = size
+
+    def __iter__(self):
+        return iter((self.address, self.size))
 
     def __hash__(self):
         return (self.address, self.size).__hash__()
