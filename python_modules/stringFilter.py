@@ -38,6 +38,9 @@ def find_debug_path(name, feellucky = False):
                 continue
 
             full_path = os.path.join(path, dirname)
+            if not os.path.exists(full_path):
+                continue
+
             libs = []
             for lib_name in os.listdir(full_path):
                 if 'libc' in lib_name:
