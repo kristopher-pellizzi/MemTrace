@@ -1,12 +1,15 @@
 from collections import deque
 from typing import Deque, Iterable
-from parsedData import MemoryAccess, AccessType
+from parsedData import MemoryAccess, AccessType, MemType
 from functools import reduce
 
 class MASet(object):
     def __init__(self):
         self.origins: Deque[str] = deque()
         self.set: Deque[MemoryAccess] = deque()
+        self.memType: MemType = None
+        self.memOffset: int = None
+        self.size: int = None
 
 
     def addOrigin(self, origin: str):
@@ -31,6 +34,19 @@ class MASet(object):
     def replaceMASet(self, set):
         self.set = deque()
         self.addMASet(set)
+
+
+    def setMemLocation(self, accessIndex: int, type: MemType, mem_base: int):
+        addr, size = accessIndex
+        addr = int(addr, 16)
+        self.memOffset = addr - mem_base
+        self.size = size
+        self.memType = type
+
+
+    def compareMemLocation(self, other):
+        return self.memType == other.memType and self.memOffset == other.memOffset and self.size == other.size
+
 
 
     # Class (static) method to create a new MASet object given an origin and a
