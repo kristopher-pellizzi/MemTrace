@@ -230,7 +230,8 @@ def parse_partial_overlap(f, reg_size, ignore_if_no_overlapping_write, ignored_a
                 print(entry.actualIp, " ignored")
                 ignored += 1
                 continue
-
+        
+        entry.accessedAddress = ai
         overlaps.append(entry)
         exec_order += 1
 
