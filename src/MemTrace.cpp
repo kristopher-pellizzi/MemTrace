@@ -699,7 +699,7 @@ VOID MallocAfter(ADDRINT ret)
         }
         mmapMallocated[page_start] = mallocRequestedSize;
         mallocatedPtrs[ret] = blockSize;
-        auto insertRet = mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(ret, newShadowMem));
+        auto insertRet = mmapShadows.insert(std::pair<ADDRINT, HeapShadow>(page_start, newShadowMem));
         // Set heapShadow to be the pointer of the just inserted HeapShadow object
         heapShadow = insertRet.first->second.getPtr();
     }
