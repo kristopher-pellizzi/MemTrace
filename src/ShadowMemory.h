@@ -44,7 +44,7 @@ class ShadowBase{
         
         // Given the index and the offset returned from the previous function,
         // return the corresponding shadow memory address
-        virtual uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) = 0;
+        virtual uint8_t* getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offset) = 0;
         
         uint8_t* shadow_memory_copy(ADDRINT addr, UINT32 size);
         unsigned long long min(unsigned long long x, unsigned long long y);
@@ -74,7 +74,7 @@ class ShadowBase{
 class StackShadow : public ShadowBase{
     protected:
         std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr) override;
-        uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) override;
+        uint8_t* getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offset) override;
 
     public:
         StackShadow();
@@ -95,7 +95,7 @@ class HeapShadow : public ShadowBase{
         bool isSingleChunk;
 
         std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr) override;
-        uint8_t* getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset) override;
+        uint8_t* getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offset) override;
 
     public:
         HeapShadow(HeapEnum type);

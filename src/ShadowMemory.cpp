@@ -15,7 +15,7 @@ unsigned long long ShadowBase::min(unsigned long long x, unsigned long long y){
 uint8_t* ShadowBase::shadow_memory_copy(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
     unsigned offset = addr % 8;
     size += offset;
     UINT32 shadowSize = size % 8 != 0 ? (size / 8) + 1 : (size / 8);
@@ -48,13 +48,14 @@ std::pair<unsigned, unsigned> StackShadow::getShadowAddrIdxOffset(ADDRINT addr) 
 uint8_t* ShadowBase::getShadowAddr(ADDRINT addr){
     std::pair<unsigned, unsigned> shadowIdxOffset = this->getShadowAddrIdxOffset(addr);
 
-    uint8_t* ret = this->getShadowAddrFromIdx(shadowIdxOffset.first, shadowIdxOffset.second);
+    uint8_t* ret = this->getShadowAddrFromIdx(&shadowIdxOffset.first, shadowIdxOffset.second);
     return ret;
 }
 
 
 
-uint8_t* StackShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
+uint8_t* StackShadow::getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offset){
+    unsigned shadowIdx = *shadowIdxPtr;
     bool needsCeiling = offset % 8 != 0;
     
     offset >>=3;
@@ -70,13 +71,27 @@ uint8_t* StackShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
     }
     
     uint8_t* ret = shadow[shadowIdx] + (offset % SHADOW_ALLOCATION);
-    return needsCeiling ? ret + 1 : ret;
+
+    if(needsCeiling){
+        // If |ret| is the address of the last byte of this shadow page, we need to increase shadowIdx in order
+        // to "increase" its value, and take the address of the first byte of the next shadow page.
+        if(ret == shadow[shadowIdx] + SHADOW_ALLOCATION - 1){
+            ret = shadow[shadowIdx + 1];
+            ++(*shadowIdxPtr);
+        }
+        // If |ret| is anything but the address of the last byte of the considered shadow page, just increase its value by 1.
+        else{
+            ++ret;
+        }
+    }
+
+    return ret;
 }
 
 void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
     dirtyPages[shadowIdx] = true;
 
@@ -133,7 +148,7 @@ void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
 uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
     std::pair<unsigned, unsigned> idxOffset = getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
     bool isUninitialized = false;
     unsigned offset = addr % 8;
@@ -186,7 +201,7 @@ uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
 void StackShadow::reset(ADDRINT addr) {
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
     unsigned long long bottom = min((unsigned long long) highestShadowAddr, (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1));
     memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
@@ -359,7 +374,9 @@ std::pair<unsigned, unsigned> HeapShadow::getShadowAddrIdxOffset(ADDRINT addr){
     return std::pair<unsigned, unsigned>(shadowIdx, retOffset);
 }
 
-uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){    
+uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offset){    
+    unsigned shadowIdx = *shadowIdxPtr;
+    
     offset >>=3;
     // If the requested address does not have a shadow location yet, allocate it
     while(shadowIdx >= shadow.size()){
@@ -379,7 +396,7 @@ uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned shadowIdx, unsigned offset){
 void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
     dirtyPages[shadowIdx] = true;
 
@@ -435,7 +452,7 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
 uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
     bool isUninitialized = false;
     unsigned offset = addr % 8;
@@ -485,7 +502,7 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
 void HeapShadow::reset(ADDRINT addr, size_t size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
-    uint8_t* shadowAddr = this->getShadowAddrFromIdx(shadowIdx, idxOffset.second);
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
     uint8_t* initialShadowAddr = shadowAddr;
     if(heapType == HeapEnum::MMAP && isSingleChunk){
         // If it is a heap allocated through mmap, it is due to a big allocation request.
