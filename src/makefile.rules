@@ -79,7 +79,7 @@ SANITY_SUBSET := $(TEST_TOOL_ROOTS) $(TEST_ROOTS)
 # This section contains the build rules for all binaries that have special build rules.
 # See makefile.default.rules for the default build rules.
 
-TOOL_CXXFLAGS += -std=c++11 -MMD
+TOOL_CXXFLAGS += -std=c++11 -MMD $(ALLOCATOR_DEF)
 PARENTDIR := ${CURDIR}/../
 OBJDIR := $(PARENTDIR)tool/
 BINDIR := $(PARENTDIR)bin/

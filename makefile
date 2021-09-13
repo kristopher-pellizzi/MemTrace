@@ -8,9 +8,13 @@ LIBDIR := ${CURDIR}/lib/
 all: tool | $(PIN_ROOT)
 
 $(PIN_ROOT):
-	echo "Extracting pin files..."
-	tar -C $(PINDIR) -xvzf $(PINDIR)pin-3.17-98314-g0c048d619-gcc-linux.tar.gz
-	mv $(PINDIR)pin-3.17-98314-g0c048d619-gcc-linux $(PINDIR)pin
+	@if ! ([ -e "$(PINDIR)pin" ]); then \
+		echo "Extracting pin files..."; \
+		tar -C $(PINDIR) -xvzf $(PINDIR)pin-3.17-98314-g0c048d619-gcc-linux.tar.gz; \
+		mv $(PINDIR)pin-3.17-98314-g0c048d619-gcc-linux $(PINDIR)pin; \
+	else \
+		echo "Intel PIN is ready"; \
+	fi
 
 .PHONY: tool
 tool: lib fuzzer | $(PIN_ROOT)
@@ -19,6 +23,14 @@ tool: lib fuzzer | $(PIN_ROOT)
 .PHONY: debug
 debug: lib fuzzer | $(PIN_ROOT)
 	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) debug
+
+.PHONY: tool_custom_malloc
+tool_custom_malloc: lib fuzzer | $(PIN_ROOT)
+	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) ALLOCATOR_DEF=-DCUSTOM_ALLOCATOR
+
+.PHONY: debug_custom_malloc
+debug_custom_malloc: lib fuzzer | $(PIN_ROOT)
+	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) ALLOCATOR_DEF=-DCUSTOM_ALLOCATOR debug
 
 .PHONY: lib
 lib: 
@@ -33,7 +45,7 @@ fuzzer: fuzzer_repo
 		echo "Fuzzer already compiled"; \
 	fi
 
-.PHONY: fuzzer_rep
+.PHONY: fuzzer_repo
 fuzzer_repo: 
 ifeq (0, $(shell ls $(AFLDIR) | wc -l))
 	git submodule init
