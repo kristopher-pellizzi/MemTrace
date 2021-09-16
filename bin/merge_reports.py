@@ -18,7 +18,7 @@ class ArgumentError(Exception):
     pass
 
 
-def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] = dict(), apply_string_filter: bool = True, report_unique_access_sets = False):
+def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] = dict(), apply_string_filter: bool = True, report_unique_access_sets = False, ignore_if_no_overlap = True):
 
     def merge_ma_sets(accumulator: Deque[MASet], element: MASet):
 
@@ -372,6 +372,20 @@ def parse_args():
         dest = "unique_access_sets"
     )
 
+    parser.add_argument('-a', '--all',
+        action = "store_false",
+        help =  "If this flag is enabled, then the parser will return all the memory accesses, avoiding discarding " 
+                "those uninitialized read accesses that don't have any write overlapping the uninitialized interval. "
+                "By default, this is disabled, so that the tool only reports actual memory overlaps. "
+                "NOTE: with this flag enabled, most of the uninitialized reads performed "
+                "by the program are reported. The tool, however, is not a memory sanitizer. The uninitialized reads "
+                "reported by the tool, are all the instructions loading from memory at least 1 byte that has not been "
+                "initialized. During program execution, this might happen many times (e.g. string operations almost "
+                "always read something beyond the initialized string), so reintroducing all the uninitialized reads "
+                "may generate huge reports.",
+        dest = "ignore_if_no_overlap"
+    )
+
     ret = parser.parse_args()
     ret.ignored_addresses = ignored_addresses
 
@@ -383,7 +397,8 @@ def main():
     ignored_addresses: Dict[str, Set[int]] = args.ignored_addresses
     apply_string_filter = not args.disable_string_filter
     report_unique_access_sets = args.unique_access_sets
-    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses, apply_string_filter, report_unique_access_sets)
+    ignore_if_no_overlap = args.ignore_if_no_overlap
+    merge_reports(os.path.realpath(args.tracer_out_path), ignored_addresses, apply_string_filter, report_unique_access_sets, ignore_if_no_overlap)
     print("Finished parsing binary file. Textual reports created")
 
 
