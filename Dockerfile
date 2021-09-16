@@ -1,6 +1,6 @@
 FROM ubuntu:focal
 ENV TZ=Europe/Rome
-ENV DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip git wget"
+ENV DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip git wget gettext"
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 WORKDIR /opt/MemTraceThesis
 COPY . .
