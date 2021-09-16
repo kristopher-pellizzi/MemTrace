@@ -4,7 +4,7 @@ ARG DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 WORKDIR /opt/MemTraceThesis
 COPY . .
-RUN apt-get -y update && apt-get -y install $DEPS && git checkout development && python3 -m pip install -r requirements.txt && make
+RUN apt-get -y update && apt-get -y install $DEPS && locale-gen it_IT.UTF-8 && git checkout development && python3 -m pip install -r requirements.txt && make
 ENV PATH="/opt/MemTraceThesis/bin:${PATH}" \
     AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
     AFL_SKIP_CPUFREQ=1 \
