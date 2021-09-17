@@ -15,6 +15,12 @@ def parse_args():
         help = "Path of the directory containing both the input file and the arguments file"
     )
 
+    parser.add_argument("-p, --pause-tool",
+        help = "Flag used to specify that the tool should be paused to allow the user attach a debugger",
+        action = "store_true",
+        dest = "pause_tool"
+    )
+
     return parser.parse_args()
 
 
@@ -30,13 +36,15 @@ def main():
     executable_path = os.fsencode(args.executable_path)
     args_path = os.path.join(testcase_path, b"argv")
  
-    launcher = os.path.realpath(os.path.join(sys.path[0], "..", "bin", "launchDebug"))
+    launcher = os.path.realpath(os.path.join(sys.path[0], "..", "third_party", "PIN", "pin", "pin"))
     if not os.path.exists(launcher):
         print("launchDebug not exists, please execute 'make debug' from the root folder of the project")
         return
 
-
-    argv = [launcher, '--', executable_path]
+    if args.pause_tool:
+        argv = [launcher, "-pause_tool", "10", "-t", os.path.join(sys.path[0], "..", "debug", "MemTrace.so"), "--", executable_path]
+    else:
+        argv = [launcher, "-t", os.path.join(sys.path[0], "..", "debug", "MemTrace.so"), "--", executable_path]
     with open(args_path, "rb") as f:
         arg = f.readline()
         while len(arg) > 0:
