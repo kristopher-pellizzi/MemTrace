@@ -136,7 +136,7 @@ def merge_reports(tracer_out_path: str, ignored_addresses: Dict[str, Set[int]] =
             # If the binary report is not found, the tracer failed to be run (random argv generation may cause execve to fail)
             try:
                 print("Parsing binary report from {0}".format(input_dir_path))
-                parse_res: ParseResult = parse(bin_report_dir = input_dir_path)
+                parse_res: ParseResult = parse(bin_report_dir = input_dir_path, ignore_if_no_overlapping_write = ignore_if_no_overlap)
                 if apply_string_filter:
                     print("Applying filter")
                     parse_res = sf.apply_filter(parse_res)
