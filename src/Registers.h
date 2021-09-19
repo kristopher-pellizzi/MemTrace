@@ -140,3 +140,5 @@ enum Registers{
 void init_regs_map();
 
 int get_normalized_register(int pinReg);
+
+const char* get_normalized_register_name(int reg);
