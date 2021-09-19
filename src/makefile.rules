@@ -122,26 +122,31 @@ $(OBJDIR)NullTool$(OBJ_SUFFIX): NullTool.cpp | $(OBJDIR)
 
 # Build the intermediate object file.
 $(OBJDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h | $(OBJDIR)
-	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
 $(OBJDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h | $(OBJDIR)
-	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
 $(OBJDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h | $(OBJDIR)
-	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
 $(OBJDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h | $(OBJDIR)
-	$(CC) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)Registers$(OBJ_SUFFIX): Registers.cpp Registers.h | $(OBJDIR)
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the tool as a dll (shared object).
 $(OBJDIR)MemTrace$(PINTOOL_SUFFIX): $(OBJDIR)MemTrace$(OBJ_SUFFIX) \
 $(OBJDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
 $(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
 $(OBJDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
-$(OBJDIR)HeapType$(OBJ_SUFFIX) HeapType.h
+$(OBJDIR)HeapType$(OBJ_SUFFIX) HeapType.h \
+$(OBJDIR)Registers$(OBJ_SUFFIX) Registers.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 $(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)	
@@ -158,26 +163,30 @@ $(DEBUGDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp | $(DEBUGDIR)
 
 # Build the intermediate object file.
 $(DEBUGDIR)MemoryAccess$(OBJ_SUFFIX): MemoryAccess.cpp MemoryAccess.h | $(DEBUGDIR)
-	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
 $(DEBUGDIR)AccessIndex$(OBJ_SUFFIX): AccessIndex.cpp AccessIndex.h | $(DEBUGDIR)
-	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
 $(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX): ShadowMemory.cpp ShadowMemory.h | $(DEBUGDIR)
-	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
 $(DEBUGDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h | $(DEBUGDIR)
-	$(CC) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+$(DEBUGDIR)Registers$(OBJ_SUFFIX): Registers.cpp HeapType.h | $(DEBUGDIR)
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the tool as a dll (shared object).
 $(DEBUGDIR)MemTrace$(PINTOOL_SUFFIX): $(DEBUGDIR)MemTrace$(OBJ_SUFFIX) \
 $(DEBUGDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
 $(DEBUGDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
 $(DEBUGDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
-$(DEBUGDIR)HeapType$(OBJ_SUFFIX) HeapType.h
+$(DEBUGDIR)HeapType$(OBJ_SUFFIX) HeapType.h \
+$(DEBUGDIR)Registers$(OBJ_SUFFIX) Registers.h
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 $(BINDIR)launchDebug: toolLauncher.cpp
