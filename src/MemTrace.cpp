@@ -31,6 +31,7 @@
 #include "Platform.h"
 #include "MallocHandler.h"
 #include "KnobTypes.h"
+#include "Registers.h"
 
 using std::cerr;
 using std::string;
@@ -70,7 +71,7 @@ std::ostream * out = &cerr;
 // NOTE: more than 1 MemoryAccess object may contain the same pointer, because Intel PIN uses an instruction cache to re-instrument instructions
 // that it recently instrumented (e.g. in loops)
 std::list<std::string*> disasmPtrs;
-std::list<std::list<REG>*> regsPtrs;
+std::list<std::set<REG>*> regsPtrs;
 
 bool heuristicEnabled = false;
 bool heuristicLibsOnly = false;
@@ -1440,16 +1441,18 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
 /*
 Return true if the xor instruction is a zeroing xor, i.e. an instruction of type "xor rdi, rdi"
 */
-bool isZeroingXor(INS ins, OPCODE opcode, UINT32 readRegisters){
+bool isZeroingXor(INS ins, OPCODE opcode, set<REG>* dstRegs, set<REG>* srcRegs){
     /*
     If the instruction is not a xor or the xor instruction has only 1 source register 
     (the other operand is an immediate), then it can't be a zeroing xor.
     */
-    if(opcode != XED_ICLASS_XOR || readRegisters < 2)
+    size_t readRegisters = dstRegs->size() + srcRegs->size();
+
+    if(opcode != XED_ICLASS_XOR || readRegisters != 2)
         return false;
 
-    REG firstOperand = INS_RegR(ins, 0);
-    REG secondOperand = INS_RegR(ins, 1);
+    REG firstOperand = *(srcRegs->begin());
+    REG secondOperand = *(dstRegs->begin());
     return firstOperand == secondOperand;
 }
 
@@ -1475,29 +1478,59 @@ VOID Instruction(INS ins, VOID* v){
     
     bool isProcedureCall = INS_IsProcedureCall(ins);
     bool isRet = INS_IsRet(ins);
+    UINT32 operandCount = INS_OperandCount(ins);
     UINT32 memoperands = INS_MemoryOperandCount(ins);
-    OPCODE opcode = INS_Opcode(ins);
     UINT32 readRegisters = INS_MaxNumRRegs(ins);
-    UINT32 writtenRegisters = INS_MaxNumWRegs(ins);
-    list<REG>* srcRegs = new list<REG>();
-    list<REG>* dstRegs = new list<REG>();
+    OPCODE opcode = INS_Opcode(ins);
+    set<REG>* srcRegs = new set<REG>();
+    set<REG>* dstRegs = new set<REG>();
     regsPtrs.push_back(srcRegs);
     regsPtrs.push_back(dstRegs);
 
-    /*
-    We are ignoring 2 kind of register usage:
-    [*] If the register is used by a cmp instruction, it is not so relevant, as we are interested in
-        leaks, not uninitialized memory usage in general
-    [*] If the register is used by a zeroing xor, it is not relevant, because the only effect of such kind of an 
-        instruction is to set the register to 0, thus throwing away any value it contains.
+    /* 
+        Take the explicitly written destination registers.
+        We simply ignore the implicit destination registers.
+        E.g. consider a push instruction. It does not really write in a register.
+        However, it implicitly writes register %rsp, because it must decrement it.
+        We are not interested, as we only need the registers potentially loaded with bytes from
+        an uninitialized read.
     */
-    if(!isCmpInstruction(opcode) && !isZeroingXor(ins, opcode, readRegisters)){
+    for(UINT32 op = 0; op < operandCount; ++op){
+        if(INS_OperandIsReg(ins, op)){
+            REG reg = INS_OperandReg(ins, op);
+            if(REG_is_flags(reg))
+                continue;
+
+            if(INS_RegWContain(ins, reg)){
+                dstRegs->insert(reg);
+            }
+        }
+    }
+
+    /*
+        Take all the registers used as source (even the implicit ones).
+        Differently from destination registers, we even consider implicitly read registers because it indicates
+        the usage of the register.
+        If a register loaded with bytes from an uninitialized read is used, the uninitialized read itself is stored,
+        otherwise it is discarded. This is why we need to consider every possible usage of each register.
+
+        However, we are ignoring 2 kind of register usage:
+        [*] If the register is used by a cmp instruction, it is not so relevant, as we are interested in
+            leaks, not uninitialized memory usage in general
+        [*] If the register is used by a zeroing xor, it is not relevant, because the only effect of such kind of an 
+            instruction is to set the register to 0, thus throwing away any value it contains.
+    */
+    if(!isCmpInstruction(opcode)){
         for(UINT32 regop = 0; regop < readRegisters; ++regop){
             REG src = INS_RegR(ins, regop);
             if(!REG_is_flags(src)){
-                srcRegs->push_front(src);
+                srcRegs->insert(src);
             }
         }
+    }
+
+    if(isZeroingXor(ins, opcode, dstRegs, srcRegs)){
+        srcRegs->clear();
     }
 
     INS_InsertPredicatedCall(
@@ -1508,13 +1541,6 @@ VOID Instruction(INS ins, VOID* v){
         IARG_CALL_ORDER, CALL_ORDER_FIRST,
         IARG_END
     );
-
-    for(UINT32 regop = 0; regop < writtenRegisters; ++regop){
-        REG dst = INS_RegW(ins, regop);
-        if(!REG_is_flags(dst) && dst != REG_STACK_PTR && dst != REG_INST_PTR){
-            dstRegs->push_front(dst);
-        }
-    }
 
     INS_InsertPredicatedCall(
         ins, 
@@ -2010,6 +2036,7 @@ VOID Fini(INT32 code, VOID *v)
  */
 int main(int argc, char *argv[])
 {
+    init_regs_map();
     // Initialize PIN library. Print help message if -h(elp) is specified
     // in the command line or the command line is invalid 
     PIN_InitSymbols();
