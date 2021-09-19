@@ -89,7 +89,7 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
-map<REG, std::pair<AccessIndex, MemoryAccess>> pendingUninitializedReads;
+map<int, std::pair<AccessIndex, MemoryAccess>> pendingUninitializedReads;
 
 // The following map is used as a temporary storage for write accesses: instead of 
 // directly insert them inside |memAccesses|, we insert them here (only 1 for each AccessIndex). Every 
@@ -526,7 +526,7 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
 void addPendingRead(list<REG> regs, AccessIndex ai, MemoryAccess ma){
     std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
-        pendingUninitializedReads[*iter] = entry;
+        pendingUninitializedReads[get_normalized_register(*iter)] = entry;
     }
 }
 
@@ -1279,7 +1279,7 @@ VOID checkDestRegisters(VOID* dstRegs){
         remove its entry, as it is going to be overwritten, and it has never
         been used as a source register (possible false positive)
         */
-        auto readIter = pendingUninitializedReads.find(*iter);
+        auto readIter = pendingUninitializedReads.find(get_normalized_register(*iter));
         if(readIter != pendingUninitializedReads.end()){
             pendingUninitializedReads.erase(readIter);
         }
@@ -1300,7 +1300,7 @@ VOID checkSourceRegisters(VOID* srcRegs){
         permanently store the read to the memAccesses map, and remove it 
         from the pending reads map.
         */
-        auto readIter = pendingUninitializedReads.find(*iter);
+        auto readIter = pendingUninitializedReads.find(get_normalized_register(*iter));
 
         if(readIter != pendingUninitializedReads.end()){
             auto& access = readIter->second;
@@ -2036,7 +2036,9 @@ VOID Fini(INT32 code, VOID *v)
  */
 int main(int argc, char *argv[])
 {
+    // Initialize register mapping for aliasing registers (e.g. rax,eax,ax,al,ag -> norm_rax)
     init_regs_map();
+
     // Initialize PIN library. Print help message if -h(elp) is specified
     // in the command line or the command line is invalid 
     PIN_InitSymbols();
