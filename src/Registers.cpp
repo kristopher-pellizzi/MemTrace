@@ -15,37 +15,6 @@ static const char* regNames[] = {
 };
 #undef X
 
-static void test_regs(){
-    std::cout << "Test registers: " <<std::endl;
-    int reg = get_normalized_register(REG_RAX);
-    std::cout << "RAX: " << REG_StringShort(REG_RAX) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_EAX);
-    std::cout << "EAX: " << REG_StringShort(REG_EAX) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_AX);
-    std::cout << "AX: " << REG_StringShort(REG_AX) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_AL);
-    std::cout << "AL: " << REG_StringShort(REG_AL) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-    
-    reg = get_normalized_register(REG_AH);
-    std::cout << "AH: " << REG_StringShort(REG_AH) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_R8);
-    std::cout << "R8: " << REG_StringShort(REG_R8) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_R8D);
-    std::cout << "R8D: " << REG_StringShort(REG_R8D) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_R8W);
-    std::cout << "R8W: " << REG_StringShort(REG_R8W) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-    reg = get_normalized_register(REG_R8B);
-    std::cout << "R8B: " << REG_StringShort(REG_R8B) << "; " << get_normalized_register_name(reg) << "(" << std::dec << reg << ")" <<std::endl;
-
-}
-
 void init_regs_map(){
 
 // According to Intel PIN's register definitions in file reg_ia32.PH, these registers are defined only
@@ -323,9 +292,6 @@ void init_regs_map(){
     REGS[REG_K7] = NORM_REG_K7;
 
     mapIsInitialized = true;
-
-    // Function used to test register mappings
-    // test_regs();
 }
 
 int get_normalized_register(int pinReg){
