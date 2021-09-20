@@ -523,7 +523,7 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
     }
 }
 
-void addPendingRead(list<REG> regs, AccessIndex ai, MemoryAccess ma){
+void addPendingRead(set<REG> regs, AccessIndex ai, MemoryAccess ma){
     std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
         pendingUninitializedReads[get_normalized_register(*iter)] = entry;
@@ -1063,7 +1063,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
                 if (dstRegs != NULL)
-                    addPendingRead(*static_cast<list<REG>*>(dstRegs), ai, ma);
+                    addPendingRead(*static_cast<set<REG>*>(dstRegs), ai, ma);
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 0));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
@@ -1132,7 +1132,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
                     if(dstRegs != NULL)
-                        addPendingRead(*static_cast<list<REG>*>(dstRegs), ai, ma);
+                        addPendingRead(*static_cast<set<REG>*>(dstRegs), ai, ma);
 
                     for(std::pair<AccessIndex, MemoryAccess>& write_access : writes){
                         storeMemoryAccess(write_access.first, write_access.second);
@@ -1271,7 +1271,7 @@ VOID checkDestRegisters(VOID* dstRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
 
-    list<REG> regs = *static_cast<list<REG>*>(dstRegs);
+    set<REG> regs = *static_cast<set<REG>*>(dstRegs);
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
         /*
@@ -1291,7 +1291,7 @@ VOID checkSourceRegisters(VOID* srcRegs){
         return;
 
     set<MemoryAccess> alreadyInserted;
-    list<REG> regs = *static_cast<list<REG>*>(srcRegs);
+    set<REG> regs = *static_cast<set<REG>*>(srcRegs);
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
         /*
