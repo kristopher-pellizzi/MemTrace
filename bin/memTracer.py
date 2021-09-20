@@ -400,6 +400,20 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         return ret
 
 
+    def get_environ_from_file(file_path):
+        ret = dict()
+        with open(file_path, "rb") as f:
+            while True:
+                # Ignore last byte (\n)
+                line = f.readline()[:-1].decode('utf-8')
+                if not line:
+                    break
+                splitted = line.split('=')
+                ret[splitted[0]] = splitted[1]
+        
+        return ret
+
+
     print("[Tracer Thread] Tracer thread started...")
     if fuzzer_error_event is None:
         fuzzer_error_event = t.Event()
@@ -411,6 +425,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     launcher_path = os.path.join(sys.path[0], "launcher")
     tracer_cmd = [launcher_path, "-o", "./overlaps.bin", "-u", args.heuristic_status, "--keep-ld", args.keep_ld, "--"] + exec_cmd[:1]
     traced_inputs = set()
+
     # If this expression evaluates to True, it means the user used --no-fuzzing option, but the tracer output folder
     # already exists, so he probably already launched the script.
     # This is a special case. The default usage should be to launch the script to perform fuzzing and tracing in parallel,
@@ -419,6 +434,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         raise IOError("Folder {0} already exists. Either remove or move it and try again.".format(tracer_out))
     os.mkdir(tracer_out)
     args_dir = os.path.join(fuzz_dir, "args")
+    environ_dir = os.path.join(fuzz_dir, "environ")
     new_inputs_found = True
 
     processes = deque()
@@ -428,7 +444,10 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     if not args.no_fuzzing:
         if os.path.exists(args_dir):
             su.rmtree(args_dir)
+        if os.path.exists(environ_dir):
+            su.rmtree(environ_dir)
         os.mkdir(args_dir)
+        os.mkdir(environ_dir)
         inputs_dir_set.add(inputs_dir)
         for i in range(args.slaves):
             slave_name = "Slave_" + str(i)
@@ -466,6 +485,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         os.mkdir(new_folder)
         if not args.no_fuzzing:
             os.mkdir(os.path.join(args_dir, directory))
+            os.mkdir(os.path.join(environ_dir, directory))
 
     pat = r"sync"
     # Loop interrupts if and only if there are no new_inputs and the fuzzer has been interrupted
@@ -503,7 +523,6 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             os.mkdir(input_folder)
             input_cpy_path = os.path.join(input_folder, "input")
             su.copy(el[1], input_cpy_path)
-            print()
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
 
             full_cmd = list(tracer_cmd)
@@ -521,36 +540,60 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 processes = wait_process_termination(processes, strikes)
 
             argv_file_path = os.path.join(input_folder, "argv")
+            env_file_path = os.path.join(input_folder, "environ")
+            input_folder_basename = os.path.basename(input_folder)
+
+            environ = None
+
+            if args.no_fuzzing:
+                environ_file_path = os.path.join(environ_dir, el[0], input_folder_basename)
+                if not os.path.exists(environ_file_path):
+                    continue
+                environ = get_environ_from_file(environ_file_path)
+                su.copy(environ_file_path, env_file_path)
+            else:
+                ENV_VARS_COPY['FUZZ_INSTANCE_NAME'] = el[0]
+                environ = ENV_VARS_COPY
+                with open(env_file_path, "wb") as f:
+                    for key, value in ENV_VARS_COPY.items():
+                        f.write("{0}={1}\n".format(key, value).encode('utf-8'))
+
+                su.copy(env_file_path, os.path.join(environ_dir, el[0], input_folder_basename))
+
             if args.argv_rand:
                 if args.no_fuzzing:
-                    args_file_path = os.path.join(args_dir, el[0], os.path.basename(input_folder))
+                    args_file_path = os.path.join(args_dir, el[0], input_folder_basename)
                     if not os.path.exists(args_file_path):
                         continue
                     argv = get_argv_from_file(args_file_path)
+                    su.copy(args_file_path, argv_file_path)
                 else:
                     # Retrieve arguments from input file and cut it to remove last 128 bytes
                     argv = get_argv(input_cpy_path)
-                    # Save used arguments in a text file called 'argv.txt' (human readable)
-                    # and a binary file called "argv" (possibly not human readable)
+                    # Save used arguments in a binary file called "argv" (possibly not human readable)
                     with open(argv_file_path, "wb") as f:
                         for cmd_arg in argv:
                             f.write(cmd_arg)
                             f.write(b"\n")
 
-                    with open(os.path.join(input_folder, "argv.txt"), "w") as f:
-                        for cmd_arg in argv:
-                            f.write("{0}\n".format(cmd_arg))
-
-                    su.copy(argv_file_path, os.path.join(args_dir, el[0], os.path.basename(input_folder)))
+                    su.copy(argv_file_path, os.path.join(args_dir, el[0], input_folder_basename))
+                
+                # Save the used arguments in a text file called 'argv.txt' (human readable)
+                with open(os.path.join(input_folder, "argv.txt"), "w") as f:
+                    for cmd_arg in argv:
+                        f.write("{0}\n".format(cmd_arg))
                     
                 # Append arguments to full_cmd
                 full_cmd.extend(argv)
+            # Argv is not fuzzed, but we must keep the arguments passed from the command line
+            else:
+                full_cmd.extend(exec_cmd[1:])
             #print("[Tracer Thread] FULL_CMD: ", full_cmd)
             if args.store_tracer_out:
                 output_file_path = os.path.join(input_folder, "output")
                 with open(output_file_path, "w") as out:
                     try:
-                        processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = out, stderr = subp.STDOUT))
+                        processes.append(subp.Popen(full_cmd, env = environ, stdin = tracer_stdin, stdout = out, stderr = subp.STDOUT))
                         strikes.append(0)
                     except Exception as e:
                         print("Exception happened while launching the tracer")
@@ -561,7 +604,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                         out.write(str(full_cmd))
             else:
                 try:
-                    processes.append(subp.Popen(full_cmd, stdin = tracer_stdin, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+                    processes.append(subp.Popen(full_cmd, env = environ, stdin = tracer_stdin, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
                     strikes.append(0)
                 except Exception as e:
                     print("Exception happened while launching the tracer")
@@ -854,7 +897,7 @@ def main():
         tracer_out = os.path.realpath(tracer_out)
         if not os.path.exists(tracer_out):
             raise IOError("Folder {0} must exist".format(tracer_out))
-        launcher_path = os.path.join(os.getcwd(), "launcher")
+        launcher_path = os.path.join(sys.path[0], "launcher")
         tracer_cmd = [launcher_path, "-o", os.path.join(tracer_out, "overlaps.bin"), "-u", args.heuristic_status, "--"] + executable
         proc = subp.Popen(tracer_cmd) #, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
         proc.wait()
