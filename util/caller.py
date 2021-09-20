@@ -67,6 +67,7 @@ def main():
     testcase_path = os.fsencode(args.testcase_path)
     executable_path = os.fsencode(args.executable_path)
     args_path = os.path.join(testcase_path, b"argv")
+    environ_path = os.path.join(testcase_path, b"environ")
  
     launcher = os.path.realpath(os.path.join(sys.path[0], "..", "bin", "launcher"))
     if not os.path.exists(launcher):
@@ -84,15 +85,27 @@ def main():
                 else:
                     argv.append(arg[:-1])
                 arg = f.readline()
+    elif not args.stdin:
+        print("Arguments file not found")
+        return
+
+    environ = dict()
+    with open(environ_path, "rb") as f:
+        line = f.readline()[:-1]
+        while len(line) > 0:
+            line = line.decode('utf-8')
+            splitted = line.split("=")
+            environ[splitted[0]] = splitted[1]
+            line = f.readline()[:-1]
 
     if args.stdin:
         input_file_path = os.path.join(testcase_path, b"input")
         with open(input_file_path, "rb") as f:
-            p = subp.Popen(argv, stdin = f)
+            p = subp.Popen(argv, end = environ, stdin = f)
             p.wait()
     else:
         with open("output", "w") as f:
-            p = subp.Popen(argv)
+            p = subp.Popen(argv, env = environ)
             p.wait()
 
 

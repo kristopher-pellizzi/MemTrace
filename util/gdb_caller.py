@@ -4,6 +4,7 @@ import subprocess as subp
 import os
 import argparse
 from time import sleep
+import sys
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -35,6 +36,7 @@ def main():
     testcase_path = os.fsencode(args.testcase_path)
     executable_path = os.fsencode(args.executable_path)
     args_path = os.path.join(testcase_path, b"argv")
+    environ_path = os.path.join(testcase_path, b"environ")
 
     argv = [b'gdb']
     if args.stdin:
@@ -45,6 +47,9 @@ def main():
         argv.extend([b'-ex', b'echo end\n'])
         #argv.extend([b'-ex', b"echo Then launch with: 'launch'\n"])
         argv.extend([b'-ex', b'define hook-run'])
+    argv.extend([b'-ex', b'set $testcase_path = "' + testcase_path + b'"'])
+    argv.extend([b'-ex', b'set $cwd = "' + os.path.realpath(os.fsencode(sys.path[0])) + b'"'])
+    argv.extend([b'-ex', b'source verification_gdb_session.py'])
     argv_ext = [b'--args', executable_path]
     argv.extend(argv_ext)
     
@@ -58,8 +63,17 @@ def main():
                     argv.append(arg[:-1])
                 arg = f.readline()
 
+    environ = dict()
+    with open(environ_path, "rb") as f:
+        line = f.readline()[:-1]
+        while len(line) > 0:
+            line = line.decode('utf-8')
+            splitted = line.split("=")
+            environ[splitted[0]] = splitted[1]
+            line = f.readline()[:-1]
+
     with open("output", "w") as f:
-        p = subp.Popen(argv)
+        p = subp.Popen(argv, env = environ)
         p.wait()
 
 

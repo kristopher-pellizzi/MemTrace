@@ -35,6 +35,7 @@ def main():
     testcase_path = os.fsencode(args.testcase_path)
     executable_path = os.fsencode(args.executable_path)
     args_path = os.path.join(testcase_path, b"argv")
+    environ_path = os.path.join(testcase_path, b"environ")
  
     launcher = os.path.realpath(os.path.join(sys.path[0], "..", "third_party", "PIN", "pin", "pin"))
     if not os.path.exists(launcher):
@@ -54,8 +55,17 @@ def main():
                 argv.append(arg[:-1])
             arg = f.readline()
 
+    environ = dict()
+    with open(environ_path, "rb") as f:
+        line = f.readline()[:-1]
+        while len(line) > 0:
+            line = line.decode('utf-8')
+            splitted = line.split("=")
+            environ[splitted[0]] = splitted[1]
+            line = f.readline()[:-1]
+
     with open("output", "w") as f:
-        p = subp.Popen(argv)
+        p = subp.Popen(argv, env = environ)
         p.wait()
 
 
