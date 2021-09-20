@@ -10,7 +10,6 @@ def import_modules(script_dir):
 
 s = gdb.execute("print $cwd", to_string = True)
 path = os.path.realpath(s.split("=")[1].strip()[1:-1])
-print("$cwd set to \"", path, "\"")
 sys.path.append(path)
 import_modules(path)
 
@@ -48,9 +47,9 @@ def breakpoint_created(ev):
 
 def convert_addr(addr):
     name, load_base = findLib(addr, load_bases)
-    s = gdb.execute("vmmap {0}".format(name), to_string = True)
-    gdb_base = int(s.split("\n")[1].strip().split()[1].strip(), 0)
-    return addr - load_base + gdb_base
+    s = gdb.execute("memmap {0}".format(name), to_string = True)
+    gdb_base = int(s.split("\n")[0].strip().split()[1].strip(), 0)
+    return int(addr, 16) - int(load_base, 16) + gdb_base
 
 
 def inferior_is_running():
@@ -71,16 +70,17 @@ class BreakOverlapCommand(gdb.Command):
             arg = arg[1:]
         
         try:
-            addr = convert_addr(int(arg, 0))
+            addr = convert_addr(arg)
         except ValueError as e:
             print("Cannot interpret \"{0}\" as an address".format(arg))
             return
         gdb.execute("b *{0}".format(addr))
+        gdb.execute("x/i {0}".format(addr))
 
 
 class VmmapCommand(gdb.Command):
     def __init__(self):
-        super(VmmapCommand, self).__init__("vmmap", gdb.COMMAND_USER)
+        super(VmmapCommand, self).__init__("memmap", gdb.COMMAND_USER)
 
     def invoke(self, arg: str, from_tty):
         # TODO: now add arg, and return only the requested addresses in case it is a string with the library name or
@@ -113,7 +113,7 @@ class VmmapCommand(gdb.Command):
             try:
                 addr = int(arg, 0)
             except ValueError:
-                lib = arg.strip()
+                lib = os.path.basename(os.path.realpath(arg.strip()))
 
             if addr is not None:
                 to_find = addr
@@ -137,19 +137,12 @@ class VmmapCommand(gdb.Command):
                 splitted[0] = "\t".join((hex(low_addr), hex(high_addr)))
                 line = "\t".join(splitted)
 
-                if lib is not None and lib != line_lib:
+                if lib is not None and lib != os.path.basename(os.path.realpath(line_lib)):
                     continue
 
                 if addr is not None and (addr < low_addr or addr > high_addr):
                     continue
 
-                # Note: the ANSI color code is just noise, used in order to allow function
-                # |convert_addr| to use pwndbg's vmmap command as well (it prepends an ANSI color code).
-                # Also, pwndbg prints a table header before printing the result of the command.
-                # In order to get the correct line both if we are using pwndbg or our internal command,
-                # let's add a header as well.
-                if not printed_line:
-                    print("\u001b[31mVMMAP:")
                 print("\u001b[31m ", line)
                 printed_line = True
         print("\u001b[0m")    
@@ -159,13 +152,7 @@ BreakOverlapCommand()
 gdb.execute("alias bro=break-overlap")
 gdb.execute("r")
 
-# If there is no vmmap command (pwndbg is not installed), then use the internal
-# definition of the vmmap command
-try:
-    s = gdb.execute("vmmap", to_string = True)
-except gdb.error:
-    VmmapCommand()
+VmmapCommand()
 
-s = gdb.execute("vmmap /usr/lib/x86_64-linux-gnu/libc-2.31.so", to_string = True)
-gdb_base = int(s.split("\n")[1].strip().split()[1].strip(), 0)
-print("GDB_BASE: ", gdb_base)
+s = gdb.execute("memmap /usr/lib/x86_64-linux-gnu/libc-2.31.so", to_string = True)
+gdb_base = int(s.split("\n")[0].strip().split()[1].strip(), 0)
