@@ -1,6 +1,6 @@
 FROM ubuntu:focal
 ARG TZ=Europe/Rome
-ARG DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip git wget gettext locales"
+ARG DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip git wget gettext locales gdb"
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 WORKDIR /opt/MemTraceThesis
 COPY . .
@@ -11,5 +11,7 @@ ENV PATH="/opt/MemTraceThesis/bin:${PATH}" \
     FORCE_UNSAFE_CONFIGURE=1 \
     LANG=it_IT.UTF-8 \
     LANGUAGE=it
+WORKDIR /opt
+RUN git clone https://github.com/pwndbg/pwndbg && cd pwndbg && ./setup.sh
 WORKDIR /home
 CMD ["/bin/bash"]
