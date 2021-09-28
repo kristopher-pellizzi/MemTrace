@@ -524,6 +524,15 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
     }
 }
 
+/*
+    Whenever an uninitialized read writes a register, all of its sub-registers are overwritten.
+    So, add the entry to the destination registers and to all their sub-registers.
+    E.g. if an instruction writes eax, it will also completely overwrite ax, al and ah, thus overwriting the 
+    information about uninitialized bytes in there. rax, instead, remains untouched, as it may still have an 
+    uninitialized byte in a position not included in eax.
+    It is responsibility of funtion |checkDestRegisters| to perform the required operations to check if
+    super-registers should be kept in the structure or should be removed.
+*/
 void addPendingRead(set<REG> regs, AccessIndex ai, MemoryAccess ma){
     std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
     set<unsigned> toAdd;
@@ -1289,6 +1298,16 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
     addSyscallToAccesses(threadIndex, ctxt, accesses);
 }
 
+/*
+    Function used to detect the overwriting of a register. In practice, every time a register is overwritten we must
+    remove all pending uninitialized reads whose uninitialized bytes are overwritten by writing the destination
+    registers. For instance, let's suppose an uninitialized read loads rax with uninitialized mask 11111000.
+    A subsequent overwrite of register eax with mask 1111 will overwrite the previous load. So, previous uninitialized 
+    read won't be reported, because never used.
+    If instead only ax was written with mask 11, the previous uninitialized bytes are not completely overwritten and, so,
+    the read is not removed. Indeed, if a subsequent instruction would use eax or rax, 1 uninitialized byte loaded by the 
+    first load will be read.
+*/
 VOID checkDestRegisters(VOID* dstRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
@@ -1307,6 +1326,9 @@ VOID checkDestRegisters(VOID* dstRegs){
         unsigned shadowReg = registerFile.getShadowRegister(*iter);
         toRemove.insert(shadowReg);
         set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
+        // It's not a problem to tamper with destination register's content here,
+        // because this function is called before |memtrace|, so the real status will be lately update.
+        // Of course, this is valid only for destination registers. Other registers should not be modified.
         registerFile.setAsInitialized(*iter);
 
         for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
@@ -1420,6 +1442,13 @@ VOID checkDestRegisters(VOID* dstRegs){
     }
 }
 
+/*
+    Function used to detect register usage and permanently store all the pending uninitialized
+    reads that loaded that register.
+    In particular, when a register is read, it will read also the bytes belonging to its sub-registers.
+    So, also check if there are uninitialized reads that loaded into its sub-registers and permanently store
+    them as well.
+*/
 VOID checkSourceRegisters(VOID* srcRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
