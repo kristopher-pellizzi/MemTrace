@@ -80,6 +80,7 @@ SANITY_SUBSET := $(TEST_TOOL_ROOTS) $(TEST_ROOTS)
 # See makefile.default.rules for the default build rules.
 
 TOOL_CXXFLAGS += -std=c++11 -MMD $(ALLOCATOR_DEF)
+TOOL_CFLAGS += -MMD $(ALLOCATOR_DEF)
 PARENTDIR := ${CURDIR}/../
 OBJDIR := $(PARENTDIR)tool/
 BINDIR := $(PARENTDIR)bin/
@@ -87,6 +88,18 @@ DEBUGDIR := $(PARENTDIR)debug/
 MKDIR := mkdir -p 
 PINROOTDEF := -DPIN_ROOT=\"$(PARENTDIR)third_party/PIN/pin\"
 TOOLDIRDEF := -DTOOL_DIR=
+
+# Instruction emulators
+INST_SRC_DIR := ${CURDIR}/instructions/
+INST_EMULATORS := $(wildcard $(INST_SRC_DIR)*.cpp)
+INST_OBJ_DIR := $(OBJDIR)instructions/
+INST_OBJ_FILES := $(patsubst $(INST_SRC_DIR)%.cpp, $(INST_OBJ_DIR)%.o, $(INST_EMULATORS))
+
+# Misc folder source files
+MISC_SRC_DIR := ${CURDIR}/misc/
+MISC_SRC := $(wildcard $(MISC_SRC_DIR)*.cpp)
+MISC_OBJ_DIR := $(OBJDIR)misc/
+MISC_OBJ_FILES := $(patsubst $(MISC_SRC_DIR)%.cpp, $(MISC_OBJ_DIR)%.o, $(MISC_SRC))
 
 .PHONY: all
 all: tool | $(OBJDIR)
@@ -106,11 +119,20 @@ launcher: $(BINDIR)launcher
 .PHONY: debugLauncher
 debugLauncher: $(BINDIR)launchDebug
 
+.PHONY: instHeaderFiles
+instHeaderFiles: | $(INST_OBJ_DIR)
+	python3 ${CURDIR}/instructionsScript.py
+
+$(INST_OBJ_DIR):
+	$(MKDIR)$@
+
+$(MISC_OBJ_DIR):
+	$(MKDIR)$@
+
 $(OBJDIR):
 	$(MKDIR)$@
 
 $(DEBUGDIR):
-	@echo Creating folder
 	$(MKDIR)$@
 
 # Build the intermediate object file.
@@ -140,13 +162,37 @@ $(OBJDIR)HeapType$(OBJ_SUFFIX): HeapType.cpp HeapType.h | $(OBJDIR)
 $(OBJDIR)Registers$(OBJ_SUFFIX): Registers.cpp Registers.h | $(OBJDIR)
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
+# Build the intermediate object file.
+$(OBJDIR)ShadowRegisterFile$(OBJ_SUFFIX): ShadowRegisterFile.cpp ShadowRegisterFile.h | $(OBJDIR)
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)ShadowRegister$(OBJ_SUFFIX): ShadowRegister.cpp ShadowRegister.h | $(OBJDIR)
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file.
+$(OBJDIR)InstructionHandler$(OBJ_SUFFIX): InstructionHandler.cpp InstructionHandler.h | instHeaderFiles
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build intermediate object files for instruction emulators
+$(INST_OBJ_DIR)%.o: $(INST_SRC_DIR)%.cpp $(INST_SRC_DIR)%.h | instHeaderFiles
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build intermediate object files for misc source files
+$(MISC_OBJ_DIR)%.o: $(MISC_SRC_DIR)%.cpp $(MISC_SRC_DIR)%.h | $(MISC_OBJ_DIR)
+	$(CC) $(TOOL_CFLAGS) $(COMP_OBJ)$@ $<
+
 # Build the tool as a dll (shared object).
 $(OBJDIR)MemTrace$(PINTOOL_SUFFIX): $(OBJDIR)MemTrace$(OBJ_SUFFIX) \
 $(OBJDIR)MemoryAccess$(OBJ_SUFFIX) MemoryAccess.h \
 $(OBJDIR)AccessIndex$(OBJ_SUFFIX) AccessIndex.h \
 $(OBJDIR)ShadowMemory$(OBJ_SUFFIX) ShadowMemory.h \
 $(OBJDIR)HeapType$(OBJ_SUFFIX) HeapType.h \
-$(OBJDIR)Registers$(OBJ_SUFFIX) Registers.h
+$(OBJDIR)ShadowRegisterFile$(OBJ_SUFFIX) ShadowRegisterFile.h \
+$(OBJDIR)ShadowRegister$(OBJ_SUFFIX) ShadowRegister.h \
+$(OBJDIR)InstructionHandler$(OBJ_SUFFIX) InstructionHandler.h \
+$(INST_OBJ_FILES) \
+$(MISC_OBJ_FILES)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 $(OBJDIR)NullTool$(PINTOOL_SUFFIX): $(OBJDIR)NullTool$(OBJ_SUFFIX)	
