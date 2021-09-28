@@ -31,7 +31,8 @@
 #include "Platform.h"
 #include "MallocHandler.h"
 #include "KnobTypes.h"
-#include "Registers.h"
+#include "ShadowRegisterFile.h"
+#include "InstructionHandler.h"
 
 using std::cerr;
 using std::string;
@@ -89,7 +90,7 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
-map<int, std::pair<AccessIndex, MemoryAccess>> pendingUninitializedReads;
+map<unsigned, std::pair<AccessIndex, MemoryAccess>> pendingUninitializedReads;
 
 // The following map is used as a temporary storage for write accesses: instead of 
 // directly insert them inside |memAccesses|, we insert them here (only 1 for each AccessIndex). Every 
@@ -525,8 +526,26 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
 
 void addPendingRead(set<REG> regs, AccessIndex ai, MemoryAccess ma){
     std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
+    set<unsigned> toAdd;
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
-        pendingUninitializedReads[get_normalized_register(*iter)] = entry;
+        unsigned shadowReg = registerFile.getShadowRegister(*iter);
+        toAdd.insert(shadowReg);
+        set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
+        unsigned shadowByteSize = registerFile.getByteSize(*iter);
+
+        for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
+            SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
+            // Add the same entry for each sub-register
+            if(registerFile.getByteSize(shdw_reg) < shadowByteSize){
+                toAdd.insert(*aliasReg);
+            }
+        }
+
+    }
+
+    for(auto iter = toAdd.begin(); iter != toAdd.end(); ++iter){
+        pendingUninitializedReads[*iter] = entry;
     }
 }
 
@@ -1060,6 +1079,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
+            // Update register status
+            InstructionHandler::getInstance().handle(opcode, ma, static_cast<set<REG>*>(dstRegs));
+
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
                 if (dstRegs != NULL)
@@ -1272,16 +1294,128 @@ VOID checkDestRegisters(VOID* dstRegs){
         return;
 
     set<REG> regs = *static_cast<set<REG>*>(dstRegs);
+    set<unsigned> toRemove;
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    bool checkSuperRegisterCoverage = false;
+    set<REG> singleByteRegs;
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
+        if(registerFile.getByteSize(*iter) == 1){
+            checkSuperRegisterCoverage = true;
+            singleByteRegs.insert(*iter);
+        }
+        unsigned shadowReg = registerFile.getShadowRegister(*iter);
+        toRemove.insert(shadowReg);
+        set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
+        registerFile.setAsInitialized(*iter);
+
+        for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
+            SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
+            // We must remove only those accesses that are not uninitialized anymore
+            if(registerFile.isUninitialized(shdw_reg)){
+                continue;
+            }
+
+            toRemove.insert(*aliasReg);
+        }
+    }
+
+    for(auto iter = toRemove.begin(); iter != toRemove.end(); ++iter){
         /*
         If the destination register is a key in the pending reads map,
         remove its entry, as it is going to be overwritten, and it has never
         been used as a source register (possible false positive)
         */
-        auto readIter = pendingUninitializedReads.find(get_normalized_register(*iter));
+        auto readIter = pendingUninitializedReads.find(*iter);
         if(readIter != pendingUninitializedReads.end()){
             pendingUninitializedReads.erase(readIter);
+        }
+    }
+
+    /* 
+        Note that this should only happen rarely. Namely, it should happen when at least one of the destination registers
+        is a 1 byte register (e.g. al, bl, bh...).
+        This is required because some registers can write both byte 0 and 1 (e.g. rax can be referenced both as al and ah), 
+        thus allowing to cover uninitialized bytes of previous loads with 2 different instructions. Example:
+            Write rbx with uninitialized mask 11111100 (1 = initialized; 0 = uninitialized);
+            Write bl with uninitialized mask 0;
+            Write bh with uninitialized mask 0;
+            The last 2 writes completely cover the first one, but since they happen at different instructions, the first
+            write is not removed with the previous loop. We need an additional check.
+
+    */
+    if(checkSuperRegisterCoverage){
+        set<unsigned> superRegs;
+        set<unsigned> smallRegs;
+        map<unsigned, uint8_t*> superRegsContent;
+
+        for(auto iter = singleByteRegs.begin(); iter != singleByteRegs.end(); ++iter){
+            unsigned shadowByteSize = 1;
+            smallRegs.insert(registerFile.getShadowRegister(*iter));
+            set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
+
+            // Look for another 1 byte register in |pendingUninitializedReads|
+            for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
+                SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
+                auto pendingReadsIter = pendingUninitializedReads.find(*aliasReg);
+                if(pendingReadsIter == pendingUninitializedReads.end())
+                    continue;
+
+                if(registerFile.getByteSize(shdw_reg) == shadowByteSize)
+                    smallRegs.insert(*aliasReg);
+                else{
+                    uint8_t* content = registerFile.getContentStatus(shdw_reg);
+                    bool toCheck = true;
+                    unsigned shadowSize = registerFile.getShadowSize(shdw_reg);
+                    for(unsigned i = 0; i < shadowSize - 1 && toCheck; ++i){
+                        if(*(content + i) != 0xff)
+                            toCheck = false;
+                    }
+
+                    if(toCheck){
+                        superRegs.insert(*aliasReg);
+                        superRegsContent[*aliasReg] = content;
+                    }
+                    else{
+                        free(content);
+                    }
+                }
+            }
+        }
+
+        if(superRegs.size() == 0)
+            return;
+
+        toRemove.clear();
+        uint8_t smallRegsMask = 0;
+        for(auto iter = smallRegs.begin(); iter != smallRegs.end(); ++iter){
+            SHDW_REG shdw_reg = (SHDW_REG) *iter;
+            uint8_t* content = registerFile.getContentStatus(shdw_reg);
+            smallRegsMask |= ~(*content);
+            free(content);
+        }
+
+        for(auto iter = superRegs.begin(); iter != superRegs.end(); ++iter){
+            SHDW_REG shdw_reg = (SHDW_REG) *iter;
+            uint8_t* content = superRegsContent[*iter];
+            unsigned shadowSize = registerFile.getShadowSize(shdw_reg);
+            uint8_t* firstBytePtr = content + shadowSize - 1;
+            
+            uint8_t regMask = *firstBytePtr;
+            regMask |= smallRegsMask;
+
+            // Small registers completely cover this register
+            if(regMask == 0xff){
+                toRemove.insert(*iter);
+            }
+            free(content);
+        }
+
+        for(auto iter = toRemove.begin(); iter != toRemove.end(); ++iter){
+            auto readIter = pendingUninitializedReads.find(*iter);
+            if(readIter != pendingUninitializedReads.end()){
+                pendingUninitializedReads.erase(readIter);
+            }
         }
     }
 }
@@ -1290,17 +1424,43 @@ VOID checkSourceRegisters(VOID* srcRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
 
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     set<MemoryAccess> alreadyInserted;
     set<REG> regs = *static_cast<set<REG>*>(srcRegs);
+    set<unsigned> toCheck;
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
+
+        // If a register is not uninitialized, its subregisters cannot be uninitialized as well
+        if(!registerFile.isUninitialized(*iter)){
+            continue;
+        }
+        
+        unsigned shadowReg = registerFile.getShadowRegister(*iter);
+        unsigned shadowByteSize = registerFile.getByteSize(*iter);
+        toCheck.insert(shadowReg);
+        set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
+
+        for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
+            // If size of the alias register is lower than the size of the considered register,
+            // it is an uninitialized subregister, and we need to check if there's any MemoryAccess object that wrote
+            // that subregister
+            SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
+            if(registerFile.getByteSize(shdw_reg) < shadowByteSize && registerFile.isUninitialized(shdw_reg)){
+                toCheck.insert(*aliasReg);
+            }
+        }
+    }
+
+    for(auto iter = toCheck.begin(); iter != toCheck.end(); ++iter){
+
         /*
         If the instruction is reading from
         a register previously loaded with an uninitialized read,
         permanently store the read to the memAccesses map, and remove it 
         from the pending reads map.
         */
-        auto readIter = pendingUninitializedReads.find(get_normalized_register(*iter));
+        auto readIter = pendingUninitializedReads.find(*iter);
 
         if(readIter != pendingUninitializedReads.end()){
             auto& access = readIter->second;
@@ -2036,9 +2196,6 @@ VOID Fini(INT32 code, VOID *v)
  */
 int main(int argc, char *argv[])
 {
-    // Initialize register mapping for aliasing registers (e.g. rax,eax,ax,al,ag -> norm_rax)
-    init_regs_map();
-
     // Initialize PIN library. Print help message if -h(elp) is specified
     // in the command line or the command line is invalid 
     PIN_InitSymbols();
