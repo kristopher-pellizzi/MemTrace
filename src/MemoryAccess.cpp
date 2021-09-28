@@ -1,5 +1,9 @@
 #include "MemoryAccess.h"
 
+OPCODE MemoryAccess::getOpcode(){
+    return opcode;
+}
+
 ADDRINT MemoryAccess::getIP() const{
     return instructionPointer;
 }
@@ -164,6 +168,10 @@ bool PartialOverlapAccess::operator<(const PartialOverlapAccess& other) const{
 }
 
 // Contained MemoryAccess structure delegation methods
+
+OPCODE PartialOverlapAccess::getOpcode(){
+    return ma.getOpcode();
+}
 
 ADDRINT PartialOverlapAccess::getIP() const{
     return ma.getIP();

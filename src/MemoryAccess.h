@@ -22,6 +22,7 @@ class MemoryAccess{
         unsigned long long executionOrder;
 
     private:
+        OPCODE opcode;
         ADDRINT instructionPointer;
         ADDRINT actualInstructionPointer;
         ADDRINT accessAddress;
@@ -40,6 +41,7 @@ class MemoryAccess{
         // its members (otherwise a warning will raise, and Intel PIN's default makefile considers all warnings as errors).
         MemoryAccess() :
             executionOrder(0),
+            opcode(0),
             instructionPointer(0),
             actualInstructionPointer(0),
             accessAddress(0),
@@ -53,8 +55,9 @@ class MemoryAccess{
             shadowMemory(NULL)
             {}
 
-        MemoryAccess(unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string* disasm, ShadowBase* shadowMemory) : 
+        MemoryAccess(OPCODE opcode, unsigned long long executionOrder, ADDRINT ip, ADDRINT actualInstructionPointer, ADDRINT addr, int spOffset, int bpOffset, UINT32 size, AccessType type, std::string* disasm, ShadowBase* shadowMemory) : 
             executionOrder(executionOrder),
+            opcode(opcode),
             instructionPointer(ip),
             actualInstructionPointer(actualInstructionPointer),
             accessAddress(addr),
@@ -68,6 +71,8 @@ class MemoryAccess{
             shadowMemory(shadowMemory)
             {};
 
+        OPCODE getOpcode();
+        
         ADDRINT getIP() const;
 
         ADDRINT getActualIP() const;
@@ -263,6 +268,8 @@ class PartialOverlapAccess{
 
         // Contained MemoryAccess structure delegation methods
 
+        OPCODE getOpcode();
+        
         ADDRINT getIP() const;
 
         ADDRINT getActualIP() const;

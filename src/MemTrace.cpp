@@ -917,7 +917,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
         int bpOffset = addr - bp;
 
-        MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, ins_disasm, currentShadow);
+        MemoryAccess ma(opcode, executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, ins_disasm, currentShadow);
         AccessIndex ai(addr, size);
         mallocTemporaryWriteStorage[ai] = ma;
         return;
@@ -956,7 +956,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     int spOffset = isPushInstruction(opcode) ? 0 : addr - sp;
     int bpOffset = addr - bp;
 
-    MemoryAccess ma(executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, ins_disasm, currentShadow);
+    MemoryAccess ma(opcode, executedAccesses++, lastExecutedInstruction, ip, addr, spOffset, bpOffset, size, type, ins_disasm, currentShadow);
     AccessIndex ai(addr, size);
 
     #ifdef DEBUG
