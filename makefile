@@ -51,3 +51,7 @@ ifeq (0, $(shell ls $(AFLDIR) | wc -l))
 	git submodule init
 	git submodule update
 endif
+
+.PHONY: nulltool
+nulltool:
+	$(MAKE) -C $(SRCDIR) PIN_ROOT=$(PIN_ROOT) nulltool
