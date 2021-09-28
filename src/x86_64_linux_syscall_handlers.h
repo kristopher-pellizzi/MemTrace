@@ -1249,6 +1249,9 @@ RETTYPE sys_rt_sigprocmask_handler ARGUMENTS{
     return ret;
 }
 
+#undef RETTYPE
+#undef ARGUMENTS
+
 
 
 //////////////////////////////////////////////////////////////////
