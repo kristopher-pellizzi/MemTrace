@@ -1,5 +1,6 @@
-EXE_PATH="./Tests/coreutils/src"
-PIN_PATH="/opt/pin"
+EXE_PATH=$(readlink -f "./Tests/coreutils/src")
+PIN_PATH=$(readlink -f "./third_party/PIN/pin")
+TOOL_PATH=$(readlink -f "./tool")
 
 user=$(whoami)
 
@@ -19,11 +20,11 @@ $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
+./bin/launcher -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -55,11 +56,11 @@ $EXE_PATH/b2sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/b2sum ./test.iso
+./bin/launcher -- $EXE_PATH/b2sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/b2sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/b2sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -89,11 +90,11 @@ $EXE_PATH/base32 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/base32 ./test.iso
+./bin/launcher -- $EXE_PATH/base32 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/base32 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/base32 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -123,11 +124,11 @@ $EXE_PATH/base64 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/base64 ./test.iso
+./bin/launcher -- $EXE_PATH/base64 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/base64 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/base64 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -159,11 +160,11 @@ $EXE_PATH/basename $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/basename $path
+./bin/launcher -- $EXE_PATH/basename $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/basename $path
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/basename $path
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -193,11 +194,11 @@ $EXE_PATH/cat ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/cat ./test.iso ./test2.iso
+./bin/launcher -- $EXE_PATH/cat ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/cat ./test.iso ./test2.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cat ./test.iso ./test2.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -227,11 +228,11 @@ $EXE_PATH/chgrp root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/chgrp root ./test.iso
+./bin/launcher -- $EXE_PATH/chgrp root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/chgrp root ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/chgrp root ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -267,14 +268,14 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/chmod 700 ./test.cpy
+./bin/launcher -- $EXE_PATH/chmod 700 ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/chmod 700 ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/chmod 700 ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -306,11 +307,11 @@ $EXE_PATH/chown root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/chown root ./test.iso
+./bin/launcher -- $EXE_PATH/chown root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/chown root ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/chown root ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -340,11 +341,11 @@ $EXE_PATH/cksum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/cksum ./test.iso
+./bin/launcher -- $EXE_PATH/cksum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/cksum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cksum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -376,13 +377,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.sorted
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sort ./test.iso -o ./test.sorted
+./bin/launcher -- $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.sorted
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sort ./test.iso -o ./test.sorted
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_null=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/sort ./test2.iso -o ./test2.sorted
@@ -415,11 +416,11 @@ $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/comm ./test.sorted ./test2.sorted
+./bin/launcher -- $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/comm ./test.sorted ./test2.sorted
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -451,13 +452,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./toDelete.tmp
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
+./bin/launcher -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./toDelete.tmp
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./toDelete.tmp
@@ -491,13 +492,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm xx00 xx01
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/csplit ./test.iso 3
+./bin/launcher -- $EXE_PATH/csplit ./test.iso 3
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm xx00 xx01
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/csplit ./test.iso 3
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/csplit ./test.iso 3
 end_null=$(date +%s%N | cut -b1-13)
 
 rm xx00 xx01
@@ -528,11 +529,11 @@ $EXE_PATH/cut -b1-10 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/cut -b1-10 ./test.iso
+./bin/launcher -- $EXE_PATH/cut -b1-10 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/cut -b1-10 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cut -b1-10 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -562,11 +563,11 @@ $EXE_PATH/date
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/date
+./bin/launcher -- $EXE_PATH/date
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/date
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/date
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -596,11 +597,11 @@ $EXE_PATH/df -h
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/df -h
+./bin/launcher -- $EXE_PATH/df -h
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/df -h
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/df -h
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -630,11 +631,11 @@ $EXE_PATH/dir
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/dir
+./bin/launcher -- $EXE_PATH/dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/dir
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dir
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -664,11 +665,11 @@ $EXE_PATH/dircolors --print-database
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/dircolors --print-database
+./bin/launcher -- $EXE_PATH/dircolors --print-database
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/dircolors --print-database
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dircolors --print-database
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -698,11 +699,11 @@ $EXE_PATH/dirname $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/dirname $path
+./bin/launcher -- $EXE_PATH/dirname $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/dirname $path
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dirname $path
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -735,11 +736,11 @@ $EXE_PATH/du -h $path
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/du -h $path
+./bin/launcher -- $EXE_PATH/du -h $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/du -h $path
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/du -h $path
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -773,11 +774,11 @@ $EXE_PATH/echo $random_data
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/echo $random_data
+./bin/launcher -- $EXE_PATH/echo $random_data
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/echo $random_data
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/echo $random_data
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -808,11 +809,11 @@ $EXE_PATH/env
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/env
+./bin/launcher -- $EXE_PATH/env
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/env
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/env
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -844,11 +845,11 @@ $EXE_PATH/expand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/expand ./test.iso
+./bin/launcher -- $EXE_PATH/expand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/expand ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/expand ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -882,11 +883,11 @@ $EXE_PATH/expr 118462910 \* 123456
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/expr 118462910 \* 123456
+./bin/launcher -- $EXE_PATH/expr 118462910 \* 123456
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/expr 118462910 \* 123456
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/expr 118462910 \* 123456
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -918,11 +919,11 @@ $EXE_PATH/factor 123456789123459
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/factor 123456789123459
+./bin/launcher -- $EXE_PATH/factor 123456789123459
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/factor 123456789123459
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/factor 123456789123459
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -955,11 +956,11 @@ $EXE_PATH/fmt -s -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/fmt -s -w 15 ./test.iso
+./bin/launcher -- $EXE_PATH/fmt -s -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/fmt -s -w 15 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/fmt -s -w 15 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -990,11 +991,11 @@ $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/fold -s -b -w 15 ./test.iso
+./bin/launcher -- $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/fold -s -b -w 15 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1025,11 +1026,11 @@ $EXE_PATH/getlimits
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/getlimits
+./bin/launcher -- $EXE_PATH/getlimits
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/getlimits
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/getlimits
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1060,11 +1061,11 @@ $EXE_PATH/groups
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/groups
+./bin/launcher -- $EXE_PATH/groups
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/groups
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/groups
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1097,11 +1098,11 @@ $EXE_PATH/head -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/head -c 512 ./test.iso
+./bin/launcher -- $EXE_PATH/head -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/head -c 512 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/head -c 512 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1134,11 +1135,11 @@ $EXE_PATH/hostid
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/hostid
+./bin/launcher -- $EXE_PATH/hostid
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/hostid
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/hostid
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1169,11 +1170,11 @@ $EXE_PATH/id
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/id
+./bin/launcher -- $EXE_PATH/id
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/id
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/id
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1205,11 +1206,11 @@ $EXE_PATH/join ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/join ./test.sorted ./test2.sorted
+./bin/launcher -- $EXE_PATH/join ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/join ./test.sorted ./test2.sorted
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/join ./test.sorted ./test2.sorted
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1242,13 +1243,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.link
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/link ./test.iso ./test.link
+./bin/launcher -- $EXE_PATH/link ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/link ./test.iso ./test.link
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/link ./test.iso ./test.link
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -1283,13 +1284,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.link
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/ln -s ./test.iso ./test.link
+./bin/launcher -- $EXE_PATH/ln -s ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/ln -s ./test.iso ./test.link
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/ln -s ./test.iso ./test.link
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -1321,11 +1322,11 @@ $EXE_PATH/ls -al ./Tests/coreutils/src
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/ls -al ./Tests/coreutils/src
+./bin/launcher -- $EXE_PATH/ls -al ./Tests/coreutils/src
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/ls -al ./Tests/coreutils/src
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/ls -al ./Tests/coreutils/src
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1356,11 +1357,11 @@ $EXE_PATH/md5sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/md5sum ./test.iso
+./bin/launcher -- $EXE_PATH/md5sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/md5sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/md5sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1394,13 +1395,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm -r abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
+./bin/launcher -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm -r abcdefghijklmnopqrstuvwxyz
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_null=$(date +%s%N | cut -b1-13)
 
 rm -r abcdefghijklmnopqrstuvwxyz
@@ -1435,13 +1436,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
+./bin/launcher -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_null=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
@@ -1478,13 +1479,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm abcdefghijklmnopqrstuvwxyz
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
+./bin/launcher -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_null=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
@@ -1519,11 +1520,11 @@ $EXE_PATH/mktemp
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/mktemp
+./bin/launcher -- $EXE_PATH/mktemp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/mktemp
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mktemp
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1558,13 +1559,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 $EXE_PATH/mv ./test_dir/test.iso .
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/mv ./test.iso ./test_dir
+./bin/launcher -- $EXE_PATH/mv ./test.iso ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/mv ./test_dir/test.iso .
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/mv ./test.iso ./test_dir
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mv ./test.iso ./test_dir
 end_null=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/mv ./test_dir/test.iso .
@@ -1600,11 +1601,11 @@ $EXE_PATH/nice -n 19 ls -al
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/nice -n 19 ls -al
+./bin/launcher -- $EXE_PATH/nice -n 19 ls -al
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/nice -n 19 ls -al
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/nice -n 19 ls -al
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1636,11 +1637,11 @@ $EXE_PATH/nl ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/nl ./test.iso
+./bin/launcher -- $EXE_PATH/nl ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/nl ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/nl ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1671,11 +1672,11 @@ $EXE_PATH/nproc
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/nproc
+./bin/launcher -- $EXE_PATH/nproc
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/nproc
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/nproc
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1706,11 +1707,11 @@ $EXE_PATH/numfmt 123456789 1253 9182746583
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/numfmt 123456789 1253 9182746583
+./bin/launcher -- $EXE_PATH/numfmt 123456789 1253 9182746583
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/numfmt 123456789 1253 9182746583
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/numfmt 123456789 1253 9182746583
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1742,11 +1743,11 @@ $EXE_PATH/od -x ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/od -x ./test.iso
+./bin/launcher -- $EXE_PATH/od -x ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/od -x ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/od -x ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1779,11 +1780,11 @@ $EXE_PATH/paste ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/paste ./test.iso ./test2.iso
+./bin/launcher -- $EXE_PATH/paste ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/paste ./test.iso ./test2.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/paste ./test.iso ./test2.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1814,11 +1815,11 @@ $EXE_PATH/pinky
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/pinky
+./bin/launcher -- $EXE_PATH/pinky
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/pinky
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/pinky
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1850,11 +1851,11 @@ $EXE_PATH/printenv
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/printenv
+./bin/launcher -- $EXE_PATH/printenv
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/printenv
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/printenv
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1887,11 +1888,11 @@ $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
+./bin/launcher -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1921,11 +1922,11 @@ $EXE_PATH/ptx ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/ptx ./test.iso
+./bin/launcher -- $EXE_PATH/ptx ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/ptx ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/ptx ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1958,11 +1959,11 @@ $EXE_PATH/pwd
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/pwd
+./bin/launcher -- $EXE_PATH/pwd
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/pwd
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/pwd
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -1996,11 +1997,11 @@ $EXE_PATH/readlink ./test.link
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/readlink ./test.link
+./bin/launcher -- $EXE_PATH/readlink ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/readlink ./test.link
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/readlink ./test.link
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
@@ -2034,11 +2035,11 @@ $EXE_PATH/realpath ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/realpath ./test.iso
+./bin/launcher -- $EXE_PATH/realpath ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/realpath ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/realpath ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2076,13 +2077,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/rm ./test.cpy
+./bin/launcher -- $EXE_PATH/rm ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/rm ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/rm ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2119,13 +2120,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 mkdir ./test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/rmdir ./test_dir
+./bin/launcher -- $EXE_PATH/rmdir ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 mkdir ./test_dir
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/rmdir ./test_dir
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/rmdir ./test_dir
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2158,11 +2159,11 @@ $EXE_PATH/seq 1 1000000
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/seq 1 1000000
+./bin/launcher -- $EXE_PATH/seq 1 1000000
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/seq 1 1000000
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/seq 1 1000000
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2194,11 +2195,11 @@ $EXE_PATH/sha1sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sha1sum ./test.iso
+./bin/launcher -- $EXE_PATH/sha1sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sha1sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha1sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2231,11 +2232,11 @@ $EXE_PATH/sha224sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sha224sum ./test.iso
+./bin/launcher -- $EXE_PATH/sha224sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sha224sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha224sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2267,11 +2268,11 @@ $EXE_PATH/sha256sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sha256sum ./test.iso
+./bin/launcher -- $EXE_PATH/sha256sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sha256sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha256sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2303,11 +2304,11 @@ $EXE_PATH/sha384sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sha384sum ./test.iso
+./bin/launcher -- $EXE_PATH/sha384sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sha384sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha384sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2340,11 +2341,11 @@ $EXE_PATH/sha512sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sha512sum ./test.iso
+./bin/launcher -- $EXE_PATH/sha512sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sha512sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha512sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2381,14 +2382,14 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/shred ./test.cpy
+./bin/launcher -- $EXE_PATH/shred ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/shred ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/shred ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2420,11 +2421,11 @@ $EXE_PATH/shuf ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/shuf ./test.iso
+./bin/launcher -- $EXE_PATH/shuf ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/shuf ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/shuf ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2457,11 +2458,11 @@ $EXE_PATH/sleep 1
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sleep 1
+./bin/launcher -- $EXE_PATH/sleep 1
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sleep 1
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sleep 1
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2494,7 +2495,7 @@ mkdir test_dir
 cd test_dir
 
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
-../$EXE_PATH/split -b 512 ../test.iso
+$EXE_PATH/split -b 512 ../test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -2503,7 +2504,7 @@ mkdir test_dir
 cd test_dir
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-../launcher -- ../$EXE_PATH/split -b 512 ../test.iso
+../bin/launcher -- $EXE_PATH/split -b 512 ../test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -2512,7 +2513,7 @@ mkdir test_dir
 cd test_dir
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/split -b 512 ../test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/split -b 512 ../test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -2548,11 +2549,11 @@ $EXE_PATH/stat ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/stat ./test.iso
+./bin/launcher -- $EXE_PATH/stat ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/stat ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/stat ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2583,11 +2584,11 @@ $EXE_PATH/stty -a
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/stty -a
+./bin/launcher -- $EXE_PATH/stty -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/stty -a
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/stty -a
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2618,11 +2619,11 @@ $EXE_PATH/sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/sum ./test.iso
+./bin/launcher -- $EXE_PATH/sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2654,11 +2655,11 @@ $EXE_PATH/tac ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/tac ./test.iso ./test2.iso
+./bin/launcher -- $EXE_PATH/tac ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/tac ./test.iso ./test2.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/tac ./test.iso ./test2.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2690,11 +2691,11 @@ $EXE_PATH/tail -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/tail -c 512 ./test.iso
+./bin/launcher -- $EXE_PATH/tail -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/tail -c 512 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/tail -c 512 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2727,13 +2728,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/touch ./test.cpy
+./bin/launcher -- $EXE_PATH/touch ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/touch ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/touch ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2771,14 +2772,14 @@ rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/truncate -s 512K ./test.cpy
+./bin/launcher -- $EXE_PATH/truncate -s 512K ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/truncate -s 512K ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/truncate -s 512K ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
@@ -2811,11 +2812,11 @@ $EXE_PATH/tty
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/tty
+./bin/launcher -- $EXE_PATH/tty
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/tty
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/tty
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2847,11 +2848,11 @@ $EXE_PATH/uname -a
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/uname -a
+./bin/launcher -- $EXE_PATH/uname -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/uname -a
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/uname -a
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2882,11 +2883,11 @@ $EXE_PATH/unexpand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/unexpand ./test.iso
+./bin/launcher -- $EXE_PATH/unexpand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/unexpand ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/unexpand ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2917,11 +2918,11 @@ $EXE_PATH/uniq -u ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/uniq -u ./test.iso
+./bin/launcher -- $EXE_PATH/uniq -u ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/uniq -u ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/uniq -u ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2958,13 +2959,13 @@ end_orig=$(date +%s%N | cut -b1-13)
 cp ./test.iso ./test.cpy
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/unlink ./test.cpy
+./bin/launcher -- $EXE_PATH/unlink ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/unlink ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/unlink ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -2997,11 +2998,11 @@ $EXE_PATH/uptime
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/uptime
+./bin/launcher -- $EXE_PATH/uptime
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/uptime
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/uptime
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -3032,11 +3033,11 @@ $EXE_PATH/users
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/users
+./bin/launcher -- $EXE_PATH/users
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/users
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/users
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -3069,11 +3070,11 @@ $EXE_PATH/vdir
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/vdir
+./bin/launcher -- $EXE_PATH/vdir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/vdir
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/vdir
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -3104,11 +3105,11 @@ $EXE_PATH/wc ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/wc ./test.iso
+./bin/launcher -- $EXE_PATH/wc ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/wc ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/wc ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -3139,11 +3140,11 @@ $EXE_PATH/who
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/who
+./bin/launcher -- $EXE_PATH/who
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/who
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/who
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
@@ -3175,11 +3176,11 @@ $EXE_PATH/whoami
 end_orig=$(date +%s%N | cut -b1-13)
 
 start_instrumented=$(date +%s%N | cut -b1-13)
-./launcher -- $EXE_PATH/whoami
+./bin/launcher -- $EXE_PATH/whoami
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 start_null=$(date +%s%N | cut -b1-13)
-$PIN_PATH/pin -t obj-intel64/NullTool.so -- $EXE_PATH/whoami
+$PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/whoami
 end_null=$(date +%s%N | cut -b1-13)
 
 orig_duration=$(expr $end_orig - $start_orig)
