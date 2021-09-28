@@ -449,6 +449,29 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
         highestShadowAddr = shadowAddr;
 }
 
+uint8_t* HeapShadow::invertBitOrder(uint8_t* data, unsigned offset, UINT32 byteSize){
+    UINT32 size = byteSize + offset;
+    UINT32 shadowSize = size % 8 != 0 ? (size / 8) + 1 : size / 8;
+
+    uint8_t* ret = (uint8_t*) calloc(shadowSize, sizeof(uint8_t));
+    uint8_t* srcPtr = data + shadowSize - 1;
+    uint8_t* dstPtr = ret;
+    for(UINT32 j = 0; j < shadowSize; ++j){
+        for(int i = 0; i < 8; ++i){
+            *dstPtr <<= 1;
+            uint8_t lsb = *srcPtr % 2;
+            *dstPtr |= lsb;
+            *srcPtr >>= 1;
+        }
+
+        ++dstPtr;
+        --srcPtr;
+    }
+
+    free(data);
+    return ret;
+}
+
 uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
@@ -493,7 +516,10 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
     }
 
     if(isUninitialized){
-        return this->shadow_memory_copy(addr, size);
+        // We return the reversed bit sequence in order to adapt the information
+        // about uninitialized byte to be aligned to the order both StackShadow and ShadowRegister
+        // use (i.e. MSB to the left; LSB to the right)
+        return this->invertBitOrder(this->shadow_memory_copy(addr, size), addr % 8, size);
     }
     else
         return NULL;
@@ -530,6 +556,7 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
 }
 
 set<std::pair<unsigned, unsigned>> HeapShadow::computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize){
+    /*
     set<std::pair<unsigned, unsigned>> ret;
 
     uint8_t* addr = uninitializedInterval;
@@ -622,6 +649,101 @@ set<std::pair<unsigned, unsigned>> HeapShadow::computeIntervals(uint8_t* uniniti
             --shadowSize;
             ++addr;
             ++byteCount;
+        }
+    }
+
+    return ret;
+    */
+
+   set<std::pair<unsigned, unsigned>> ret;
+
+    uint8_t* addr = uninitializedInterval;
+    unsigned offset = accessAddr % 8;
+    UINT32 size = accessSize + offset;
+    UINT32 shadowSize = (size % 8 != 0 ? (size / 8) + 1 : (size / 8));
+    uint8_t mask = size % 8 == 0 ? 0 : 0xff << (size % 8);
+
+    while(shadowSize > 0){
+        uint8_t val = *addr;
+        val |= mask;
+        val |= (shadowSize != 1 ? 0 : ((1 << offset) - 1));
+        mask = 0;
+
+        if(val != 0xff){
+            // Start scanning the bits to find the lower and upper bounds of the interval
+            mask = 1 << 7;
+            int counter = 0;
+
+            // Starting from the most significant bit, scan every other bit until a 0 is found (guaranteed to be found, 
+            // as we already know |val| is not 0xff
+            while((val & mask) != 0){
+                ++counter;
+                mask >>= 1;
+            }
+
+            int upperBound = shadowSize * 8 - counter - 1 - offset;
+
+            while((val & mask) == 0 && mask != 0){
+                ++counter;
+                mask >>= 1;
+            }
+
+            // If another 1 is found inside the same shadow byte, we have found the interval's lower bound
+            if(mask != 0){
+                int lowerBound = shadowSize * 8 - counter - offset;
+                ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                // Update mask in order to ignore the interval just found
+                mask = 0xff << (8 - counter);
+            }
+            // the lower bound is in the following shadow byte. Before scanning bit by bit, try to see if the whole
+            // shadow byte is 0. If it's not, scan the byte one bit at a time.
+            else{
+                bool lowerBoundFound = false;
+
+                while(!lowerBoundFound){
+                    --shadowSize;
+                    ++addr;
+
+                    // This condition evaluates to true if there's no bit set to 1 starting from the |upperBound|.
+                    // This means that also the very first byte of the access is uninitialized, so |lowerBound| is 0
+                    if(shadowSize == 0){
+                        int lowerBound = 0;
+                        ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                        break;
+                    }
+
+                    if(shadowSize == 1)
+                        offset = accessAddr % 8;
+
+                    val = *addr;
+                    val |= (shadowSize != 1 ? 0 : ((1 << offset) - 1));
+
+                    if(val != 0){
+                        mask = 1 << 7;
+                        counter = 0;
+
+                        // Starting from the most significant bit, scan every other bit until a 1 is found (guaranteed to be found, 
+                        // as we already know |val| is not 0
+                        while((val & mask) == 0){
+                            ++counter;
+                            mask >>= 1;
+                        }
+
+                        int lowerBound = shadowSize * 8 - counter - offset;
+                        ret.insert(std::pair<unsigned, unsigned>(lowerBound, upperBound));
+                        mask = 0xff << (8 - counter);
+                        lowerBoundFound = true;
+                    }
+                }
+            }
+        }
+        // This shadow byte is 0xff. No uninitialized interval can be found
+        else{
+            // |addr| is increased only if it was 0xff. This way, it is checked again after computing
+            // interval's bounds in case there are more "holes" in the same shadow byte 
+            // (e.g. shadowByte = 11011001 => intervals are [1,2] and [5, 5], assuming only 1 byte is accessed by the application)
+            --shadowSize;
+            ++addr;
         }
     }
 

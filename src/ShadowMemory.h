@@ -96,6 +96,7 @@ class HeapShadow : public ShadowBase{
 
         std::pair<unsigned, unsigned> getShadowAddrIdxOffset(ADDRINT addr) override;
         uint8_t* getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offset) override;
+        uint8_t* invertBitOrder(uint8_t* data, unsigned offset, UINT32 byteSize);
 
     public:
         HeapShadow(HeapEnum type);
