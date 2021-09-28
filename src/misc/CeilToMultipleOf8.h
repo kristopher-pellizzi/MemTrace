@@ -1,0 +1,1 @@
+unsigned ceilToMultipleOf8(unsigned byteSize);
