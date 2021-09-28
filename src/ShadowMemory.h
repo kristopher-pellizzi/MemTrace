@@ -64,7 +64,7 @@ class ShadowBase{
         // more bytes are accessed by a MemoryAccess, the more expensive it is.
         // However, this is executed only for those uninitialized read accesses saved by the tool (which shouldn't be so
         // many in a well produced program), most of which are usually of a few bytes.
-        virtual set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize) = 0;
+        set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize);
 
         void setBaseAddr(ADDRINT baseAddr);
         ShadowBase* getPtr();
@@ -86,7 +86,6 @@ class StackShadow : public ShadowBase{
 
         void set_as_initialized(ADDRINT addr, UINT32 size) override;
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
-        set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize) override;
 };
 
 class HeapShadow : public ShadowBase{
@@ -106,7 +105,6 @@ class HeapShadow : public ShadowBase{
 
         void set_as_initialized(ADDRINT addr, UINT32 size) override;
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
-        set<std::pair<unsigned, unsigned>> computeIntervals(uint8_t* uninitializedInterval, ADDRINT accessAddr, UINT32 accessSize) override;
 };
 
 extern StackShadow stack;
