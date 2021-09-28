@@ -37,6 +37,7 @@ def main():
     executable_path = os.fsencode(args.executable_path)
     args_path = os.path.join(testcase_path, b"argv")
     environ_path = os.path.join(testcase_path, b"environ")
+    script_dir = os.fsencode(os.path.realpath(sys.path[0]))
 
     argv = [b'gdb']
     if args.stdin:
@@ -49,7 +50,7 @@ def main():
         argv.extend([b'-ex', b'define hook-run'])
     argv.extend([b'-ex', b'set $testcase_path = "' + testcase_path + b'"'])
     argv.extend([b'-ex', b'set $cwd = "' + os.path.realpath(os.fsencode(sys.path[0])) + b'"'])
-    argv.extend([b'-ex', b'source verification_gdb_session.py'])
+    argv.extend([b'-ex', b'source ' + os.path.join(script_dir, b'verification_gdb_session.py')])
     argv_ext = [b'--args', executable_path]
     argv.extend(argv_ext)
     
