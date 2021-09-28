@@ -13,6 +13,9 @@ def main():
     include_str = '#include "instructions/{0}"\n'
     template_path = os.path.join(cwd, "EmulatorTemplate.h")
     emulator_template = None
+    existing_instr = set()
+    instr_obj_dir = os.path.realpath(os.path.join("..", "tool", "instructions"))
+
     with open(template_path, "r") as f:
         emulator_template = f.read()
 
@@ -24,6 +27,7 @@ def main():
             header_file = "{0}.h".format(name)
             include_guard = name.upper()
             header_path = os.path.join(instr_path, header_file)
+            existing_instr.add(name)
 
             # If the header file already exists, it has already been generated and added to the header file
             if os.path.exists(header_path):
@@ -37,6 +41,13 @@ def main():
             
             # Insert include statement in Instructions.h
             f.write(include_str.format(header_file))
+
+    # Remove not-existing instructions object files (if any)
+    for file in os.scandir(instr_obj_dir):
+        name, ext = file.name.split(".")
+        if not name in existing_instr:
+            path = os.path.join(instr_obj_dir, file.name)
+            os.remove(os.path.join(instr_obj_dir, path))
 
 
 if __name__ == '__main__':
