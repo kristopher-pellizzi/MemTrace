@@ -1,4 +1,10 @@
 #include "DefaultLoadInstruction.h"
+#include <fstream>
+
+using std::ofstream;
+
+// Open a text file where to write opcodes that caused a warning
+static ofstream warningOpcodes("warningOpcodes.log", std::ios_base::app);
 
 static uint8_t* expandData(uint8_t* data, MemoryAccess& ma, unsigned shadowSize, unsigned regByteSize, unsigned regShadowSize){
     uint8_t* ret = (uint8_t*) malloc(sizeof(uint8_t) * regShadowSize);
@@ -62,19 +68,33 @@ RETTYPE DefaultLoadInstruction::operator() ARGS{
             cerr 
                 << "[DefaultLoadInstruction] Warning: writing shadow register " 
                 << ShadowRegisterFile::getInstance().getName(*iter) 
-                << ". Register size (" << regByteSize << ") is lower than the read memory (" << ma.getSize() << ")." << endl;
+                << "." << endl;
+            cerr 
+                << "Instruction : " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
+                << "." << endl;
+            cerr
+                << "Register size (" << std::dec << regByteSize << ") is lower than the read memory (" << ma.getSize() << ")." << endl;
             cerr    
                 << "It's possible that the information about uninitialized bytes stored into the shadow register is "
-                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl;
+                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+
+            warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is LOWER than memory size" << endl;
         }
         else if(regByteSize > ma.getSize()){
             cerr 
                 << "[DefaultLoadInstruction] Warning: writing shadow register " 
                 << ShadowRegisterFile::getInstance().getName(*iter) 
-                << ". Register size (" << regByteSize << ") is higher than the read memory (" << ma.getSize() << ")." << endl;
+                << "." << endl;
+            cerr 
+                << "Instruction's opcode: " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode())
+                << "." << endl;
+            cerr 
+                << "Register size (" << std::dec << regByteSize << ") is higher than the read memory (" << ma.getSize() << ")." << endl;
             cerr    
                 << "It's possible that the information about uninitialized bytes stored into the shadow register is "
-                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl;
+                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+
+            warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is HIGHER than memory size" << endl;
            
             uint8_t* expandedData = expandData(regData, ma, shadowSize, regByteSize, regShadowSize);
             curr_data = expandedData;
