@@ -89,11 +89,17 @@ MKDIR := mkdir -p
 PINROOTDEF := -DPIN_ROOT=\"$(PARENTDIR)third_party/PIN/pin\"
 TOOLDIRDEF := -DTOOL_DIR=
 
-# Instruction emulators
-INST_SRC_DIR := ${CURDIR}/instructions/
-INST_EMULATORS := $(wildcard $(INST_SRC_DIR)*.cpp)
-INST_OBJ_DIR := $(OBJDIR)instructions/
-INST_OBJ_FILES := $(patsubst $(INST_SRC_DIR)%.cpp, $(INST_OBJ_DIR)%.o, $(INST_EMULATORS))
+# Memory instruction emulators
+MEM_INST_SRC_DIR := ${CURDIR}/instructions/mem/
+MEM_INST_EMULATORS := $(wildcard $(MEM_INST_SRC_DIR)*.cpp)
+MEM_INST_OBJ_DIR := $(OBJDIR)instructions/mem/
+MEM_INST_OBJ_FILES := $(patsubst $(MEM_INST_SRC_DIR)%.cpp, $(MEM_INST_OBJ_DIR)%.o, $(MEM_INST_EMULATORS))
+
+# Register instruction emulators
+REG_INST_SRC_DIR := ${CURDIR}/instructions/reg/
+REG_INST_EMULATORS := $(wildcard $(REG_INST_SRC_DIR)*.cpp)
+REG_INST_OBJ_DIR := $(OBJDIR)instructions/reg/
+REG_INST_OBJ_FILES := $(patsubst $(REG_INST_SRC_DIR)%.cpp, $(REG_INST_OBJ_DIR)%.o, $(REG_INST_EMULATORS))
 
 # Misc folder source files
 MISC_SRC_DIR := ${CURDIR}/misc/
@@ -120,10 +126,13 @@ launcher: $(BINDIR)launcher
 debugLauncher: $(BINDIR)launchDebug
 
 .PHONY: instHeaderFiles
-instHeaderFiles: | $(INST_OBJ_DIR)
+instHeaderFiles: | $(MEM_INST_OBJ_DIR) $(REG_INST_OBJ_DIR)
 	python3 ${CURDIR}/instructionsScript.py
 
-$(INST_OBJ_DIR):
+$(MEM_INST_OBJ_DIR):
+	$(MKDIR)$@
+
+$(REG_INST_OBJ_DIR):
 	$(MKDIR)$@
 
 $(MISC_OBJ_DIR):
@@ -136,7 +145,7 @@ $(DEBUGDIR):
 	$(MKDIR)$@
 
 # Build the intermediate object file.
-$(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp | $(OBJDIR)
+$(OBJDIR)MemTrace$(OBJ_SUFFIX): MemTrace.cpp InstructionHandler.h| $(OBJDIR)
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 $(OBJDIR)NullTool$(OBJ_SUFFIX): NullTool.cpp | $(OBJDIR)
@@ -171,11 +180,21 @@ $(OBJDIR)ShadowRegister$(OBJ_SUFFIX): ShadowRegister.cpp ShadowRegister.h | $(OB
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file.
-$(OBJDIR)InstructionHandler$(OBJ_SUFFIX): InstructionHandler.cpp InstructionHandler.h | instHeaderFiles
+$(OBJDIR)InstructionHandler$(OBJ_SUFFIX): InstructionHandler.cpp InstructionHandler.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
-# Build intermediate object files for instruction emulators
-$(INST_OBJ_DIR)%.o: $(INST_SRC_DIR)%.cpp $(INST_SRC_DIR)%.h | instHeaderFiles
+# In order to be able and include InstructionHandler.h, we need to create header file Instructions.h
+InstructionHandler.h: instHeaderFiles
+
+# Build the intermediate object file
+$(OBJDIR)MemInstructionEmulator$(OBJ_SUFFIX): MemInstructionEmulator.cpp MemInstructionEmulator.h
+
+# Build intermediate object files for memory instruction emulators
+$(MEM_INST_OBJ_DIR)%.o: $(MEM_INST_SRC_DIR)%.cpp $(MEM_INST_SRC_DIR)%.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build intermediate object files for register instruction emulators
+$(REG_INST_OBJ_DIR)%.o: $(REG_INST_SRC_DIR)%.cpp $(REG_INST_SRC_DIR)%.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build intermediate object files for misc source files
@@ -191,7 +210,9 @@ $(OBJDIR)HeapType$(OBJ_SUFFIX) HeapType.h \
 $(OBJDIR)ShadowRegisterFile$(OBJ_SUFFIX) ShadowRegisterFile.h \
 $(OBJDIR)ShadowRegister$(OBJ_SUFFIX) ShadowRegister.h \
 $(OBJDIR)InstructionHandler$(OBJ_SUFFIX) InstructionHandler.h \
-$(INST_OBJ_FILES) \
+$(OBJDIR)MemInstructionEmulator$(OBJ_SUFFIX) MemInstructionEmulator.h \
+$(MEM_INST_OBJ_FILES) \
+$(REG_INST_OBJ_FILES) \
 $(MISC_OBJ_FILES)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
