@@ -533,11 +533,11 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
     It is responsibility of funtion |checkDestRegisters| to perform the required operations to check if
     super-registers should be kept in the structure or should be removed.
 */
-void addPendingRead(set<REG> regs, AccessIndex ai, MemoryAccess ma){
+void addPendingRead(set<REG>* regs, AccessIndex ai, MemoryAccess ma){
     std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
     set<unsigned> toAdd;
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    for(auto iter = regs.begin(); iter != regs.end(); ++iter){
+    for(auto iter = regs->begin(); iter != regs->end(); ++iter){
         unsigned shadowReg = registerFile.getShadowRegister(*iter);
         toAdd.insert(shadowReg);
         set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
@@ -879,7 +879,7 @@ bool initUpToNullByte(unsigned nulIndex, set<std::pair<unsigned, unsigned>> inte
 }
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                UINT32 opcode_arg, VOID* dstRegs)
+                UINT32 opcode_arg, VOID* dstRegsPtr, VOID* srcRegsPtr)
 {
     #ifdef DEBUG
         static std::ofstream mtrace("mtrace.log");
@@ -1088,13 +1088,15 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
+            set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
+            set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
             // Update register status
-            InstructionHandler::getInstance().handle(opcode, ma, static_cast<set<REG>*>(dstRegs));
+            InstructionHandler::getInstance().handle(opcode, ma, dstRegs, srcRegs);
 
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
                 if (dstRegs != NULL)
-                    addPendingRead(*static_cast<set<REG>*>(dstRegs), ai, ma);
+                    addPendingRead(dstRegs, ai, ma);
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 0));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
@@ -1163,7 +1165,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
                     if(dstRegs != NULL)
-                        addPendingRead(*static_cast<set<REG>*>(dstRegs), ai, ma);
+                        addPendingRead(dstRegs, ai, ma);
 
                     for(std::pair<AccessIndex, MemoryAccess>& write_access : writes){
                         storeMemoryAccess(write_access.first, write_access.second);
@@ -1179,7 +1181,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
 // for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                    UINT32 opcode, VOID* dstRegs)
+                    UINT32 opcode, VOID* dstRegs, VOID* srcRegs)
 {
     if(!entryPointExecuted){
         return;
@@ -1187,11 +1189,11 @@ VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, AD
 
     // The procedure call pushes the return address on the stack
     currentShadow = stack.getPtr();
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs, srcRegs);
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                UINT32 opcode, VOID* dstRegs)
+                UINT32 opcode, VOID* dstRegs, VOID* srcRegs)
 {
     if(!entryPointExecuted){
         return;
@@ -1203,7 +1205,7 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
     heuristicAlreadyApplied = false;
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs, srcRegs);
 
     // Reset the shadow memory of the "freed" stack frame.
     // NOTE: at this point we are sure currentShadow is an instance of StackShadow, so we can perform
@@ -1228,7 +1230,7 @@ void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v)
     // does not make any difference
     OPCODE opcode = XED_ICLASS_SYSCALL_AMD;
     for(auto i = v.begin(); i != v.end(); ++i){
-        memtrace(tid, ctxt, i->getType(), syscallIP, i->getAddress(), i->getSize(), disasm, opcode, NULL);    
+        memtrace(tid, ctxt, i->getType(), syscallIP, i->getAddress(), i->getSize(), disasm, opcode, NULL, NULL);    
     }
 }
 
@@ -1503,6 +1505,13 @@ VOID checkSourceRegisters(VOID* srcRegs){
     }
 }
 
+VOID propagateRegisterStatus(VOID* srcRegsPtr, VOID* dstRegsPtr){
+    //set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
+    //set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
+
+    //uint8_t* srcStatus = NULL;
+}
+
 /*
     This analysis function is simply used to update the last executed instruction in case the instruction is a jmp
     instruction and it is inside the .text section.
@@ -1672,9 +1681,11 @@ VOID Instruction(INS ins, VOID* v){
     UINT32 readRegisters = INS_MaxNumRRegs(ins);
     OPCODE opcode = INS_Opcode(ins);
     set<REG>* srcRegs = new set<REG>();
+    set<REG>* explicitSrcRegs = new set<REG>();
     set<REG>* dstRegs = new set<REG>();
     regsPtrs.push_back(srcRegs);
     regsPtrs.push_back(dstRegs);
+    regsPtrs.push_back(explicitSrcRegs);
 
     /* 
         Take the explicitly written destination registers.
@@ -1690,8 +1701,14 @@ VOID Instruction(INS ins, VOID* v){
             if(REG_is_flags(reg))
                 continue;
 
+            // If the register is explicitly written, add it to the destination registers set
             if(INS_RegWContain(ins, reg)){
                 dstRegs->insert(reg);
+            }
+
+            // If the register is explicitly read, add it to the explicit source registers set
+            if(INS_RegRContain(ins, reg)){
+                explicitSrcRegs->insert(reg);
             }
         }
     }
@@ -1710,6 +1727,7 @@ VOID Instruction(INS ins, VOID* v){
             instruction is to set the register to 0, thus throwing away any value it contains.
     */
     if(!isCmpInstruction(opcode)){
+        // Add all source registers (both implicit and explicit) to the set of source registers
         for(UINT32 regop = 0; regop < readRegisters; ++regop){
             REG src = INS_RegR(ins, regop);
             if(!REG_is_flags(src)){
@@ -1722,6 +1740,23 @@ VOID Instruction(INS ins, VOID* v){
         srcRegs->clear();
     }
 
+    // Already delete any set that is empty, and set the pointer to NULL
+    if(dstRegs->size() == 0){
+        delete(dstRegs);
+        dstRegs = NULL;
+    }
+
+    if(srcRegs->size() == 0){
+        delete(srcRegs);
+        srcRegs = NULL;
+    }
+
+    if(explicitSrcRegs->size() == 0){
+        delete(explicitSrcRegs);
+        explicitSrcRegs = NULL;
+    }
+
+    // Start inserting analysis functions
     INS_InsertPredicatedCall(
         ins,
         IPOINT_BEFORE,
@@ -1784,6 +1819,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_PTR, disassembly, 
                         IARG_UINT32, opcode, 
                         IARG_PTR, dstRegs,
+                        IARG_PTR, explicitSrcRegs,
                         IARG_END
                     );
 
@@ -1808,6 +1844,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_PTR, disassembly, 
                         IARG_UINT32, opcode, 
                         IARG_PTR, dstRegs,
+                        IARG_PTR, explicitSrcRegs,
                         IARG_END
                     ); 
                 }          
@@ -1830,6 +1867,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
                         IARG_PTR, dstRegs,
+                        IARG_PTR, explicitSrcRegs,
                         IARG_END
                     );
 
@@ -1855,6 +1893,7 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
                         IARG_PTR, dstRegs,
+                        IARG_PTR, explicitSrcRegs,
                         IARG_END
                     );
                 }
