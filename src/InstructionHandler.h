@@ -1,5 +1,8 @@
 #include <map>
 #include "pin.H"
+
+#include "RegInstructionEmulator.h"
+#include "MemInstructionEmulator.h"
 #include "Instructions.h"
 
 using std::map;
@@ -9,9 +12,11 @@ using std::map;
 
 class InstructionHandler{
     private:
-        map<OPCODE, InstructionEmulator*> emulators;
-        InstructionEmulator* defaultLoad;
-        InstructionEmulator* defaultStore;
+        map<OPCODE, MemInstructionEmulator*> memEmulators;
+        map<OPCODE, RegInstructionEmulator*> regEmulators;
+        MemInstructionEmulator* defaultLoad;
+        MemInstructionEmulator* defaultStore;
+        RegInstructionEmulator* defaultRegPropagate;
 
         InstructionHandler();
         void init();
@@ -22,7 +27,8 @@ class InstructionHandler{
         void operator=(const InstructionHandler& other) = delete;
 
         static InstructionHandler& getInstance();
-        void handle(OPCODE op, MemoryAccess& ma, set<REG>* regs);
+        void handle(OPCODE op, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs);
+        void handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs);
 
 };
 
