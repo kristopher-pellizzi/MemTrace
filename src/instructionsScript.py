@@ -1,6 +1,19 @@
 import os
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--debug", "-d",
+        action = "store_true",
+        help = "Flag to produce debug enabled object files",
+        dest = "debug"
+    )
+
+    return parser.parse_args()
 
 def main():
+    args = parse_args()
     cwd = os.getcwd()
     out_path = os.path.join(cwd, "{0}Instructions.h")
 
@@ -9,11 +22,12 @@ def main():
     template_path = os.path.join(cwd, "EmulatorTemplate.h")
     emulator_template = None
     existing_instr = set()
-    instr_obj_dir = os.path.realpath(os.path.join("..", "tool", "instructions"))
+    objdir = "tool" if args.debug else "debug"
+    instr_obj_dir = os.path.realpath(os.path.join("..", objdir, "instructions"))
 
     args = {
         "mem": "(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs)",
-        "reg": "(set<REG>* srcRegs, set<REG>* dstRegs)"
+        "reg": "(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs)"
     }
     
     comment = "/*\nThis header file has been automatically generated with a script\n\
