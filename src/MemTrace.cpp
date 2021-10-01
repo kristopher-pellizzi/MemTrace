@@ -33,6 +33,7 @@
 #include "KnobTypes.h"
 #include "ShadowRegisterFile.h"
 #include "InstructionHandler.h"
+#include "misc/PendingReads.h"
 
 using std::cerr;
 using std::string;
@@ -90,7 +91,6 @@ ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
-map<unsigned, std::pair<AccessIndex, MemoryAccess>> pendingUninitializedReads;
 
 // The following map is used as a temporary storage for write accesses: instead of 
 // directly insert them inside |memAccesses|, we insert them here (only 1 for each AccessIndex). Every 
@@ -511,7 +511,7 @@ void print_profile(std::ostream& stream, const char* msg){
         << " - " << msg << endl;
 }
 
-void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
+void storeMemoryAccess(const AccessIndex& ai, const MemoryAccess& ma){
     static MemoryAccess::MAHasher hasher;
     const auto& overlapSet = memAccesses.find(ai);
     if(overlapSet != memAccesses.end()){
@@ -521,40 +521,6 @@ void storeMemoryAccess(const AccessIndex& ai, MemoryAccess& ma){
         unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
         v.insert(ma);
         memAccesses[ai] = v;
-    }
-}
-
-/*
-    Whenever an uninitialized read writes a register, all of its sub-registers are overwritten.
-    So, add the entry to the destination registers and to all their sub-registers.
-    E.g. if an instruction writes eax, it will also completely overwrite ax, al and ah, thus overwriting the 
-    information about uninitialized bytes in there. rax, instead, remains untouched, as it may still have an 
-    uninitialized byte in a position not included in eax.
-    It is responsibility of funtion |checkDestRegisters| to perform the required operations to check if
-    super-registers should be kept in the structure or should be removed.
-*/
-void addPendingRead(set<REG>* regs, AccessIndex ai, MemoryAccess ma){
-    std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
-    set<unsigned> toAdd;
-    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    for(auto iter = regs->begin(); iter != regs->end(); ++iter){
-        unsigned shadowReg = registerFile.getShadowRegister(*iter);
-        toAdd.insert(shadowReg);
-        set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
-        unsigned shadowByteSize = registerFile.getByteSize(*iter);
-
-        for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
-            SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
-            // Add the same entry for each sub-register
-            if(registerFile.getByteSize(shdw_reg) < shadowByteSize){
-                toAdd.insert(*aliasReg);
-            }
-        }
-
-    }
-
-    for(auto iter = toAdd.begin(); iter != toAdd.end(); ++iter){
-        pendingUninitializedReads[*iter] = entry;
     }
 }
 
@@ -1007,8 +973,16 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #ifdef DEBUG
             print_profile(applicationTiming, "\t\tFinished retrieving uninitialized overlap");
         #endif
-        
-        if(uninitializedInterval != NULL){
+
+        set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
+        set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
+        propagatePendingReads(srcRegs, dstRegs);
+
+        // If the memory read is not an uninitialized read, simply propagate registers status
+        if(uninitializedInterval == NULL){
+            InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
+        }
+        else{
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
 
@@ -1088,8 +1062,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
-            set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
-            set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
             // Update register status
             InstructionHandler::getInstance().handle(opcode, ma, dstRegs, srcRegs);
 
@@ -1494,22 +1466,32 @@ VOID checkSourceRegisters(VOID* srcRegs){
         auto readIter = pendingUninitializedReads.find(*iter);
 
         if(readIter != pendingUninitializedReads.end()){
-            auto& access = readIter->second;
-            // Avoid inserting the same read access more than once (in case it has written more than 1 dst register)
-            if(alreadyInserted.find(access.second) == alreadyInserted.end()){
-                storeMemoryAccess(access.first, access.second);
-                alreadyInserted.insert(access.second);
+            auto& accessSet = readIter->second;
+            for(auto accessIter = accessSet.begin(); accessIter != accessSet.end(); ++iter){
+                auto& access = *accessIter;
+                // Avoid inserting the same read access more than once (in case it has written more than 1 dst register)
+                if(alreadyInserted.find(access.second) == alreadyInserted.end()){
+                    storeMemoryAccess(access.first, access.second);
+                    alreadyInserted.insert(access.second);
+                }
             }
             pendingUninitializedReads.erase(readIter);
         }
     }
 }
 
-VOID propagateRegisterStatus(VOID* srcRegsPtr, VOID* dstRegsPtr){
-    //set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
-    //set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
+VOID propagateRegisterStatus(UINT32 opcodeArg, VOID* srcRegsPtr, VOID* dstRegsPtr){
+    set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
+    set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
+    OPCODE opcode = static_cast<OPCODE>(opcodeArg);
 
-    //uint8_t* srcStatus = NULL;
+    // If srcRegs or dstRegs are empty, there's nothing to do
+    if(srcRegs == NULL || dstRegs == NULL)
+        return;
+
+    propagatePendingReads(srcRegs, dstRegs);
+
+    InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
 }
 
 /*
@@ -1787,9 +1769,17 @@ VOID Instruction(INS ins, VOID* v){
     }
 
     // If it is not an instruction accessing memory, it is of no interest.
-    // Return without doing anything else.
+    // However, we need to propagate information about uninitialized bytes to perform taint analysis.
     if(memoperands == 0){
-        return;
+        INS_InsertPredicatedCall(
+            ins, 
+            IPOINT_BEFORE,
+            (AFUNPTR) propagateRegisterStatus,
+            IARG_UINT32, opcode,
+            IARG_PTR, explicitSrcRegs,
+            IARG_PTR, dstRegs,
+            IARG_END
+        );
     }
     else{
 
