@@ -1,5 +1,4 @@
 #include "DefaultLoadInstruction.h"
-#include "../../misc/CeilToMultipleOf8.h"
 
 using std::ofstream;
 
@@ -37,43 +36,45 @@ static uint8_t* expandData(uint8_t* data, MemoryAccess& ma, unsigned shadowSize,
 }
 
 void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
-    ofstream warningOpcodes;
     // If there are no destination registers, there's nothing to do
-    if(dstRegs->size() == 0)
+    if(dstRegs == NULL)
         return;
 
+    ofstream warningOpcodes;
     uint8_t* uninitializedInterval = ma.getUninitializedInterval();
     uint8_t* regData = cutUselessBits(uninitializedInterval, ma.getAddress(), ma.getSize());
     UINT32 shadowSize = ma.getSize() + ma.getAddress() % 8;
     shadowSize = shadowSize % 8 != 0 ? (shadowSize / 8) + 1 : shadowSize / 8;
 
     // Get the content status of all source registers and merge it with status loaded from memory (bitwise AND)
-    pair<uint8_t*, unsigned> srcStatus = getSrcRegsStatus(srcRegs);
-    uint8_t* srcStatusPtr = srcStatus.first;
-    unsigned srcByteSize = srcStatus.second;
+    if(srcRegs != NULL){
+        RegsStatus srcStatus = getSrcRegsStatus(srcRegs);
+        uint8_t* srcStatusPtr = srcStatus.getStatus();
+        unsigned srcByteSize = srcStatus.getByteSize();
+        unsigned srcShadowSize = srcStatus.getShadowSize();
 
-    if(srcByteSize != ma.getSize()){
-        cerr 
-            << "[DefaultLoadInstruction] Warning: reading source registers." << endl;
-        cerr 
-            << "Instruction : " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
-            << "." << endl;
-        cerr
-            << "Register size (" << std::dec << srcByteSize << ") is "
-            << (srcByteSize < ma.getSize() ? "lower" : "higher") 
-            << " than the read memory (" << ma.getSize() << ")." << endl;
-        cerr    
-            << "It's possible that the information about uninitialized bytes stored into the shadow register is "
-            << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+        if(srcByteSize != ma.getSize()){
+            cerr 
+                << "[DefaultLoadInstruction] Warning: reading source registers." << endl;
+            cerr 
+                << "Instruction : " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
+                << "." << endl;
+            cerr
+                << "Register size (" << std::dec << srcByteSize << ") is "
+                << (srcByteSize < ma.getSize() ? "lower" : "higher") 
+                << " than the read memory (" << ma.getSize() << ")." << endl;
+            cerr    
+                << "It's possible that the information about uninitialized bytes stored into the shadow register is "
+                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
 
-        warningOpcodes.open("warningOpcodes.log", std::ios::app);
-        warningOpcodes 
-            << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
-            << " raised a warning 'cause source register size is "
-            << (srcByteSize < ma.getSize() ? "LOWER" : "HIGHER")
-            << " than memory size" << endl;
-        
-        unsigned srcShadowSize = ceilToMultipleOf8(srcByteSize) / 8;
+            warningOpcodes.open("warningOpcodes.log", std::ios::app);
+            warningOpcodes 
+                << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
+                << " raised a warning 'cause source register size is "
+                << (srcByteSize < ma.getSize() ? "LOWER" : "HIGHER")
+                << " than memory size" << endl;
+        }
+            
         uint8_t* data_ptr = regData;
         unsigned minShadowSize = shadowSize;
 
@@ -89,6 +90,8 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
         for(unsigned i = 0; i < minShadowSize; ++i){
             *(data_ptr + i) &= *(srcStatusPtr + i);
         }
+
+        free(srcStatusPtr);
     }
 
 
