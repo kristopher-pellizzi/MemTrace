@@ -1,6 +1,9 @@
 #include "pin.H"
 #include <iostream>
 
+#ifndef ACCESSINDEX
+#define ACCESSINDEX
+
 class AccessIndex{
     private:
         std::pair<ADDRINT, UINT32> elements;
@@ -90,3 +93,5 @@ class AccessIndex{
                 bool operator()(const AccessIndex& ai1, const AccessIndex& ai2) const;
         };
 };
+
+#endif //ACCESSINDEX
