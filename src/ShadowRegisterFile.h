@@ -287,6 +287,7 @@ class ShadowRegisterFile{ // Singleton
         unsigned getShadowRegister(REG pin_reg);
         bool isUninitialized(REG pin_reg);
         bool isUninitialized(SHDW_REG reg);
+        bool isUnknownRegister(REG pin_reg);
         set<unsigned>& getAliasingRegisters(REG pin_reg);
 
 };

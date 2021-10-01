@@ -289,6 +289,13 @@ bool ShadowRegisterFile::isUninitialized(SHDW_REG reg){
 }
 
 
+bool ShadowRegisterFile::isUnknownRegister(REG pin_reg){
+    SHDW_REG shdw_reg = convertPinReg(pin_reg);
+
+    return shdw_reg == (SHDW_REG) -1;
+}
+
+
 set<unsigned>& ShadowRegisterFile::getAliasingRegisters(REG pin_reg){
     SHDW_REG shadow_reg = convertPinReg(pin_reg);
 
