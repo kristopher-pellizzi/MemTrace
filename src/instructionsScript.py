@@ -22,7 +22,7 @@ def main():
     template_path = os.path.join(cwd, "EmulatorTemplate.h")
     emulator_template = None
     existing_instr = set()
-    objdir = "tool" if args.debug else "debug"
+    objdir = "debug" if args.debug else "tool"
     instr_obj_dir = os.path.realpath(os.path.join("..", objdir, "instructions"))
 
     args = {
