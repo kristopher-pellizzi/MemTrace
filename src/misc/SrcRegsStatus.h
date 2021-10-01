@@ -5,4 +5,25 @@
 using std::pair;
 using std::set;
 
-pair<uint8_t*, unsigned> getSrcRegsStatus(set<REG>* srcRegs);
+#ifndef REGSSTATUS
+#define REGSSTATUS
+
+class RegsStatus{
+    private:
+        uint8_t* status;
+        unsigned byteSize;
+        unsigned shadowSize;
+        bool allInitialized;
+
+    public:
+        RegsStatus(uint8_t* status, unsigned byteSize, unsigned shadowSize, bool allInitialized);
+
+        uint8_t* getStatus();
+        unsigned getByteSize();
+        unsigned getShadowSize();
+        bool isAllInitialized();
+};
+
+RegsStatus getSrcRegsStatus(set<REG>* srcRegs);
+
+#endif //REGSSTATUS
