@@ -10,6 +10,10 @@ RegsStatus getSrcRegsStatus(set<REG>* srcRegs){
     bool allRegistersInitialized = true;
 
     for(auto iter = srcRegs->begin(); iter != srcRegs->end(); ++iter){
+        // If this register does not have an associated shadow register,
+        // we can't propagate anything
+        if(registerFile.isUnknownRegister(*iter))
+            continue;
         unsigned regByteSize = registerFile.getByteSize(*iter);
         unsigned regShadowSize = registerFile.getShadowSize(*iter);
 
@@ -62,7 +66,7 @@ RegsStatus getSrcRegsStatus(set<REG>* srcRegs){
         }
     }
 
-    // We did not allocate any pointer yet. Allocate the status ptr and fill it with 1
+    // If the condition holds, we did not allocate any pointer yet. Allocate the status ptr and fill it with 1
     if(allRegistersInitialized){
         ptr = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
         memset(ptr, 0xff, shadowSize);
