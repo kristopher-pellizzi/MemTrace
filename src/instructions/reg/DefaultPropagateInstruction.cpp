@@ -15,6 +15,9 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
     std::ofstream warningOpcodes;
 
     for(auto iter = dstRegs->begin(); iter != dstRegs->end(); ++iter){
+        if(registerFile.isUnknownRegister(*iter))
+            continue;
+            
         unsigned byteSize = registerFile.getByteSize(*iter);
         unsigned shadowSize = registerFile.getShadowRegister(*iter);
         uint8_t* data = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);

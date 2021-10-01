@@ -97,6 +97,9 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
 
     // Set the status for each destination register
     for(auto iter = dstRegs->begin(); iter != dstRegs->end(); ++iter){
+        if(ShadowRegisterFile::getInstance().isUnknownRegister(*iter))
+            continue;
+            
         unsigned regShadowSize = ShadowRegisterFile::getInstance().getShadowSize(*iter);
         // Register |*iter| has no corresponding shadow register
         if(regShadowSize == (unsigned) -1){
