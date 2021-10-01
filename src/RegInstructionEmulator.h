@@ -12,7 +12,7 @@ using std::pair;
 
 class RegInstructionEmulator{
     public:
-        virtual void operator() (set<REG>* srcRegs, set<REG>* dstRegs) = 0;
+        virtual void operator() (OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs) = 0;
 };
 
 #endif //REGINSTRUCTIONEMULATOR
