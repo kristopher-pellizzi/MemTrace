@@ -12,8 +12,7 @@ using std::map;
 #define PENDINGREADS
 
 extern map<unsigned, set<pair<AccessIndex, MemoryAccess>>> pendingUninitializedReads;
-
+ 
 void addPendingRead(set<REG>* regs, const AccessIndex& ai, const MemoryAccess& ma);
-void addPendingRead(set<REG>* regs, set<pair<AccessIndex, MemoryAccess>>& accessSet);
 void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs);
 #endif //PENDINGREADS

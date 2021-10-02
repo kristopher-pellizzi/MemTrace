@@ -2,7 +2,6 @@
 
 map<unsigned, set<std::pair<AccessIndex, MemoryAccess>>> pendingUninitializedReads;
 
-
 /*
     Whenever an uninitialized read writes a register, all of its sub-registers are overwritten.
     So, add the entry to the destination registers and to all their sub-registers.
@@ -50,8 +49,19 @@ void addPendingRead(set<REG>* regs, const AccessIndex& ai, const MemoryAccess& m
     }
 }
 
+// Being an anonymous namespace, the following class is available only in this source file
+namespace{
+    class PendingReadsSorter{
+        public:
+            #define Access pair<AccessIndex, MemoryAccess>
+            bool operator()(const Access& x, const Access& y){
+                return x.second < y.second;
+            }
+            #undef Access
+    };
+}
 
-void addPendingRead(set<REG>* regs, set<pair<AccessIndex, MemoryAccess>>& accessSet){
+static void addPendingRead(set<REG>* regs, set<pair<AccessIndex, MemoryAccess>, PendingReadsSorter>& accessSet){
     for(auto iter = accessSet.begin(); iter != accessSet.end(); ++iter){
         const AccessIndex& ai = iter->first;
         const MemoryAccess& ma = iter->second;
@@ -66,7 +76,7 @@ void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
         return;
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    set<pair<AccessIndex, MemoryAccess>> accessSet;
+    set<pair<AccessIndex, MemoryAccess>, PendingReadsSorter> accessSet;
     set<unsigned> toPropagate;
 
     // Select all registers which should be propagated
