@@ -23,6 +23,7 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
         uint8_t* data = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
 
         if(srcByteSize != byteSize){
+            #ifdef DEBUG
             cerr 
                 << "[DefaultPropagateInstruction] Warning: propagating bytes into "
                 << registerFile.getName(*iter) << "." << endl;
@@ -35,6 +36,7 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
                 << "Source registers have a size "
                 << (srcByteSize < byteSize ? "lower" : "higher") 
                 << " than destination register." << endl;
+            #endif
 
             warningOpcodes.open("warningOpcodes.log", std::ios::app);
             warningOpcodes 
