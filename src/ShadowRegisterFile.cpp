@@ -176,7 +176,10 @@ SHDW_REG ShadowRegisterFile::convertPinReg(REG pin_reg){
     }
 
     #ifdef DEBUG
-    std::cerr << "No SHDW_REG corresponding to register " << REG_StringShort(pin_reg) << std::endl;
+    if(alreadyNotified.find(pin_reg) == alreadyNotified.end()){
+        std::cerr << "No SHDW_REG corresponding to register " << REG_StringShort(pin_reg) << std::endl;
+        alreadyNotified.insert(pin_reg);
+    }
     #endif
 
     return (SHDW_REG) -1;

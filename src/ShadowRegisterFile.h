@@ -233,6 +233,11 @@ class ShadowRegisterFile{ // Singleton
         ShadowRegister** shadowRegisters;
         map<SHDW_REG, set<unsigned>> aliasingRegisters;
         set<unsigned> emptySet;
+        #ifdef DEBUG
+        // Set of Intel PIN's registers not having a corresponding shadow register which have already
+        // been notified to the user
+        set<REG> alreadyNotified;
+        #endif
         string unknownString = "Unknown Register";
 
         /*
