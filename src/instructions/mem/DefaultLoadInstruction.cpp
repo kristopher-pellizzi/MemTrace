@@ -54,6 +54,7 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
         unsigned srcShadowSize = srcStatus.getShadowSize();
 
         if(srcByteSize != ma.getSize()){
+            #ifdef DEBUG
             cerr 
                 << "[DefaultLoadInstruction] Warning: reading source registers." << endl;
             cerr 
@@ -66,6 +67,7 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
             cerr    
                 << "It's possible that the information about uninitialized bytes stored into the shadow register is "
                 << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+            #endif
 
             warningOpcodes.open("warningOpcodes.log", std::ios::app);
             warningOpcodes 
@@ -97,8 +99,9 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
 
     // Set the status for each destination register
     for(auto iter = dstRegs->begin(); iter != dstRegs->end(); ++iter){
-        if(ShadowRegisterFile::getInstance().isUnknownRegister(*iter))
+        if(ShadowRegisterFile::getInstance().isUnknownRegister(*iter)){
             continue;
+        }
             
         unsigned regShadowSize = ShadowRegisterFile::getInstance().getShadowSize(*iter);
         // Register |*iter| has no corresponding shadow register
@@ -119,6 +122,7 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
                 warningOpcodes.open("warningOpcodes.log", std::ios::app);
             }
 
+            #ifdef DEBUG
             cerr 
                 << "[DefaultLoadInstruction] Warning: writing shadow register " 
                 << ShadowRegisterFile::getInstance().getName(*iter) 
@@ -131,10 +135,12 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
             cerr    
                 << "It's possible that the information about uninitialized bytes stored into the shadow register is "
                 << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+            #endif
 
             warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is LOWER than memory size" << endl;
         }
         else if(regByteSize > ma.getSize()){
+            #ifdef DEBUG
             cerr 
                 << "[DefaultLoadInstruction] Warning: writing shadow register " 
                 << ShadowRegisterFile::getInstance().getName(*iter) 
@@ -147,12 +153,14 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
             cerr    
                 << "It's possible that the information about uninitialized bytes stored into the shadow register is "
                 << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+            #endif
 
             warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is HIGHER than memory size" << endl;
            
             uint8_t* expandedData = expandData(regData, ma, shadowSize, regByteSize, regShadowSize);
             curr_data = expandedData;
             ShadowRegisterFile::getInstance().setAsInitialized(*iter, curr_data);
+            free(expandedData);
             continue;
         }
 
