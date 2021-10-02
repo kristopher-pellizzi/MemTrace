@@ -845,7 +845,7 @@ bool initUpToNullByte(unsigned nulIndex, set<std::pair<unsigned, unsigned>> inte
 }
 
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                UINT32 opcode_arg, VOID* dstRegsPtr, VOID* srcRegsPtr)
+                UINT32 opcode_arg, VOID* srcRegsPtr, VOID* dstRegsPtr)
 {
     #ifdef DEBUG
         static std::ofstream mtrace("mtrace.log");
@@ -1063,7 +1063,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
             // Update register status
-            InstructionHandler::getInstance().handle(opcode, ma, dstRegs, srcRegs);
+            InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
 
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
@@ -1147,13 +1147,13 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 }
             }
         }
-    } 
+    }
 }
 
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
 // for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                    UINT32 opcode, VOID* dstRegs, VOID* srcRegs)
+                    UINT32 opcode, VOID* srcRegs, VOID* dstRegs)
 {
     if(!entryPointExecuted){
         return;
@@ -1161,11 +1161,11 @@ VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, AD
 
     // The procedure call pushes the return address on the stack
     currentShadow = stack.getPtr();
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs, srcRegs);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, srcRegs, dstRegs);
 }
 
 VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
-                UINT32 opcode, VOID* dstRegs, VOID* srcRegs)
+                UINT32 opcode, VOID* srcRegs, VOID* dstRegs)
 {
     if(!entryPointExecuted){
         return;
@@ -1177,7 +1177,7 @@ VOID retTrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // If the input triggers an application vulnerability, it is possible that the return instruction reads an uninitialized
     // memory area. Call memtrace to analyze the read access.
     heuristicAlreadyApplied = false;
-    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, dstRegs, srcRegs);
+    memtrace(tid, ctxt, type, ip, addr, size, disasm_ptr, opcode, srcRegs, dstRegs);
 
     // Reset the shadow memory of the "freed" stack frame.
     // NOTE: at this point we are sure currentShadow is an instance of StackShadow, so we can perform
@@ -1283,7 +1283,7 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
     first load will be read.
 */
 VOID checkDestRegisters(VOID* dstRegs){
-    if(pendingUninitializedReads.size() == 0)
+    if(dstRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
     set<REG> regs = *static_cast<set<REG>*>(dstRegs);
@@ -1424,7 +1424,7 @@ VOID checkDestRegisters(VOID* dstRegs){
     them as well.
 */
 VOID checkSourceRegisters(VOID* srcRegs){
-    if(pendingUninitializedReads.size() == 0)
+    if(srcRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
@@ -1467,7 +1467,7 @@ VOID checkSourceRegisters(VOID* srcRegs){
 
         if(readIter != pendingUninitializedReads.end()){
             auto& accessSet = readIter->second;
-            for(auto accessIter = accessSet.begin(); accessIter != accessSet.end(); ++iter){
+            for(auto accessIter = accessSet.begin(); accessIter != accessSet.end(); ++accessIter){
                 auto& access = *accessIter;
                 // Avoid inserting the same read access more than once (in case it has written more than 1 dst register)
                 if(alreadyInserted.find(access.second) == alreadyInserted.end()){
@@ -1665,9 +1665,6 @@ VOID Instruction(INS ins, VOID* v){
     set<REG>* srcRegs = new set<REG>();
     set<REG>* explicitSrcRegs = new set<REG>();
     set<REG>* dstRegs = new set<REG>();
-    regsPtrs.push_back(srcRegs);
-    regsPtrs.push_back(dstRegs);
-    regsPtrs.push_back(explicitSrcRegs);
 
     /* 
         Take the explicitly written destination registers.
@@ -1722,20 +1719,30 @@ VOID Instruction(INS ins, VOID* v){
         srcRegs->clear();
     }
 
-    // Already delete any set that is empty, and set the pointer to NULL
+    // Already delete any set that is empty and set the pointer to NULL, otherwise store the pointer
+    // to allow the tool free it at the end
     if(dstRegs->size() == 0){
         delete(dstRegs);
         dstRegs = NULL;
+    }
+    else{
+        regsPtrs.push_back(dstRegs);
     }
 
     if(srcRegs->size() == 0){
         delete(srcRegs);
         srcRegs = NULL;
     }
+    else{
+        regsPtrs.push_back(srcRegs);
+    }
 
     if(explicitSrcRegs->size() == 0){
         delete(explicitSrcRegs);
         explicitSrcRegs = NULL;
+    }
+    else{
+        regsPtrs.push_back(explicitSrcRegs);
     }
 
     // Start inserting analysis functions
@@ -1807,9 +1814,9 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYWRITE_EA, 
                         IARG_MEMORYWRITE_SIZE,
                         IARG_PTR, disassembly, 
-                        IARG_UINT32, opcode, 
+                        IARG_UINT32, opcode,
+                        IARG_PTR, explicitSrcRegs, 
                         IARG_PTR, dstRegs,
-                        IARG_PTR, explicitSrcRegs,
                         IARG_END
                     );
 
@@ -1832,9 +1839,9 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYWRITE_EA, 
                         IARG_MEMORYWRITE_SIZE,
                         IARG_PTR, disassembly, 
-                        IARG_UINT32, opcode, 
+                        IARG_UINT32, opcode,
+                        IARG_PTR, explicitSrcRegs, 
                         IARG_PTR, dstRegs,
-                        IARG_PTR, explicitSrcRegs,
                         IARG_END
                     ); 
                 }          
@@ -1856,8 +1863,8 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYREAD_SIZE,
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
-                        IARG_PTR, dstRegs,
                         IARG_PTR, explicitSrcRegs,
+                        IARG_PTR, dstRegs,
                         IARG_END
                     );
 
@@ -1882,8 +1889,8 @@ VOID Instruction(INS ins, VOID* v){
                         IARG_MEMORYREAD_SIZE, 
                         IARG_PTR, disassembly,
                         IARG_UINT32, opcode,
-                        IARG_PTR, dstRegs,
                         IARG_PTR, explicitSrcRegs,
+                        IARG_PTR, dstRegs,
                         IARG_END
                     );
                 }
