@@ -216,6 +216,198 @@ bool isCallInstruction(OPCODE opcode){
         opcode == XED_ICLASS_CALL_NEAR;
 }
 
+bool isMovInstruction(OPCODE opcode){
+    switch(opcode){
+        case XED_ICLASS_BNDMOV:
+
+        case XED_ICLASS_CMOVB:
+        case XED_ICLASS_CMOVBE:
+        case XED_ICLASS_CMOVL:
+        case XED_ICLASS_CMOVLE:
+        case XED_ICLASS_CMOVNB:
+        case XED_ICLASS_CMOVNBE:
+        case XED_ICLASS_CMOVNL:
+        case XED_ICLASS_CMOVNLE:
+        case XED_ICLASS_CMOVNO:
+        case XED_ICLASS_CMOVNP:
+        case XED_ICLASS_CMOVNS:
+        case XED_ICLASS_CMOVNZ:
+        case XED_ICLASS_CMOVO:
+        case XED_ICLASS_CMOVP:
+        case XED_ICLASS_CMOVS:
+        case XED_ICLASS_CMOVZ:
+
+        case XED_ICLASS_FCMOVB:
+        case XED_ICLASS_FCMOVBE:
+        case XED_ICLASS_FCMOVE:
+        case XED_ICLASS_FCMOVNB:
+        case XED_ICLASS_FCMOVNBE:
+        case XED_ICLASS_FCMOVNE:
+        case XED_ICLASS_FCMOVNU:
+        case XED_ICLASS_FCMOVU:
+
+        case XED_ICLASS_KMOVB:
+        case XED_ICLASS_KMOVD:
+        case XED_ICLASS_KMOVQ:
+        case XED_ICLASS_KMOVW:
+
+        case XED_ICLASS_MASKMOVDQU:
+        case XED_ICLASS_MASKMOVQ:
+
+        case XED_ICLASS_MOV:
+        case XED_ICLASS_MOVAPD:
+        case XED_ICLASS_MOVAPS:
+        case XED_ICLASS_MOVBE:
+        case XED_ICLASS_MOVD:
+        case XED_ICLASS_MOVDDUP:
+        case XED_ICLASS_MOVDIR64B:
+        case XED_ICLASS_MOVDIRI:
+        case XED_ICLASS_MOVDQ2Q:
+        case XED_ICLASS_MOVDQA:
+        case XED_ICLASS_MOVDQU:
+        case XED_ICLASS_MOVHLPS:
+        case XED_ICLASS_MOVHPD:
+        case XED_ICLASS_MOVHPS:
+        case XED_ICLASS_MOVLHPS:
+        case XED_ICLASS_MOVLPD:
+        case XED_ICLASS_MOVLPS:
+        case XED_ICLASS_MOVMSKPD:
+        case XED_ICLASS_MOVMSKPS:
+        case XED_ICLASS_MOVNTDQ:
+        case XED_ICLASS_MOVNTDQA:
+        case XED_ICLASS_MOVNTI:
+        case XED_ICLASS_MOVNTPD:
+        case XED_ICLASS_MOVNTPS:
+        case XED_ICLASS_MOVNTQ:
+        case XED_ICLASS_MOVNTSD:
+        case XED_ICLASS_MOVNTSS:
+        case XED_ICLASS_MOVQ:
+        case XED_ICLASS_MOVQ2DQ:
+        case XED_ICLASS_MOVSB:
+        case XED_ICLASS_MOVSD:
+        case XED_ICLASS_MOVSD_XMM:
+        case XED_ICLASS_MOVSHDUP:
+        case XED_ICLASS_MOVSLDUP:
+        case XED_ICLASS_MOVSQ:
+        case XED_ICLASS_MOVSS:
+        case XED_ICLASS_MOVSW:
+        case XED_ICLASS_MOVSX:
+        case XED_ICLASS_MOVSXD:
+        case XED_ICLASS_MOVUPD:
+        case XED_ICLASS_MOVUPS:
+        case XED_ICLASS_MOVZX:
+        /* NOT FOUND IN THE INTEL ISA REFERENCE MANUAL
+        case XED_ICLASS_MOV_CR:
+        case XED_ICLASS_MOV_DR:
+        */
+
+        case XED_ICLASS_PMOVMSKB:
+        case XED_ICLASS_PMOVSXBD:
+        case XED_ICLASS_PMOVSXBQ:
+        case XED_ICLASS_PMOVSXBW:
+        case XED_ICLASS_PMOVSXDQ:
+        case XED_ICLASS_PMOVSXWD:
+        case XED_ICLASS_PMOVSXWQ:
+        case XED_ICLASS_PMOVZXBD:
+        case XED_ICLASS_PMOVZXBQ:
+        case XED_ICLASS_PMOVZXBW:
+        case XED_ICLASS_PMOVZXDQ:
+        case XED_ICLASS_PMOVZXWD:
+        case XED_ICLASS_PMOVZXWQ:
+
+        case XED_ICLASS_REP_MOVSB:
+        case XED_ICLASS_REP_MOVSD:
+        case XED_ICLASS_REP_MOVSQ:
+        case XED_ICLASS_REP_MOVSW:
+
+        case XED_ICLASS_VMASKMOVDQU:
+        case XED_ICLASS_VMASKMOVPD:
+        case XED_ICLASS_VMASKMOVPS:
+
+        case XED_ICLASS_VMOVAPD:
+        case XED_ICLASS_VMOVAPS:
+        case XED_ICLASS_VMOVD:
+        case XED_ICLASS_VMOVDDUP:
+        case XED_ICLASS_VMOVDQA:
+        case XED_ICLASS_VMOVDQA32:
+        case XED_ICLASS_VMOVDQA64:
+        case XED_ICLASS_VMOVDQU:
+        case XED_ICLASS_VMOVDQU16:
+        case XED_ICLASS_VMOVDQU32:
+        case XED_ICLASS_VMOVDQU64:
+        case XED_ICLASS_VMOVDQU8:
+        case XED_ICLASS_VMOVHLPS:
+        case XED_ICLASS_VMOVHPD:
+        case XED_ICLASS_VMOVHPS:
+        case XED_ICLASS_VMOVLHPS:
+        case XED_ICLASS_VMOVLPD:
+        case XED_ICLASS_VMOVLPS:
+        case XED_ICLASS_VMOVMSKPD:
+        case XED_ICLASS_VMOVMSKPS:
+        case XED_ICLASS_VMOVNTDQ:
+        case XED_ICLASS_VMOVNTDQA:
+        case XED_ICLASS_VMOVNTPD:
+        case XED_ICLASS_VMOVNTPS:
+        case XED_ICLASS_VMOVQ:
+        case XED_ICLASS_VMOVSD:
+        case XED_ICLASS_VMOVSHDUP:
+        case XED_ICLASS_VMOVSLDUP:
+        case XED_ICLASS_VMOVSS:
+        case XED_ICLASS_VMOVUPD:
+        case XED_ICLASS_VMOVUPS:
+
+        case XED_ICLASS_VPCMOV:
+
+        case XED_ICLASS_VPMASKMOVD:
+        case XED_ICLASS_VPMASKMOVQ:
+
+        case XED_ICLASS_VPMOVB2M:
+        case XED_ICLASS_VPMOVD2M:
+        case XED_ICLASS_VPMOVDB:
+        case XED_ICLASS_VPMOVDW:
+        case XED_ICLASS_VPMOVM2B:
+        case XED_ICLASS_VPMOVM2D:
+        case XED_ICLASS_VPMOVM2Q:
+        case XED_ICLASS_VPMOVM2W:
+        case XED_ICLASS_VPMOVMSKB:
+        case XED_ICLASS_VPMOVQ2M:
+        case XED_ICLASS_VPMOVQB:
+        case XED_ICLASS_VPMOVQD:
+        case XED_ICLASS_VPMOVQW:
+        case XED_ICLASS_VPMOVSDB:
+        case XED_ICLASS_VPMOVSDW:
+        case XED_ICLASS_VPMOVSQB:
+        case XED_ICLASS_VPMOVSQD:
+        case XED_ICLASS_VPMOVSQW:
+        case XED_ICLASS_VPMOVSWB:
+        case XED_ICLASS_VPMOVSXBD:
+        case XED_ICLASS_VPMOVSXBQ:
+        case XED_ICLASS_VPMOVSXBW:
+        case XED_ICLASS_VPMOVSXDQ:
+        case XED_ICLASS_VPMOVSXWD:
+        case XED_ICLASS_VPMOVSXWQ:
+        case XED_ICLASS_VPMOVUSDB:
+        case XED_ICLASS_VPMOVUSDW:
+        case XED_ICLASS_VPMOVUSQB:
+        case XED_ICLASS_VPMOVUSQD:
+        case XED_ICLASS_VPMOVUSQW:
+        case XED_ICLASS_VPMOVUSWB:
+        case XED_ICLASS_VPMOVW2M:
+        case XED_ICLASS_VPMOVWB:
+        case XED_ICLASS_VPMOVZXBD:
+        case XED_ICLASS_VPMOVZXBQ:
+        case XED_ICLASS_VPMOVZXBW:
+        case XED_ICLASS_VPMOVZXDQ:
+        case XED_ICLASS_VPMOVZXWD:
+        case XED_ICLASS_VPMOVZXWQ:
+            
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 bool isCmpInstruction(OPCODE opcode){
     /*
     Not included instructions:
@@ -282,9 +474,34 @@ bool isCmpInstruction(OPCODE opcode){
 
         default:
             return false;
-
-
     }
+}
+
+/*
+    We call an "auto mov" a mov instruction whose src and destination register is the same.
+    This function is used to manage a very specific problem.
+    Let's consider this example:
+        1) Register rbx is loaded with uninitialized bytes
+        2) There is (for some reason) a mov copying rbx into itself.
+        3) Register rbx is used by some instruction
+    
+    Since mov instructions are not considered as register usages, the mov instruction at point 2) won't trigger the store of the uninitialized read.
+    However, that has as a destination register rbx itself. The analysis function |checkDestRegisters| will therefore delete any entry in the map 
+    |pendingUninitializedReads| associated to rbx.
+    By doing so, we lose any information about uninitialized reads associated to rbx and therefore, when rbx is subsequently used, the uninitialized read won't be stored.
+
+    To avoid this problem (happening only because mov destination and source registers are the same), we'll remove entries from |pendingUninitializedReads|
+    only if that is not an auto mov.
+*/
+bool isAutoMov(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+
+    if(srcRegs == NULL || dstRegs == NULL || srcRegs->size() + dstRegs->size() != 2 || !isMovInstruction(opcode))
+        return false;
+
+    REG srcReg = *srcRegs->begin();
+    REG dstReg = *dstRegs->begin();
+    return srcReg == dstReg;
+
 }
 
 // This function can be quite expensive if there are many malloc allocating
@@ -521,6 +738,18 @@ void storeMemoryAccess(const AccessIndex& ai, const MemoryAccess& ma){
         unordered_set<MemoryAccess, MemoryAccess::MAHasher> v;
         v.insert(ma);
         memAccesses[ai] = v;
+    }
+}
+
+void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* dstRegs){
+    // If it is a mov instruction, it is a simple LOAD, thus leave it pending
+    if(isMovInstruction(opcode)){
+        addPendingRead(dstRegs, ai, ma);
+    }
+    // If it is anything but a mov instruction, the load is caused by an instruction directly using the loaded value (e.g. add instruction)
+    // So, directly store the uninitialized read
+    else{
+        storeMemoryAccess(ai, ma);
     }
 }
 
@@ -1068,7 +1297,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
                 if (dstRegs != NULL)
-                    addPendingRead(dstRegs, ai, ma);
+                    storeOrLeavePending(opcode, ai, ma, dstRegs);
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 0));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
@@ -1137,7 +1366,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
                     if(dstRegs != NULL)
-                        addPendingRead(dstRegs, ai, ma);
+                        storeOrLeavePending(opcode, ai, ma, dstRegs);
 
                     for(std::pair<AccessIndex, MemoryAccess>& write_access : writes){
                         storeMemoryAccess(write_access.first, write_access.second);
@@ -1746,23 +1975,33 @@ VOID Instruction(INS ins, VOID* v){
     }
 
     // Start inserting analysis functions
-    INS_InsertPredicatedCall(
-        ins,
-        IPOINT_BEFORE,
-        (AFUNPTR) checkSourceRegisters,
-        IARG_PTR, srcRegs,
-        IARG_CALL_ORDER, CALL_ORDER_FIRST,
-        IARG_END
-    );
 
-    INS_InsertPredicatedCall(
-        ins, 
-        IPOINT_BEFORE,
-        (AFUNPTR) checkDestRegisters,
-        IARG_PTR, dstRegs,
-        IARG_CALL_ORDER, CALL_ORDER_FIRST + 1,
-        IARG_END
-    );
+    /*
+        If the instruction is a mov instruction, avoid considering it a register usage.
+        Register status will be propagated and whenever an instruction different from "mov" is executed
+        the register usage will be detected, and the associated uninitialized read (if any) will be stored.
+    */
+    if(!isMovInstruction(opcode)){
+        INS_InsertPredicatedCall(
+            ins,
+            IPOINT_BEFORE,
+            (AFUNPTR) checkSourceRegisters,
+            IARG_PTR, srcRegs,
+            IARG_CALL_ORDER, CALL_ORDER_FIRST,
+            IARG_END
+        );
+    }
+
+    if(!isAutoMov(opcode, explicitSrcRegs, dstRegs)){
+        INS_InsertPredicatedCall(
+            ins, 
+            IPOINT_BEFORE,
+            (AFUNPTR) checkDestRegisters,
+            IARG_PTR, dstRegs,
+            IARG_CALL_ORDER, CALL_ORDER_FIRST + 1,
+            IARG_END
+        );
+    }
 
     ADDRINT ip = INS_Address(ins);
     if(INS_IsBranch(ins) && ip >= textStart && ip <= textEnd){
