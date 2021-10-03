@@ -19,7 +19,7 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
             continue;
             
         unsigned byteSize = registerFile.getByteSize(*iter);
-        unsigned shadowSize = registerFile.getShadowRegister(*iter);
+        unsigned shadowSize = registerFile.getShadowSize(*iter);
         uint8_t* data = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
 
         if(srcByteSize != byteSize){
