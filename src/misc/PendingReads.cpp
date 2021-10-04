@@ -61,11 +61,34 @@ namespace{
     };
 }
 
-static void addPendingRead(set<REG>* regs, set<pair<AccessIndex, MemoryAccess>, PendingReadsSorter>& accessSet){
+static void addPendingRead(set<REG>* regs, set<pair<AccessIndex, MemoryAccess>>& accessSet){
     for(auto iter = accessSet.begin(); iter != accessSet.end(); ++iter){
         const AccessIndex& ai = iter->first;
         const MemoryAccess& ma = iter->second;
         addPendingRead(regs, ai, ma);
+    }
+}
+
+
+static void addPendingRead(set<unsigned>& shdw_regs, set<pair<AccessIndex, MemoryAccess>>& accessSet){
+    for(auto iter = shdw_regs.begin(); iter != shdw_regs.end(); ++iter){
+        SHDW_REG shdw_iter = (SHDW_REG) *iter;
+
+        auto pendingReadIter = pendingUninitializedReads.find(shdw_iter);
+        for(auto accessIter = accessSet.begin(); accessIter != accessSet.end(); ++accessIter){
+            const pair<AccessIndex, MemoryAccess>& entry = *accessIter;
+
+            // If there's already an accessSet associated with the register, simply add the entry
+            // to that set
+            if(pendingReadIter != pendingUninitializedReads.end()){
+                pendingUninitializedReads[shdw_iter].insert(entry);
+            }
+            else{
+                set<std::pair<AccessIndex, MemoryAccess>> s;
+                s.insert(entry);
+                pendingUninitializedReads[shdw_iter] = s;
+            }
+        }
     }
 }
 
@@ -76,8 +99,8 @@ void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
         return;
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    set<pair<AccessIndex, MemoryAccess>, PendingReadsSorter> accessSet;
     set<unsigned> toPropagate;
+    set<unsigned> shadowSrc;
 
     // Select all registers which should be propagated
     for(auto iter = srcRegs->begin(); iter != srcRegs->end(); iter++){
@@ -87,7 +110,7 @@ void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
 
         unsigned shadowReg = registerFile.getShadowRegister(*iter);
         unsigned byteSize = registerFile.getByteSize(*iter);
-        toPropagate.insert(shadowReg);
+        shadowSrc.insert(shadowReg);
         set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
 
         for(auto aliasIter = aliasingRegisters.begin(); aliasIter != aliasingRegisters.end(); ++aliasIter){
@@ -99,13 +122,24 @@ void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
         }
     }
 
-    for(auto iter = toPropagate.begin(); iter != toPropagate.end(); ++iter){
+    // Add pending reads from src to dst registers
+    for(auto iter = shadowSrc.begin(); iter != shadowSrc.end(); ++iter){
         auto pendingReadIter = pendingUninitializedReads.find(*iter);
         if(pendingReadIter != pendingUninitializedReads.end()){
             set<pair<AccessIndex, MemoryAccess>>& pendingReadSet = pendingReadIter->second;
-            accessSet.insert(pendingReadSet.begin(), pendingReadSet.end());
+            addPendingRead(dstRegs, pendingReadSet);
         }
     }
 
-    addPendingRead(dstRegs, accessSet);
+    // We must propagate also changes done to sub-registers of src, if any
+    for(auto iter = toPropagate.begin(); iter != toPropagate.end(); ++iter){
+        auto pendingReadIter = pendingUninitializedReads.find(*iter);
+        if(pendingReadIter != pendingUninitializedReads.end()){
+            SHDW_REG shdw_iter = (SHDW_REG) *iter;
+            set<pair<AccessIndex, MemoryAccess>>& pendingReadSet = pendingReadIter->second;
+            set<unsigned> correspondingRegisters = registerFile.getCorrespondingRegisters(shdw_iter, dstRegs);
+
+            addPendingRead(correspondingRegisters, pendingReadSet);
+        }
+    }
 }
