@@ -102,6 +102,11 @@ bool ShadowRegister::isUninitialized(){
 }
 
 
+bool ShadowRegister::isHighByte(){
+    return false;
+}
+
+
 
 // Begin of ShadowOverwritingSubRegister section
 void ShadowOverwritingSubRegister::setAsInitialized(uint8_t* data){
@@ -150,4 +155,8 @@ bool ShadowHighByteSubRegister::isUninitialized(){
     uint8_t mask = (uint8_t) (0xff << 2) + 1;
     uint8_t maskedContent = *content | mask;
     return maskedContent != 0xff;
+}
+
+bool ShadowHighByteSubRegister::isHighByte(){
+    return true;
 }

@@ -44,6 +44,7 @@ class ShadowRegister{
         virtual void setAsInitialized();
         virtual uint8_t* getContentStatus();
         virtual bool isUninitialized();
+        virtual bool isHighByte();
 };
 
 
@@ -71,6 +72,7 @@ class ShadowHighByteSubRegister : public ShadowRegister{
         void setAsInitialized(uint8_t* data) override;
         uint8_t* getContentStatus() override;
         bool isUninitialized() override;
+        bool isHighByte() override;
 };
 
 #endif //SHDWREGISTER
