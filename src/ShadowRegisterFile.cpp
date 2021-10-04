@@ -79,6 +79,7 @@ ShadowRegister* ShadowRegisterFile::getNewShadowSubRegister(const char* name, un
     ShadowRegister* ret;
     if(requireAdjustment.find(idx) != requireAdjustment.end()){
         ret = new ShadowHighByteSubRegister(name, size, contentPtr);
+        haveHighByte.insert(idx);
     }
     else if(isOverwritingReg){
         ret = new ShadowOverwritingSubRegister(name, size, contentPtr, parentRegister->getContentPtr());
@@ -164,6 +165,19 @@ void ShadowRegisterFile::initShadowRegisters(){
     }
 
     aliasingRegisters.insert(toInsert.begin(), toInsert.end());
+
+
+    // Populate set |haveHighByte|
+    set<SHDW_REG> tmpSet;
+    for(auto iter = haveHighByte.begin(); iter != haveHighByte.end(); ++iter){
+        set<unsigned>& aliasingRegs = aliasingRegisters[*iter];
+        for(auto aliasIter = aliasingRegs.begin(); aliasIter != aliasingRegs.end(); ++aliasIter){
+            SHDW_REG shdw_reg = (SHDW_REG) *aliasIter;
+            tmpSet.insert(shdw_reg);
+        }
+    }
+
+    haveHighByte.insert(tmpSet.begin(), tmpSet.end());
     
 }
 
@@ -194,6 +208,11 @@ string& ShadowRegisterFile::getName(REG pin_reg){
     }
 
     return shadowRegisters[shadow_reg]->getName();
+}
+
+
+string& ShadowRegisterFile::getName(SHDW_REG reg){
+    return shadowRegisters[reg]->getName();
 }
 
 
@@ -306,6 +325,110 @@ set<unsigned>& ShadowRegisterFile::getAliasingRegisters(REG pin_reg){
         return emptySet;
 
     return aliasingRegisters[shadow_reg];
+}
+
+namespace{
+    class AliasRegistersSorter{
+        public:
+            bool operator()(const unsigned x, const unsigned y){
+                SHDW_REG shdw_x = (SHDW_REG) x;
+                SHDW_REG shdw_y = (SHDW_REG) y;
+                ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+                unsigned xByteSize = registerFile.getByteSize(shdw_x);
+                unsigned yByteSize = registerFile.getByteSize(shdw_y);
+
+                if(xByteSize != yByteSize){
+                    return xByteSize > yByteSize;
+                }
+
+                return registerFile.isHighByteReg(shdw_x);
+            }
+    };
+}
+
+/*
+    Given a SHDW_REG |reg|, and a set of registers, get a set of registers with these properties:
+    [*] Each returned register is the alias register of 1 of the given registers
+    [*] Each returned register corresponds to |reg| (same size or different size but missing destination equivalent. 
+        E.g. |reg| is bh, |regSet| only contains rsi. In that case, the corresponding register will be si)
+*/
+set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, set<REG>* regSet){
+    set<unsigned> corrRegs;
+    unsigned targetByteSize;
+    bool targetIsHighByte = false;
+    bool targetFound = false;
+    unsigned lastCheckedRegister;
+
+    targetByteSize = getByteSize(reg);
+
+    if(targetByteSize == 1 && shadowRegisters[reg]->isHighByte()){
+        targetIsHighByte = true; 
+    }
+
+    for(auto iter = regSet->begin(); iter != regSet->end(); ++iter){
+        // If |reg| is a high byte register (e.g. ah) and the dst register does not have an aliasing high byte register,
+        // set as the corresponding register the one whose size is 2 bytes
+        if(targetIsHighByte && !hasHighByte(*iter)){
+            targetByteSize = 2;
+        }
+
+        set<unsigned>& tmpAliasing = getAliasingRegisters(*iter);
+        set<unsigned, AliasRegistersSorter> aliasRegs;
+        aliasRegs.insert(tmpAliasing.begin(), tmpAliasing.end());
+
+        if(!isUnknownRegister(*iter))
+            aliasRegs.insert(getShadowRegister(*iter));
+
+        for(auto aliasReg = aliasRegs.begin(); aliasReg != aliasRegs.end(); ++aliasReg){
+            SHDW_REG shdw_alias = (SHDW_REG) *aliasReg;
+            unsigned aliasByteSize = getByteSize(shdw_alias);
+
+            if(aliasByteSize >= targetByteSize){
+                lastCheckedRegister = *aliasReg;
+            }
+
+            if(aliasByteSize == targetByteSize){
+                // If |reg| is a high byte register and the current alias register is a low byte register,
+                // we must keep searching for the correct corresponding register
+                if(targetIsHighByte){
+                    if(!shadowRegisters[shdw_alias]->isHighByte()){
+                        continue;
+                    }
+                }
+                else{
+                    if(shadowRegisters[shdw_alias]->isHighByte()){
+                        continue;
+                    }
+                }
+
+                corrRegs.insert(*aliasReg);
+                targetFound = true;
+                break;
+            }
+            
+        }
+
+        if(!targetFound){
+            corrRegs.insert(lastCheckedRegister);
+        }
+    }
+
+    return corrRegs;
+}
+
+
+bool ShadowRegisterFile::hasHighByte(REG pin_reg){
+    SHDW_REG reg = convertPinReg(pin_reg);
+    if(reg == (SHDW_REG) -1){
+        return false;
+    }
+
+    return haveHighByte.find(reg) != haveHighByte.end();
+}
+
+
+bool ShadowRegisterFile::isHighByteReg(SHDW_REG reg){
+    return shadowRegisters[reg]->isHighByte();
 }
 
 

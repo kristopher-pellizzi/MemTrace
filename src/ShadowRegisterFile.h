@@ -254,6 +254,11 @@ class ShadowRegisterFile{ // Singleton
         */
        map<REG, unsigned> unknownRegisters;
 
+        /*
+            The following set contains all the shadow registers that have a high byte aliasing register (e.g. rax has ah)
+        */
+        set<SHDW_REG> haveHighByte;
+
         // Private methods
         ShadowRegisterFile();
 
@@ -281,6 +286,7 @@ class ShadowRegisterFile{ // Singleton
         }
 
         string& getName(REG pin_reg);
+        string& getName(SHDW_REG reg);
         void setAsInitialized(REG pin_reg, uint8_t* data);
         void setAsInitialized(REG pin_reg);
         uint8_t* getContentStatus(REG pin_reg);
@@ -294,6 +300,9 @@ class ShadowRegisterFile{ // Singleton
         bool isUninitialized(SHDW_REG reg);
         bool isUnknownRegister(REG pin_reg);
         set<unsigned>& getAliasingRegisters(REG pin_reg);
+        set<unsigned> getCorrespondingRegisters(SHDW_REG reg, set<REG>* regSet);
+        bool hasHighByte(REG pin_reg);
+        bool isHighByteReg(SHDW_REG reg);
 
 };
 
