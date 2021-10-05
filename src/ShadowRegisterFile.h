@@ -300,10 +300,17 @@ class ShadowRegisterFile{ // Singleton
         bool isUninitialized(SHDW_REG reg);
         bool isUnknownRegister(REG pin_reg);
         set<unsigned>& getAliasingRegisters(REG pin_reg);
+        set<unsigned>& getAliasingRegisters(SHDW_REG reg);
         set<unsigned> getCorrespondingRegisters(SHDW_REG reg, set<REG>* regSet);
         bool hasHighByte(REG pin_reg);
         bool isHighByteReg(SHDW_REG reg);
 
+
+
+        class DecresingSizeRegisterSorter{
+            public: 
+                bool operator()(const unsigned x, const unsigned y);
+        };
 };
 
 #endif // SHDWREGISTERFILE

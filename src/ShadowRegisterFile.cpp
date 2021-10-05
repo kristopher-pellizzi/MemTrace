@@ -327,23 +327,22 @@ set<unsigned>& ShadowRegisterFile::getAliasingRegisters(REG pin_reg){
     return aliasingRegisters[shadow_reg];
 }
 
-namespace{
-    class AliasRegistersSorter{
-        public:
-            bool operator()(const unsigned x, const unsigned y){
-                SHDW_REG shdw_x = (SHDW_REG) x;
-                SHDW_REG shdw_y = (SHDW_REG) y;
-                ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-                unsigned xByteSize = registerFile.getByteSize(shdw_x);
-                unsigned yByteSize = registerFile.getByteSize(shdw_y);
+set<unsigned>& ShadowRegisterFile::getAliasingRegisters(SHDW_REG reg){
+    return aliasingRegisters[reg];
+}
 
-                if(xByteSize != yByteSize){
-                    return xByteSize > yByteSize;
-                }
+bool ShadowRegisterFile::DecresingSizeRegisterSorter::operator()(const unsigned x, const unsigned y){
+    SHDW_REG shdw_x = (SHDW_REG) x;
+    SHDW_REG shdw_y = (SHDW_REG) y;
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    unsigned xByteSize = registerFile.getByteSize(shdw_x);
+    unsigned yByteSize = registerFile.getByteSize(shdw_y);
 
-                return registerFile.isHighByteReg(shdw_x);
-            }
-    };
+    if(xByteSize != yByteSize){
+        return xByteSize > yByteSize;
+    }
+
+    return registerFile.isHighByteReg(shdw_x);
 }
 
 /*
@@ -353,6 +352,7 @@ namespace{
         E.g. |reg| is bh, |regSet| only contains rsi. In that case, the corresponding register will be si)
 */
 set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, set<REG>* regSet){
+
     set<unsigned> corrRegs;
     unsigned targetByteSize;
     bool targetIsHighByte = false;
@@ -373,7 +373,7 @@ set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, set<RE
         }
 
         set<unsigned>& tmpAliasing = getAliasingRegisters(*iter);
-        set<unsigned, AliasRegistersSorter> aliasRegs;
+        set<unsigned, ShadowRegisterFile::DecresingSizeRegisterSorter> aliasRegs;
         aliasRegs.insert(tmpAliasing.begin(), tmpAliasing.end());
 
         if(!isUnknownRegister(*iter))
