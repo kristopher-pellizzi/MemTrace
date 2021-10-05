@@ -100,7 +100,7 @@ static void addPendingRead(set<unsigned>& shdw_regs, set<pair<AccessIndex, Memor
 
 void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
     // If srcRegs or dstRegs are empty, there's nothing to propagate
-    if(srcRegs == NULL || dstRegs == NULL)
+    if(pendingUninitializedReads.size() == 0 || srcRegs == NULL || dstRegs == NULL)
         return;
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
