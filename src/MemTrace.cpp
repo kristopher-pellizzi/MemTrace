@@ -1209,6 +1209,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         // If the memory read is not an uninitialized read, simply propagate registers status
         if(uninitializedInterval == NULL){
+            // If memory is fully initialized, this handler avoids considering memory at all, thus
+            // optimizing performance
             InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
         }
         else{
@@ -1512,7 +1514,7 @@ VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VO
     first load will be read.
 */
 VOID checkDestRegisters(VOID* dstRegs){
-    if(dstRegs == NULL || pendingUninitializedReads.size() == 0)
+    if(!entryPointExecuted || dstRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
     set<REG> regs = *static_cast<set<REG>*>(dstRegs);
@@ -1608,8 +1610,9 @@ VOID checkDestRegisters(VOID* dstRegs){
             }
         }
 
-        if(superRegs.size() == 0)
+        if(superRegs.size() == 0){
             return;
+        }
 
         toRemove.clear();
         uint8_t smallRegsMask = 0;
@@ -1653,7 +1656,7 @@ VOID checkDestRegisters(VOID* dstRegs){
     them as well.
 */
 VOID checkSourceRegisters(VOID* srcRegs){
-    if(srcRegs == NULL || pendingUninitializedReads.size() == 0)
+    if(!entryPointExecuted || srcRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
@@ -1710,6 +1713,9 @@ VOID checkSourceRegisters(VOID* srcRegs){
 }
 
 VOID propagateRegisterStatus(UINT32 opcodeArg, VOID* srcRegsPtr, VOID* dstRegsPtr){
+    if(!entryPointExecuted)
+        return;
+
     set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
     set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
     OPCODE opcode = static_cast<OPCODE>(opcodeArg);
@@ -1851,6 +1857,9 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
 Return true if the xor instruction is a zeroing xor, i.e. an instruction of type "xor rdi, rdi"
 */
 bool isZeroingXor(INS ins, OPCODE opcode, set<REG>* dstRegs, set<REG>* srcRegs){
+    if(srcRegs == NULL || dstRegs == NULL)
+        return false;
+
     /*
     If the instruction is not a xor or the xor instruction has only 1 source register 
     (the other operand is an immediate), then it can't be a zeroing xor.
@@ -1891,9 +1900,9 @@ VOID Instruction(INS ins, VOID* v){
     UINT32 memoperands = INS_MemoryOperandCount(ins);
     UINT32 readRegisters = INS_MaxNumRRegs(ins);
     OPCODE opcode = INS_Opcode(ins);
-    set<REG>* srcRegs = new set<REG>();
-    set<REG>* explicitSrcRegs = new set<REG>();
-    set<REG>* dstRegs = new set<REG>();
+    set<REG>* srcRegs = NULL;
+    set<REG>* explicitSrcRegs = NULL;
+    set<REG>* dstRegs = NULL;
 
     /* 
         Take the explicitly written destination registers.
@@ -1911,11 +1920,19 @@ VOID Instruction(INS ins, VOID* v){
 
             // If the register is explicitly written, add it to the destination registers set
             if(INS_RegWContain(ins, reg)){
+                if(dstRegs == NULL){
+                    dstRegs = new set<REG>();
+                    regsPtrs.push_back(dstRegs);
+                }
                 dstRegs->insert(reg);
             }
 
             // If the register is explicitly read, add it to the explicit source registers set
             if(INS_RegRContain(ins, reg)){
+                if(explicitSrcRegs == NULL){
+                    explicitSrcRegs = new set<REG>();
+                    regsPtrs.push_back(explicitSrcRegs);
+                }
                 explicitSrcRegs->insert(reg);
             }
         }
@@ -1939,6 +1956,10 @@ VOID Instruction(INS ins, VOID* v){
         for(UINT32 regop = 0; regop < readRegisters; ++regop){
             REG src = INS_RegR(ins, regop);
             if(!REG_is_flags(src)){
+                if(srcRegs == NULL){
+                    srcRegs = new set<REG>();
+                    regsPtrs.push_back(srcRegs);
+                }
                 srcRegs->insert(src);
             }
         }
@@ -1946,32 +1967,6 @@ VOID Instruction(INS ins, VOID* v){
 
     if(isZeroingXor(ins, opcode, dstRegs, srcRegs)){
         srcRegs->clear();
-    }
-
-    // Already delete any set that is empty and set the pointer to NULL, otherwise store the pointer
-    // to allow the tool free it at the end
-    if(dstRegs->size() == 0){
-        delete(dstRegs);
-        dstRegs = NULL;
-    }
-    else{
-        regsPtrs.push_back(dstRegs);
-    }
-
-    if(srcRegs->size() == 0){
-        delete(srcRegs);
-        srcRegs = NULL;
-    }
-    else{
-        regsPtrs.push_back(srcRegs);
-    }
-
-    if(explicitSrcRegs->size() == 0){
-        delete(explicitSrcRegs);
-        explicitSrcRegs = NULL;
-    }
-    else{
-        regsPtrs.push_back(explicitSrcRegs);
     }
 
     // Start inserting analysis functions
