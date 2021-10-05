@@ -19,8 +19,6 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
             continue;
             
         unsigned byteSize = registerFile.getByteSize(*iter);
-        unsigned shadowSize = registerFile.getShadowSize(*iter);
-        uint8_t* data = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
 
         if(srcByteSize != byteSize){
             #ifdef DEBUG
@@ -46,29 +44,36 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
                 << " than destination register size" << endl;
         }
 
-
-        // Consider the excessive bytes as initialized 
-        // (e.g. if srcShadowSize is 8, and shadowSize is 16, consider the 8 most significant shadow bytes of the 
-        // destination registers as initialized)
-        if(srcShadowSize < shadowSize){
-            for(unsigned i = 0; i < shadowSize - srcShadowSize; ++i){
-                *(data + i) = 0xff;
-            }
-
-            unsigned j = 0;
-            for(unsigned i = shadowSize - srcShadowSize; i < shadowSize; ++i, ++j){
-                *(data + i) = *(srcStatusContent + j);
-            }
+        if(srcStatus.isAllInitialized()){
+            registerFile.setAsInitialized(*iter);
         }
         else{
-            uint8_t* currStatusContent = srcStatusContent + (srcShadowSize - shadowSize);
-            for(unsigned i = 0; i < shadowSize; ++i){
-                *(data + i) = *(currStatusContent + i);
-            }
-        }
+            unsigned shadowSize = registerFile.getShadowSize(*iter);
+            uint8_t* data = (uint8_t*) malloc(sizeof(uint8_t) * shadowSize);
 
-        registerFile.setAsInitialized(*iter, data);
-        free(data);
+
+            // Consider the excessive bytes as initialized 
+            // (e.g. if srcShadowSize is 8, and shadowSize is 16, consider the 8 most significant shadow bytes of the 
+            // destination registers as initialized)
+            if(srcShadowSize < shadowSize){
+                for(unsigned i = 0; i < shadowSize - srcShadowSize; ++i){
+                    *(data + i) = 0xff;
+                }
+
+                unsigned j = 0;
+                for(unsigned i = shadowSize - srcShadowSize; i < shadowSize; ++i, ++j){
+                    *(data + i) = *(srcStatusContent + j);
+                }
+            }
+            else{
+                uint8_t* currStatusContent = srcStatusContent + (srcShadowSize - shadowSize);
+                for(unsigned i = 0; i < shadowSize; ++i){
+                    *(data + i) = *(currStatusContent + i);
+                }
+            }
+
+            registerFile.setAsInitialized(*iter, data);
+            free(data);
+        }
     }
-    free(srcStatusContent);
 }
