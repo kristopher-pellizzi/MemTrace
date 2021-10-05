@@ -17,6 +17,7 @@ class RegsStatus{
 
     public:
         RegsStatus(uint8_t* status, unsigned byteSize, unsigned shadowSize, bool allInitialized);
+        ~RegsStatus();
 
         uint8_t* getStatus();
         unsigned getByteSize();

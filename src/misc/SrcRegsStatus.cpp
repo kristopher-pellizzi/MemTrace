@@ -87,6 +87,11 @@ RegsStatus::RegsStatus(uint8_t* status, unsigned byteSize, unsigned shadowSize, 
 {}
 
 
+RegsStatus::~RegsStatus(){
+    free(status);
+}
+
+
 uint8_t* RegsStatus::getStatus(){
     return status;
 }
