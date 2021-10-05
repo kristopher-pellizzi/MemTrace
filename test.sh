@@ -15,14 +15,20 @@ echo "Utility;Original execution time;Null instrumented execution time;Instrumen
 
 dd if=/dev/urandom of=./test2.iso iflag=count_bytes count=1K
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dd if=/dev/urandom of=./test.iso iflag=count_bytes count=1K
 end_null=$(date +%s%N | cut -b1-13)
@@ -51,14 +57,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test b2sum utility to compute checksum of a file of 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/b2sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/b2sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/b2sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/b2sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -85,14 +97,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test base32 utility to compute base32 encoding of a file with 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/base32 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/base32 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/base32 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/base32 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -119,14 +137,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test base64 utility to compute the base64 encoding of a file with 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/base64 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/base64 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/base64 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/base64 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -155,14 +179,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 # Test basename utility to get the basename of the current folder
 
 path=$(pwd)
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/basename $path
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/basename $path
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/basename $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/basename $path
 end_null=$(date +%s%N | cut -b1-13)
@@ -189,14 +219,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test cat utility to concatenate 2 files containing 1K of random data each and print them to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/cat ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/cat ./test.iso ./test2.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/cat ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cat ./test.iso ./test2.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -223,14 +259,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test chgrp utility to change owner group of a file to root
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/chgrp root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/chgrp root ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/chgrp root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/chgrp root ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -260,6 +302,8 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/chmod 700 ./test.cpy
 end_orig=$(date +%s%N | cut -b1-13)
@@ -267,13 +311,17 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/chmod 700 ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/chmod 700 ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/chmod 700 ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
@@ -302,14 +350,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test chown utility to change the owner of a file to root
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/chown root ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/chown root ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/chown root ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/chown root ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -336,14 +390,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test cksum to compute the checksum of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/cksum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/cksum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/cksum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cksum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -370,18 +430,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sort utility to sort a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm ./test.sorted
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sort ./test.iso -o ./test.sorted
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.sorted
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sort ./test.iso -o ./test.sorted
 end_null=$(date +%s%N | cut -b1-13)
@@ -411,14 +477,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test comm to compare 2 files containing 1K of random data each
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/comm ./test.sorted ./test2.sorted
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/comm ./test.sorted ./test2.sorted
 end_null=$(date +%s%N | cut -b1-13)
@@ -445,18 +517,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test cp utility to copy a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm ./toDelete.tmp
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./toDelete.tmp
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cp ./test.iso ./toDelete.tmp
 end_null=$(date +%s%N | cut -b1-13)
@@ -485,18 +563,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test csplit to split a file containing 1K of random data at 3rd line into 2 distinct files
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/csplit ./test.iso 3
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm xx00 xx01
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/csplit ./test.iso 3
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/csplit ./test.iso 3
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm xx00 xx01
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/csplit ./test.iso 3
 end_null=$(date +%s%N | cut -b1-13)
@@ -524,14 +608,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test cut utility to extract only first 10 bytes of each line of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/cut -b1-10 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/cut -b1-10 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/cut -b1-10 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/cut -b1-10 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -558,14 +648,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test date utility to print current date to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/date
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/date
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/date
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/date
 end_null=$(date +%s%N | cut -b1-13)
@@ -592,14 +688,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test df utility to print to stdout information about file system disk space usage
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/df -h
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/df -h
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/df -h
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/df -h
 end_null=$(date +%s%N | cut -b1-13)
@@ -626,14 +728,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test dir utility to print the list of current directory content to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/dir
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/dir
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dir
 end_null=$(date +%s%N | cut -b1-13)
@@ -660,14 +768,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test dircolors to print the database of set colors to file extensions
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/dircolors --print-database
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/dircolors --print-database
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/dircolors --print-database
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dircolors --print-database
 end_null=$(date +%s%N | cut -b1-13)
@@ -694,14 +808,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test dirname utility to print the current path except the last directory to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/dirname $path
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/dirname $path
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/dirname $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/dirname $path
 end_null=$(date +%s%N | cut -b1-13)
@@ -731,14 +851,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test du utility to print information about disk usage of the current directory
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/du -h $path
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/du -h $path
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/du -h $path
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/du -h $path
 end_null=$(date +%s%N | cut -b1-13)
@@ -769,14 +895,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 random_data=$(cat /dev/urandom | head -c 100)
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/echo $random_data
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/echo $random_data
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/echo $random_data
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/echo $random_data
 end_null=$(date +%s%N | cut -b1-13)
@@ -804,14 +936,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test env utility to print all set environment variables ti stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/env
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/env
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/env
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/env
 end_null=$(date +%s%N | cut -b1-13)
@@ -840,14 +978,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test expand to convert hypothetical tabs to spaces in a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/expand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/expand ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/expand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/expand ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -878,14 +1022,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test expr utility to compute a multiplication
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/expr 118462910 \* 123456
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/expr 118462910 \* 123456
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/expr 118462910 \* 123456
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/expr 118462910 \* 123456
 end_null=$(date +%s%N | cut -b1-13)
@@ -914,14 +1064,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test factor utility to factorize a number with 15 digits
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/factor 123456789123459
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/factor 123456789123459
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/factor 123456789123459
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/factor 123456789123459
 end_null=$(date +%s%N | cut -b1-13)
@@ -951,14 +1107,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test fmt utility to format a file containing 1K of random data such that long lines are splitted and lines contain at most 15 chars
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/fmt -s -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/fmt -s -w 15 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/fmt -s -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/fmt -s -w 15 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -986,14 +1148,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test fold utility to wrap lines of a file containing 1K of random data into lines of 15 bytes
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/fold -s -b -w 15 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/fold -s -b -w 15 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1021,14 +1189,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test getlimits utility to print information about shell limits to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/getlimits
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/getlimits
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/getlimits
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/getlimits
 end_null=$(date +%s%N | cut -b1-13)
@@ -1056,14 +1230,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test groups utility to print the list of available groups in the system to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/groups
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/groups
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/groups
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/groups
 end_null=$(date +%s%N | cut -b1-13)
@@ -1093,14 +1273,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test head to print first 512 bytes of a file containing 1K of random data to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/head -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/head -c 512 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/head -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/head -c 512 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1130,14 +1316,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test hostid to print the numeric identifier of the current host to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/hostid
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/hostid
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/hostid
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/hostid
 end_null=$(date +%s%N | cut -b1-13)
@@ -1165,14 +1357,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test id utility to print user and groupd ids to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/id
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/id
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/id
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/id
 end_null=$(date +%s%N | cut -b1-13)
@@ -1201,14 +1399,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test join utility to join 2 files of 1K of random data each
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/join ./test.sorted ./test2.sorted
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/join ./test.sorted ./test2.sorted
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/join ./test.sorted ./test2.sorted
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/join ./test.sorted ./test2.sorted
 end_null=$(date +%s%N | cut -b1-13)
@@ -1236,18 +1440,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test link utility to create a link to a file of 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/link ./test.iso ./test.link
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/link ./test.iso ./test.link
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/link ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/link ./test.iso ./test.link
 end_null=$(date +%s%N | cut -b1-13)
@@ -1277,18 +1487,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test ln utility to create a symbolic link to a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/ln -s ./test.iso ./test.link
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/ln -s ./test.iso ./test.link
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/ln -s ./test.iso ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.link
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/ln -s ./test.iso ./test.link
 end_null=$(date +%s%N | cut -b1-13)
@@ -1317,14 +1533,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test ls utility to print a list of the current directory content to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/ls -al ./Tests/coreutils/src
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/ls -al ./Tests/coreutils/src
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/ls -al ./Tests/coreutils/src
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/ls -al ./Tests/coreutils/src
 end_null=$(date +%s%N | cut -b1-13)
@@ -1352,14 +1574,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test md5sum utility to compute the md5 hash digest of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/md5sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/md5sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/md5sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/md5sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1388,18 +1616,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test mkdir utility to create a new directory
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm -r abcdefghijklmnopqrstuvwxyz
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm -r abcdefghijklmnopqrstuvwxyz
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mkdir abcdefghijklmnopqrstuvwxyz
 end_null=$(date +%s%N | cut -b1-13)
@@ -1429,18 +1663,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test mkfifo utility to create a named PIPE
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mkfifo abcdefghijklmnopqrstuvwxyz
 end_null=$(date +%s%N | cut -b1-13)
@@ -1472,18 +1712,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test mknod utility to create a PIPE
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm abcdefghijklmnopqrstuvwxyz
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mknod abcdefghijklmnopqrstuvwxyz p
 end_null=$(date +%s%N | cut -b1-13)
@@ -1515,14 +1761,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test mktemp utility to create e new temporary file
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/mktemp
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/mktemp
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/mktemp
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mktemp
 end_null=$(date +%s%N | cut -b1-13)
@@ -1552,18 +1804,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 mkdir test_dir
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/mv ./test.iso ./test_dir
 end_orig=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/mv ./test_dir/test.iso .
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/mv ./test.iso ./test_dir
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/mv ./test.iso ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 $EXE_PATH/mv ./test_dir/test.iso .
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/mv ./test.iso ./test_dir
 end_null=$(date +%s%N | cut -b1-13)
@@ -1596,14 +1854,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test nice utility to run ls command with lowest possible niceness
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/nice -n 19 ls -al
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/nice -n 19 ls -al
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/nice -n 19 ls -al
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/nice -n 19 ls -al
 end_null=$(date +%s%N | cut -b1-13)
@@ -1632,14 +1896,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test nl utility to number lines of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/nl ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/nl ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/nl ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/nl ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1667,14 +1937,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test nproc utility to print the number of available processing units (CPUs) to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/nproc
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/nproc
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/nproc
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/nproc
 end_null=$(date +%s%N | cut -b1-13)
@@ -1702,14 +1978,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test numfmt utility to convert numbers from human-readable strings
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/numfmt 123456789 1253 9182746583
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/numfmt 123456789 1253 9182746583
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/numfmt 123456789 1253 9182746583
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/numfmt 123456789 1253 9182746583
 end_null=$(date +%s%N | cut -b1-13)
@@ -1738,14 +2020,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test od to dump a file containing 1K of random data into hexadecimal format
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/od -x ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/od -x ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/od -x ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/od -x ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1775,14 +2063,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # test paste utility to merge lines of 2 files containing 1K of random data each
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/paste ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/paste ./test.iso ./test2.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/paste ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/paste ./test.iso ./test2.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1810,14 +2104,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test pinky utility to print user information to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/pinky
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/pinky
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/pinky
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/pinky
 end_null=$(date +%s%N | cut -b1-13)
@@ -1846,14 +2146,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test printenv utility to print environment variables to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/printenv
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/printenv
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/printenv
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/printenv
 end_null=$(date +%s%N | cut -b1-13)
@@ -1883,14 +2189,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test printf utility to print a string containing an integer to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/printf "%d is a number, %s is not\n" 1234502839576 ciaone
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/printf $"%d is a number, %s is not\n$" 1234502839576 ciaone
 end_null=$(date +%s%N | cut -b1-13)
@@ -1917,14 +2229,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test ptx utility to produce a permuted index of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/ptx ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/ptx ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/ptx ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/ptx ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -1954,14 +2272,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test pwd utility to print the current directory to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/pwd
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/pwd
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/pwd
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/pwd
 end_null=$(date +%s%N | cut -b1-13)
@@ -1992,14 +2316,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 ln -s ./test.iso ./test.link
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/readlink ./test.link
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/readlink ./test.link
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/readlink ./test.link
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/readlink ./test.link
 end_null=$(date +%s%N | cut -b1-13)
@@ -2030,14 +2360,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test realpath utility to print the full path of a file in the directory
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/realpath ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/realpath ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/realpath ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/realpath ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2070,18 +2406,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/rm ./test.cpy
 end_orig=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/rm ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/rm ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/rm ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
@@ -2113,18 +2455,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 mkdir ./test_dir
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/rmdir ./test_dir
 end_orig=$(date +%s%N | cut -b1-13)
 
 mkdir ./test_dir
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/rmdir ./test_dir
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/rmdir ./test_dir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 mkdir ./test_dir
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/rmdir ./test_dir
 end_null=$(date +%s%N | cut -b1-13)
@@ -2154,14 +2502,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test seq utility to print the sequence of numbers between 1 and 1000000 to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/seq 1 1000000
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/seq 1 1000000
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/seq 1 1000000
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/seq 1 1000000
 end_null=$(date +%s%N | cut -b1-13)
@@ -2190,14 +2544,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sha1sum utility to compute SHA1 digest of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sha1sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sha1sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sha1sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha1sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2227,14 +2587,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sha224sum utility to compute SHA224 digest of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sha224sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sha224sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sha224sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha224sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2263,14 +2629,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sha256sum utility to compute SHA256 digest of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sha256sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sha256sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sha256sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha256sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2299,14 +2671,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sha384sum utility to compute SHA384 digest of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sha384sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sha384sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sha384sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha384sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2336,14 +2714,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sha512sum utility to compute SHA512 digest of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sha512sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sha512sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sha512sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sha512sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2374,6 +2758,8 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/shred ./test.cpy
 end_orig=$(date +%s%N | cut -b1-13)
@@ -2381,13 +2767,17 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/shred ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/shred ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/shred ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
@@ -2416,14 +2806,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test shuf utility to compute a random permutation of lines of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/shuf ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/shuf ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/shuf ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/shuf ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2453,14 +2849,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sleep utility to delay for 1 second
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sleep 1
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sleep 1
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sleep 1
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sleep 1
 end_null=$(date +%s%N | cut -b1-13)
@@ -2494,6 +2896,8 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 mkdir test_dir
 cd test_dir
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/split -b 512 ../test.iso
 end_orig=$(date +%s%N | cut -b1-13)
@@ -2503,8 +2907,10 @@ rm -r test_dir
 mkdir test_dir
 cd test_dir
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-../bin/launcher -- $EXE_PATH/split -b 512 ../test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/split -b 512 ../test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cd ..
@@ -2512,6 +2918,8 @@ rm -r test_dir
 mkdir test_dir
 cd test_dir
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/split -b 512 ../test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2544,14 +2952,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test stat utility to print information about a file containing 1K of random data to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/stat ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/stat ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/stat ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/stat ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2579,14 +2993,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test stty utility to print information about current terminal device characteristics to stdout
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/stty -a
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/stty -a
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/stty -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/stty -a
 end_null=$(date +%s%N | cut -b1-13)
@@ -2614,14 +3034,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test sum utility to compute checksum of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/sum ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/sum ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/sum ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/sum ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2650,14 +3076,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test tac utility to concatenate and print 2 files containing 1K of random data each to stdout with reversed order of lines
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/tac ./test.iso ./test2.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/tac ./test.iso ./test2.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/tac ./test.iso ./test2.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/tac ./test.iso ./test2.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2686,14 +3118,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test tail utility to extract last 512 bytes of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/tail -c 512 ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/tail -c 512 ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/tail -c 512 ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/tail -c 512 ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2721,18 +3159,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test touch utility to create a new file
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/touch ./test.cpy
 end_orig=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/touch ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/touch ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/touch ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
@@ -2764,6 +3208,8 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/truncate -s 512K ./test.cpy
 end_orig=$(date +%s%N | cut -b1-13)
@@ -2771,13 +3217,17 @@ end_orig=$(date +%s%N | cut -b1-13)
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/truncate -s 512K ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/truncate -s 512K ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 rm ./test.cpy
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/truncate -s 512K ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
@@ -2807,14 +3257,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test utility tty to print the file name of the device connected to stdin
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/tty
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/tty
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/tty
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/tty
 end_null=$(date +%s%N | cut -b1-13)
@@ -2843,14 +3299,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test uname utility to print system information
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/uname -a
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/uname -a
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/uname -a
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/uname -a
 end_null=$(date +%s%N | cut -b1-13)
@@ -2878,14 +3340,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test unexpand utility to convert spaces to tabs in a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/unexpand ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/unexpand ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/unexpand ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/unexpand ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2913,14 +3381,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test uniq utility to print only unique lines (not duplicated) in a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/uniq -u ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/uniq -u ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/uniq -u ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/uniq -u ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -2952,18 +3426,24 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/unlink ./test.cpy
 end_orig=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/unlink ./test.cpy
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/unlink ./test.cpy
 end_instrumented=$(date +%s%N | cut -b1-13)
 
 cp ./test.iso ./test.cpy
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/unlink ./test.cpy
 end_null=$(date +%s%N | cut -b1-13)
@@ -2993,14 +3473,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test uptime to print information about how much time the system is running
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/uptime
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/uptime
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/uptime
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/uptime
 end_null=$(date +%s%N | cut -b1-13)
@@ -3028,14 +3514,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test users utility to print users currently logged in
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/users
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/users
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/users
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/users
 end_null=$(date +%s%N | cut -b1-13)
@@ -3065,14 +3557,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test vdir utility to list the content of the current directory
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/vdir
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/vdir
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/vdir
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/vdir
 end_null=$(date +%s%N | cut -b1-13)
@@ -3100,14 +3598,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test wc utility to count new lines, words and bytes of a file containing 1K of random data
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/wc ./test.iso
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/wc ./test.iso
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/wc ./test.iso
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/wc ./test.iso
 end_null=$(date +%s%N | cut -b1-13)
@@ -3135,14 +3639,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test who utility to print who is currently logged in the system
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/who
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/who
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/who
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/who
 end_null=$(date +%s%N | cut -b1-13)
@@ -3171,14 +3681,20 @@ echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumenta
 
 # Test whoami utility to print the effective user id
 
+echo ""
+echo "Starting original"
 start_orig=$(date +%s%N | cut -b1-13) # Get start time in milliseconds
 $EXE_PATH/whoami
 end_orig=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting memtrace"
 start_instrumented=$(date +%s%N | cut -b1-13)
-./bin/launcher -- $EXE_PATH/whoami
+$PIN_PATH/pin -t $TOOL_PATH/MemTrace.so -- $EXE_PATH/whoami
 end_instrumented=$(date +%s%N | cut -b1-13)
 
+echo ""
+echo "Starting nulltool"
 start_null=$(date +%s%N | cut -b1-13)
 $PIN_PATH/pin -t $TOOL_PATH/NullTool.so -- $EXE_PATH/whoami
 end_null=$(date +%s%N | cut -b1-13)
