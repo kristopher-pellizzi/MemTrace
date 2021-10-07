@@ -1,5 +1,6 @@
 #include <set>
 #include <iostream>
+#include <cstring>
 #include "ShadowRegisterFile.h"
 
 using std::set;
@@ -105,6 +106,7 @@ void ShadowRegisterFile::initShadowRegistersPtr(unsigned* sizes, SHDW_REG* super
         }
     }
     shadowRegistersPtr = malloc(sizeof(uint8_t) * allocationSize);
+    memset(shadowRegistersPtr, 0xff, allocationSize);
 }
 
 
