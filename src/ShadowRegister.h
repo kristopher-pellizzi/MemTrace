@@ -15,7 +15,7 @@ class ShadowRegister{
         unsigned byteSize;
         unsigned shadowSize;
 
-        static uint8_t* data;
+        static uint8_t* initData;
         static unsigned biggestShadowSize;
 
         static uint8_t* getFullyInitializedData();

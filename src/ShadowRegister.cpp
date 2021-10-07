@@ -2,15 +2,15 @@
 #include "ShadowRegister.h"
 
 unsigned ShadowRegister::biggestShadowSize = 0;
-uint8_t* ShadowRegister::data = NULL;
+uint8_t* ShadowRegister::initData = NULL;
 
 uint8_t* ShadowRegister::getFullyInitializedData(){
-    if(data == NULL){
-        data = (uint8_t*) malloc(sizeof(uint8_t) * biggestShadowSize);
-        memset(data, 0xff, biggestShadowSize);
+    if(initData == NULL){
+        initData = (uint8_t*) malloc(sizeof(uint8_t) * biggestShadowSize);
+        memset(initData, 0xff, biggestShadowSize);
     }
 
-    return data;
+    return initData;
 }
 
 string& ShadowRegister::getName(){
