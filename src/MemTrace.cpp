@@ -1713,16 +1713,12 @@ VOID checkSourceRegisters(VOID* srcRegs){
 }
 
 VOID propagateRegisterStatus(UINT32 opcodeArg, VOID* srcRegsPtr, VOID* dstRegsPtr){
-    if(!entryPointExecuted)
+    if(!entryPointExecuted || pendingUninitializedReads.size() == 0 || srcRegsPtr == NULL || dstRegsPtr == NULL)
         return;
 
     set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
     set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
     OPCODE opcode = static_cast<OPCODE>(opcodeArg);
-
-    // If srcRegs or dstRegs are empty, there's nothing to do
-    if(srcRegs == NULL || dstRegs == NULL)
-        return;
 
     propagatePendingReads(srcRegs, dstRegs);
 
