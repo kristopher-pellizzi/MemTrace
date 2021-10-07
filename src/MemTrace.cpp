@@ -1205,13 +1205,16 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
         set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
-        propagatePendingReads(srcRegs, dstRegs);
+        bool pendingReadsExist = pendingUninitializedReads.size() != 0;
+        if(pendingReadsExist)
+            propagatePendingReads(srcRegs, dstRegs);
 
         // If the memory read is not an uninitialized read, simply propagate registers status
         if(uninitializedInterval == NULL){
-            // If memory is fully initialized, this handler avoids considering memory at all, thus
-            // optimizing performance
-            InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
+            if(pendingReadsExist)
+                // If memory is fully initialized, this handler avoids considering memory at all, thus
+                // optimizing performance
+                InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
         }
         else{
             ma.setUninitializedRead();
