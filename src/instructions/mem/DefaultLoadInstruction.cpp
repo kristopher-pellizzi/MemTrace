@@ -76,24 +76,24 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
                 << (srcByteSize < ma.getSize() ? "LOWER" : "HIGHER")
                 << " than memory size" << endl;
         }
-            
-        uint8_t* data_ptr = regData;
-        unsigned minShadowSize = shadowSize;
 
-        if(srcShadowSize > shadowSize){
-            srcStatusPtr += (srcShadowSize - shadowSize);
-            minShadowSize = shadowSize;
-        }
-        else if(srcShadowSize < shadowSize){
-            data_ptr += (shadowSize - srcShadowSize);
-            minShadowSize = srcShadowSize;
-        }
+        if(!srcStatus.isAllInitialized()){           
+            uint8_t* data_ptr = regData;
+            unsigned minShadowSize = shadowSize;
 
-        for(unsigned i = 0; i < minShadowSize; ++i){
-            *(data_ptr + i) &= *(srcStatusPtr + i);
-        }
+            if(srcShadowSize > shadowSize){
+                srcStatusPtr += (srcShadowSize - shadowSize);
+                minShadowSize = shadowSize;
+            }
+            else if(srcShadowSize < shadowSize){
+                data_ptr += (shadowSize - srcShadowSize);
+                minShadowSize = srcShadowSize;
+            }
 
-        free(srcStatusPtr);
+            for(unsigned i = 0; i < minShadowSize; ++i){
+                *(data_ptr + i) &= *(srcStatusPtr + i);
+            }
+        }
     }
 
 
