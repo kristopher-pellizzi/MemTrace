@@ -8,7 +8,7 @@ InstructionHandler::InstructionHandler(){
 void InstructionHandler::init(){
     defaultLoad = new DefaultLoadInstruction();
     defaultRegPropagate = new DefaultPropagateInstruction();
-    defaultStore = NULL;    
+    defaultStore = new DefaultStoreInstruction();    
 }
 
 InstructionHandler& InstructionHandler::getInstance(){
@@ -31,12 +31,11 @@ void InstructionHandler::handle(OPCODE op, MemoryAccess& ma, set<REG>* srcRegs, 
         defaultLoad->operator()(ma, srcRegs, dstRegs);
     }
     else{
-        // This is a store instruction. If there are no source registers, there's nothing to do.
-        if(srcRegs == NULL)
-            return;
-
-        // TODO: implement default store emulator
-        //defaultStore->operator()(ma, dstRegs, srcRegs);
+        /*
+            Note that if srcRegs is NULL, we must set all the memory as initialized, otherwise we may lose information
+            about immediate stores
+        */
+        defaultStore->operator()(ma, srcRegs, dstRegs);
     }
 }
 
