@@ -88,6 +88,57 @@ uint8_t* StackShadow::getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offs
     return ret;
 }
 
+void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data){
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
+
+    dirtyPages[shadowIdx] = true;
+
+    if(shadowAddr > highestShadowAddr)
+        highestShadowAddr = shadowAddr;
+
+    // The address associated to shadowAddr is an 8-bytes aligned address.
+    // However, addr may not be 8-bytes aligned. Consider the 8-bytes aligned address
+    // represented by shadowAddr, and adjust operations with the offset of the first considered byte
+    // from the beginning of that address.
+    unsigned offset = addr % 8;
+    UINT32 leftSize = size + offset;
+    unsigned shadowSize = leftSize % 8 != 0 ? (leftSize / 8 + 1) : leftSize / 8;
+    uint8_t* src = data + shadowSize - 1;
+
+    // Note: |data| already contains offset and possible additional bytes.
+    // They are all set to 0, so that it is enough to bitwise OR |data| with the shadow memory
+    
+    for(unsigned i = 0; i < shadowSize; ++i){
+        // Reset bits related to our access
+        uint8_t mask = 0;
+        if(leftSize % 8 != 0 && i == 0){
+            mask |= (uint8_t) 0xff << (leftSize % 8);
+        }
+        else if(i == shadowSize - 1){
+            mask |= (uint8_t) 0xff >> (8 - offset);
+        }
+        *shadowAddr &= mask;
+
+        *shadowAddr |= *src;
+
+        if(shadowAddr != shadow[shadowIdx]){
+            --shadowAddr;
+        } 
+        else if(shadowIdx != 0){
+            shadowAddr = shadow[--shadowIdx] + SHADOW_ALLOCATION - 1;
+            dirtyPages[shadowIdx] = true;
+        }
+        else{
+            leftSize = 0;
+            break;
+        }
+
+        --src;
+    }
+}
+
 void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size) {
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
@@ -393,6 +444,68 @@ uint8_t* HeapShadow::getShadowAddrFromIdx(unsigned* shadowIdxPtr, unsigned offse
     return ret;
 }
 
+void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data){
+    std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
+    unsigned shadowIdx = idxOffset.first;
+    uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
+
+    dirtyPages[shadowIdx] = true;
+
+    // The address associated to shadowAddr is an 8-bytes aligned address.
+    // However, addr may not be 8-bytes aligned. Consider the 8-bytes aligned address
+    // represented by shadowAddr, and adjust operations with the offset of the first considered byte
+    // from the beginning of that address.
+    unsigned offset = addr % 8;
+    UINT32 leftSize = size + offset;
+    unsigned shadowSize = leftSize % 8 != 0 ? (leftSize / 8) + 1 : leftSize / 8;
+    uint8_t* src = invertBitOrder(data, offset, size);
+
+    for(unsigned i = 0; i < shadowSize; ++i){
+        // Reset bits related to our access
+        uint8_t mask = 0;
+        if(i == 0){
+            mask |= (uint8_t) 0xff << (8 - offset);
+        }
+        if(leftSize % 8 != 0 && i == shadowSize - 1){
+            mask |= (uint8_t) 0xff >> (leftSize % 8);
+        }
+        *shadowAddr &= mask;
+
+        *shadowAddr |= *src;
+
+        if(shadowAddr != shadow[shadowIdx] + SHADOW_ALLOCATION - 1){
+            ++shadowAddr;
+        } 
+        else{
+            ++shadowIdx;
+            if(shadowIdx < shadow.size()){
+                shadowAddr = shadow[shadowIdx];
+            }
+            else{
+                // This should happen in some rare cases, and in most of these cases just 1 time for a single access.
+                // This manages the case where the access is performed between 2 memory pages, and the last shadow memory has not been allocated yet
+                // Note that this can't happen in a StackShadow object, as when the shadowMemory address is computed, every required memory page
+                // is eventually allocated, because the stack grows towards low addresses, so every byte at an address higher than the start address of the 
+                // access will already have an allocated shadow memory page.
+                uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                if(newMap == (void*) - 1){
+                    printf("mmap failed: %s\n", strerror(errno));
+                    exit(1);
+                }
+                shadow.push_back(newMap);
+                dirtyPages.push_back(false);
+                shadowAddr = newMap;
+            }
+            dirtyPages[shadowIdx] = true;
+        }
+
+        ++src;
+    }
+
+    if(shadowAddr > highestShadowAddr)
+        highestShadowAddr = shadowAddr;
+}
+
 void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
@@ -449,6 +562,12 @@ void HeapShadow::set_as_initialized(ADDRINT addr, UINT32 size){
         highestShadowAddr = shadowAddr;
 }
 
+/*
+    Reverse a bitmask |data| for an access with |offset| whose size is |byteSize|
+    @param data: Bitmask to be reversed
+    @param offset: Offset of the address to be accessed
+    @param byteSize: Size in bytes of the accessed memory portion
+*/
 uint8_t* HeapShadow::invertBitOrder(uint8_t* data, unsigned offset, UINT32 byteSize){
     UINT32 size = byteSize + offset;
     UINT32 shadowSize = size % 8 != 0 ? (size / 8) + 1 : size / 8;
@@ -468,7 +587,6 @@ uint8_t* HeapShadow::invertBitOrder(uint8_t* data, unsigned offset, UINT32 byteS
         --srcPtr;
     }
 
-    free(data);
     return ret;
 }
 
@@ -519,7 +637,10 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
         // We return the reversed bit sequence in order to adapt the information
         // about uninitialized byte to be aligned to the order both StackShadow and ShadowRegister
         // use (i.e. MSB to the left; LSB to the right)
-        return this->invertBitOrder(this->shadow_memory_copy(addr, size), addr % 8, size);
+        uint8_t* shadow_mem_copy = this->shadow_memory_copy(addr, size);
+        uint8_t* ret = this->invertBitOrder(shadow_mem_copy, addr % 8, size);
+        free(shadow_mem_copy);
+        return ret;
     }
     else
         return NULL;
@@ -567,6 +688,10 @@ uint8_t* getShadowAddr(ADDRINT addr){
 
 void set_as_initialized(ADDRINT addr, UINT32 size){
     currentShadow->set_as_initialized(addr, size);
+}
+
+void set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data){
+    currentShadow->set_as_initialized(addr, size, data);
 }
 
 uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size){

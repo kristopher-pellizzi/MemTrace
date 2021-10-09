@@ -53,8 +53,9 @@ class ShadowBase{
         uint8_t* getShadowAddr(ADDRINT addr);
         
         // Function invoked whenever a write access is executed.
-        // It sets the corresponding shadow memory area to 1 and resets the corresponding
-        // read shadow memory area to 0
+        // It sets the corresponding shadow memory area to 1 or according to |data|.
+        virtual void set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data) = 0;
+
         virtual void set_as_initialized(ADDRINT addr, UINT32 size) = 0;
         
         virtual uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) = 0;
@@ -84,6 +85,14 @@ class StackShadow : public ShadowBase{
         // or on free invocations.
         void reset(ADDRINT addr);
 
+        // This function expects as a parameter a buffer of bytes that already includes both the offset and
+        // the possible additional bits on the left due to the remainder of 8 of (size + offset). 
+        // Of course, to avoid modifying other memory portions than the one we are supposed to update, both the offset 
+        // and the additional bits must be set to 0.
+        // @param addr: Initial address of the memory portion to write
+        // @param size: Size of the memory access
+        // @param data: Bitmask representing information about uninitialized bytes
+        void set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data) override;
         void set_as_initialized(ADDRINT addr, UINT32 size) override;
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
 };
@@ -103,6 +112,14 @@ class HeapShadow : public ShadowBase{
         void setAsSingleChunk();
         void reset(ADDRINT addr, size_t size);
 
+        // This function expects as a parameter a buffer of bytes that already includes both the offset and
+        // the possible additional bits on the left due to the remainder of 8 of (size + offset). 
+        // Of course, to avoid modifying other memory portions than the one we are supposed to update, both the offset 
+        // and the additional bits must be set to 0.
+        // @param addr: Initial address of the memory portion to write
+        // @param size: Size of the memory access
+        // @param data: Bitmask representing information about uninitialized bytes
+        void set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data) override;
         void set_as_initialized(ADDRINT addr, UINT32 size) override;
         uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size) override;
 };
@@ -116,6 +133,8 @@ extern ShadowBase* currentShadow;
 uint8_t* getShadowAddr(ADDRINT addr);
 
 void set_as_initialized(ADDRINT addr, UINT32 size);
+
+void set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data);
 
 uint8_t* getUninitializedInterval(ADDRINT addr, UINT32 size);
 
