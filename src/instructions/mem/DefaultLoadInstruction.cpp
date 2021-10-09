@@ -4,32 +4,14 @@ using std::ofstream;
 
 static uint8_t* expandData(uint8_t* data, MemoryAccess& ma, unsigned shadowSize, unsigned regByteSize, unsigned regShadowSize){
     uint8_t* ret = (uint8_t*) malloc(sizeof(uint8_t) * regShadowSize);
-    uint8_t* dst = ret + regShadowSize - 1;
-    UINT32 accessSize = ma.getSize();
-
-    if(accessSize < 8){
-        uint8_t mask = ~ (0xff << accessSize);
-        uint8_t toReplicate = *data & mask;
-
-        for(int i = 8 - accessSize; i > 0; i -= accessSize){
-            toReplicate |= (toReplicate << accessSize);
-        }
-
-        for(unsigned i = 0; i < regShadowSize; ++i){
-            *dst-- = toReplicate;
-        }
+    uint8_t* src = data;
+    
+    unsigned diff = regShadowSize - shadowSize;
+    for(unsigned i = 0; i < diff; ++i){
+        *(ret + i) = 0xff;
     }
-    else{
-        unsigned left = regShadowSize;
-        unsigned leftSrc = shadowSize;
-        uint8_t* src = data + shadowSize - 1;
-        while(left > 0){
-            if(leftSrc == 0)
-                src = data + shadowSize - 1;
-            *dst-- = *src--;
-            --left;
-            --leftSrc;
-        }
+    for(unsigned i = diff; i < regShadowSize; ++i, ++src){
+        *(ret + i) = *src;
     }
 
     return ret;
