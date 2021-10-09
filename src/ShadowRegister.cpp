@@ -146,7 +146,12 @@ void ShadowHighByteSubRegister::setAsInitialized(uint8_t* data){
 uint8_t* ShadowHighByteSubRegister::getContentStatus(){
     uint8_t mask = (uint8_t)(0xff << 2) + 1;
     uint8_t* ret = (uint8_t*) malloc(sizeof(uint8_t));
-    *ret = *content | mask;
+    /*
+        Most propagation functions consider adta coming from registers as if they come from the LSB of the register itself.
+        In this specific case, however, data comes from the byte at index 1, so it's required a final shift, also setting to
+        1 the most significant bit.
+    */
+    *ret = ((*content | mask) >> 1) | ((uint8_t) 0xff << 7);
 
     return ret;
 }
