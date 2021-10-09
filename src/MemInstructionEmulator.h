@@ -3,6 +3,7 @@
 #include "pin.H"
 #include "MemoryAccess.h"
 #include "ShadowRegisterFile.h"
+#include "ShadowMemory.h"
 
 using std::cerr;
 using std::endl;
