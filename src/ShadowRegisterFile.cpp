@@ -214,7 +214,10 @@ string& ShadowRegisterFile::getName(REG pin_reg){
 
 
 string& ShadowRegisterFile::getName(SHDW_REG reg){
-    return shadowRegisters[reg]->getName();
+    if(reg < numRegisters)
+        return shadowRegisters[reg]->getName();
+    else    
+        return unknownString;
 }
 
 
