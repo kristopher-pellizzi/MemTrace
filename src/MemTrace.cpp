@@ -34,6 +34,7 @@
 #include "ShadowRegisterFile.h"
 #include "InstructionHandler.h"
 #include "misc/PendingReads.h"
+#include "TagManager.h"
 
 using std::cerr;
 using std::string;
@@ -1579,6 +1580,8 @@ VOID checkDestRegisters(VOID* dstRegs){
         }
     }
 
+    TagManager& tagManager = TagManager::getInstance();
+
     for(auto iter = toRemove.begin(); iter != toRemove.end(); ++iter){
         /*
         If the destination register is a key in the pending reads map,
@@ -1587,6 +1590,11 @@ VOID checkDestRegisters(VOID* dstRegs){
         */
         auto readIter = pendingUninitializedReads.find(*iter);
         if(readIter != pendingUninitializedReads.end()){
+            set<tag_t>& tags = readIter->second;
+            #ifdef DEBUG
+            *out << "Removing pending reads for " << registerFile.getName((SHDW_REG)*iter) << endl;
+            #endif
+            tagManager.decreaseRefCount(tags);
             pendingUninitializedReads.erase(readIter);
         }
     }
@@ -1674,6 +1682,11 @@ VOID checkDestRegisters(VOID* dstRegs){
         for(auto iter = toRemove.begin(); iter != toRemove.end(); ++iter){
             auto readIter = pendingUninitializedReads.find(*iter);
             if(readIter != pendingUninitializedReads.end()){
+                set<tag_t>& tags = readIter->second;
+                #ifdef DEBUG
+                *out << "Removing pending reads for " << registerFile.getName((SHDW_REG)*iter) << endl;
+                #endif
+                tagManager.decreaseRefCount(tags);
                 pendingUninitializedReads.erase(readIter);
             }
         }
@@ -1719,6 +1732,8 @@ VOID checkSourceRegisters(VOID* srcRegs){
         }
     }
 
+    TagManager& tagManager = TagManager::getInstance();
+
     for(auto iter = toCheck.begin(); iter != toCheck.end(); ++iter){
 
         /*
@@ -1732,7 +1747,8 @@ VOID checkSourceRegisters(VOID* srcRegs){
         if(readIter != pendingUninitializedReads.end()){
             auto& accessSet = readIter->second;
             for(auto accessIter = accessSet.begin(); accessIter != accessSet.end(); ++accessIter){
-                auto& access = *accessIter;
+                tag_t access_tag = *accessIter;
+                const pair<AccessIndex, MemoryAccess>& access = tagManager.getAccess(access_tag);
                 // Avoid inserting the same read access more than once (in case it has written more than 1 dst register)
                 if(alreadyInserted.find(access.second) == alreadyInserted.end()){
                     storeMemoryAccess(access.first, access.second);
