@@ -760,6 +760,15 @@ void storeMemoryAccess(const AccessIndex& ai, const MemoryAccess& ma){
     }
 }
 
+void storeMemoryAccess(set<tag_t>& tags){
+    TagManager& tagManager = TagManager::getInstance();
+
+    for(auto iter = tags.begin(); iter != tags.end(); ++iter){
+        auto access = tagManager.getAccess(*iter);
+        storeMemoryAccess(access.first, access.second);
+    }
+}
+
 void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
     if(isMovInstruction(opcode)){
@@ -771,6 +780,15 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<R
     // Note that this also includes syscall instructions
     else{
         storeMemoryAccess(ai, ma);
+    }
+}
+
+void storeOrLeavePending(OPCODE opcode, set<REG>* dstRegs, set<tag_t>& tags){
+    if(isMovInstruction(opcode)){
+        addPendingRead(dstRegs, tags);
+    }
+    else{
+        storeMemoryAccess(tags);
     }
 }
 
@@ -1208,6 +1226,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         }
         else{
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
+            storePendingReads(srcRegs, ma);
         }
         
         //set_as_initialized(addr, size);
@@ -1250,6 +1269,44 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         else{
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
+
+            // Check if the loaded value has bytes coming from stored pending reads
+            if(storedPendingUninitializedReads.size() != 0){
+                range_t memRange(addr, addr + size - 1);
+                // [*] Store or leave pending on the dst registers previous pending reads (according if it is a direct usage or a load)
+                map<range_t, set<tag_t>> pendingReads = getStoredPendingReads(ma);
+                set<tag_t> tags;
+                set<range_t, IncreasingStartRangeSorter> ranges;
+                ranges.insert(memRange);
+    
+                for(auto iter = pendingReads.begin(); iter != pendingReads.end(); ++iter){
+                    set<tag_t>& iterTags = iter->second;
+                    tags.insert(iterTags.begin(), iterTags.end());
+                    rangeDiff(ranges, iter->first);
+                }
+
+                if(tags.size() > 0){
+                    storeOrLeavePending(opcode, dstRegs, tags);                    
+                }
+
+                set<pair<unsigned, unsigned>> intervals = ma.computeIntervals();
+                set<range_t, IncreasingStartRangeSorter> uninitRanges;
+                for(auto iter = intervals.begin(); iter != intervals.end(); ++iter){
+                    uninitRanges.insert(range_t(addr + iter->first, addr + iter->second));
+                }
+                rangeIntersect(ranges, uninitRanges);
+
+                /*
+                    The load is uninitialized only because a previous uninitialized read has been stored there.
+                    So, it's of no use reporting it, just propagate the status mask into destination registers and return.
+                    If this is not the case (and therefore there are uninitialized bytes not coming from previous uninitialized reads)
+                    also this read will be reported, and the propagation of status mask to registers will be performed by a later call to |storeOrLeavePending|
+                */
+                if(ranges.size() == 0){
+                    InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
+                    return;
+                }
+            }
 
             // This is an heuristics applied in order to reduce the number of reported uninitialized reads
             // by avoiding reporting those not very significant.
