@@ -224,12 +224,6 @@ static GENERIC_ITERATOR next(GENERIC_ITERATOR& iter){
     return ++ret;
 }
 
-template <class S>
-static GENERIC_ITERATOR prev(GENERIC_ITERATOR& iter){
-    GENERIC_ITERATOR ret = iter;
-    return --ret;
-}
-
 static map<range_t, set<tag_t>, IncreasingStartRangeSorter>& merge(map<range_t, set<tag_t>, IncreasingStartRangeSorter>& m){
     if(m.size() <= 1)
         return m;
@@ -354,7 +348,7 @@ static ITERATOR split(ITERATOR& iter, range_t& splittingRange, set<tag_t>& newTa
 */
 template <class S>
 static GENERIC_ITERATOR split(map<range_t, set<tag_t>, S>& m, GENERIC_ITERATOR& iter, range_t& splittingRange){
-    GENERIC_ITERATOR ret = prev<S>(iter);
+    GENERIC_ITERATOR ret = next<S>(iter);
     bool retValueSet = false;
     bool isPendingReadMap = (void*)&m == (void*)&storedPendingUninitializedReads;
 
@@ -435,7 +429,9 @@ static void insertStoredPendingReads(map<range_t, set<tag_t>, IncreasingStartRan
                 iter = split(iter, overlappingRange, mIter->second);
                 mIter = split(endRangeSorted, mIter, overlappingRange);
             }
-            ++mIter;
+            else{
+                ++mIter;
+            }
         }
     }
 
@@ -454,12 +450,16 @@ static void insertStoredPendingReads(map<range_t, set<tag_t>, IncreasingStartRan
 }
 
 static void removeStoredPendingReads(range_t r){
-    for (auto iter = storedPendingUninitializedReads.begin(); iter != storedPendingUninitializedReads.end(); ++iter){
+    auto iter = storedPendingUninitializedReads.begin();
+    while (iter != storedPendingUninitializedReads.end()){
         const range_t iterRange = iter->first;
 
         if(r.second >= iterRange.first && r.first <= iterRange.second){
             range_t overlappingRange = getOverlappingRange(r, iterRange);
-            split(storedPendingUninitializedReads, iter, overlappingRange);
+            iter = split(storedPendingUninitializedReads, iter, overlappingRange);
+        }
+        else{
+            ++iter;
         }
     }
 }
