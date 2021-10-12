@@ -350,6 +350,21 @@ bool ShadowRegisterFile::DecresingSizeRegisterSorter::operator()(const unsigned 
     return registerFile.isHighByteReg(shdw_x);
 }
 
+
+bool ShadowRegisterFile::IncreasingSizeRegisterSorter::operator()(const unsigned x, const unsigned y){
+    SHDW_REG shdw_x = (SHDW_REG) x;
+    SHDW_REG shdw_y = (SHDW_REG) y;
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    unsigned xByteSize = registerFile.getByteSize(shdw_x);
+    unsigned yByteSize = registerFile.getByteSize(shdw_y);
+
+    if(xByteSize != yByteSize){
+        return xByteSize < yByteSize;
+    }
+
+    return !registerFile.isHighByteReg(shdw_x);
+}
+
 /*
     Given a SHDW_REG |reg|, and a set of registers, get a set of registers with these properties:
     [*] Each returned register is the alias register of 1 of the given registers

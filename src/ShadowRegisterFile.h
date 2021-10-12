@@ -311,6 +311,12 @@ class ShadowRegisterFile{ // Singleton
             public: 
                 bool operator()(const unsigned x, const unsigned y);
         };
+
+        
+        class IncreasingSizeRegisterSorter{
+            public:
+                bool operator()(const unsigned x, const unsigned y);
+        };
 };
 
 #endif // SHDWREGISTERFILE
