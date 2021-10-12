@@ -65,6 +65,12 @@ void TagManager::increaseRefCount(tag_t tag){
     ++referenceCount[tag];
 }
 
+void TagManager::increaseRefCount(const set<tag_t>& tags){
+    for(auto iter = tags.begin(); iter != tags.end(); ++iter){
+        increaseRefCount(*iter);
+    }
+}
+
 void TagManager::decreaseRefCount(tag_t tag){
     if(referenceCount.find(tag) == referenceCount.end())
         return;
@@ -93,7 +99,7 @@ void TagManager::decreaseRefCount(tag_t tag){
     }
 }
 
-void TagManager::decreaseRefCount(set<tag_t>& tags){
+void TagManager::decreaseRefCount(const set<tag_t>& tags){
     for(auto iter = tags.begin(); iter != tags.end(); ++iter){
         decreaseRefCount(*iter);
     }

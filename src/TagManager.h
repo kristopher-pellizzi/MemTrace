@@ -31,8 +31,9 @@ class TagManager{
         const Access& getAccess(tag_t tag);
         const tag_t getTag(Access access);  
         void increaseRefCount(tag_t tag);
+        void increaseRefCount(const set<tag_t>& tags);
         void decreaseRefCount(tag_t tag);
-        void decreaseRefCount(set<tag_t>& tags);
+        void decreaseRefCount(const set<tag_t>& tags);
 };
 
 #undef Access
