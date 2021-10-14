@@ -135,11 +135,21 @@ uint8_t* ShadowOverwritingSubRegister::getContentStatus(){
 
 
 // Begin of ShadowHighByteSubRegister section
+
+/*  
+    Sets the register as initialized according to the bitmask |data|.
+
+    The given bitmask represented by |data| is thought so that the least significant bit is always associated 
+    to the least significant byte of the register itself, so set the content so that the least significant bit of 
+    |data| is stored into bit with index 1 of |content|.
+
+    @param data: bitmask of the data to be propagated to the register
+*/
 void ShadowHighByteSubRegister::setAsInitialized(uint8_t* data){
     uint8_t mask = (uint8_t)(0xff << 2) + 1;
     *content &= mask;
-    mask = ~mask;
-    uint8_t maskedData = *data & mask;
+    mask = 1;
+    uint8_t maskedData = (*data & mask) << 1;
     *content |= maskedData;
 }
 
