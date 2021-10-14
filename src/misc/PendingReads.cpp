@@ -239,7 +239,8 @@ static map<range_t, set<tag_t>, IncreasingStartRangeSorter>& merge(map<range_t, 
         set<tag_t>& s1 = m[r1];
         set<tag_t>& s2 = m[r2];
 
-        if(s1 == s2){
+        // if ranges are contigous and contain the same set of tags, merge them
+        if(r1.second + 1 == r2.first && s1 == s2){
             range_t newRange(r1.first, r2.second);
             pair<range_t, set<tag_t>> newElem(newRange, s1);
             pair<ITERATOR, bool> ret = m.insert(newElem);
