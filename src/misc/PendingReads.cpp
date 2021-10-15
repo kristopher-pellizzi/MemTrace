@@ -466,6 +466,15 @@ static void removeStoredPendingReads(range_t r){
 }
 
 
+void updateStoredPendingReads(const AccessIndex& ai){
+    if(storedPendingUninitializedReads.size() != 0){
+        ADDRINT addr = ai.getFirst();
+        range_t r(addr, addr + ai.getSecond() - 1);
+        removeStoredPendingReads(r);
+    }
+}
+
+
 void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma){
     // Remove all ranges overlapping the given MemoryAccess. If there are uninitialized src registers
     // the correct uninitialized ranges will be inserted again

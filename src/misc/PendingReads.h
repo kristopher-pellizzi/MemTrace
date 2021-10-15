@@ -33,6 +33,7 @@ void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags);
 
 void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs);
 
+void updateStoredPendingReads(const AccessIndex& ai);
 void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma);
 map<range_t, set<tag_t>> getStoredPendingReads(MemoryAccess& ma);
 
