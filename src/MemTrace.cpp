@@ -896,6 +896,7 @@ VOID FreeAfter(ADDRINT ptr){
         }
 
         set_as_initialized(ai.getFirst(), ai.getSecond());
+        updateStoredPendingReads(ai);
     }
     mallocTemporaryWriteStorage.clear();    
 }
@@ -1011,6 +1012,7 @@ VOID MallocAfter(ADDRINT ret)
     // If this malloc happened before the entry point is executed, simply consider it as completely initialized.
     if(!entryPointExecuted){
         heapShadow->set_as_initialized(ret, blockSize);
+        updateStoredPendingReads(AccessIndex(ret, ret + blockSize - 1));
     }
 
     // NOTE: |mallocTemporaryWriteStorage| only contains write accesses happened during the execution of malloc
@@ -1029,6 +1031,7 @@ VOID MallocAfter(ADDRINT ret)
                 currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
             }
             set_as_initialized(ai.getFirst(), ai.getSecond());
+            updateStoredPendingReads(ai);
         }
     }
     mallocTemporaryWriteStorage.clear();
@@ -1226,8 +1229,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         }
         else{
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
-            storePendingReads(srcRegs, ma);
         }
+
+        storePendingReads(srcRegs, ma);
         
         //set_as_initialized(addr, size);
 
@@ -1537,6 +1541,7 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     ADDRINT actualIp = PIN_GetContextReg(ctxt, REG_INST_PTR);
     syscallIP = actualIp;
     ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
+
     // If this is a call to mmap and a malloc has been called, but not returned yet,
     // this mmap is part of the malloc itself, which is allocating memory pages,
     // probably because the requested size is very high.
