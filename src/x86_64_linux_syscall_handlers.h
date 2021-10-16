@@ -18,6 +18,9 @@
 #include <ustat.h>
 #include <sys/statfs.h>
 #include <signal.h>
+#include <sched.h>
+#include <linux/bpf.h>
+#include "syscall_missing_struct.h"
 
 #include "SyscallMemAccess.h"
 
@@ -164,6 +167,14 @@ RETTYPE sys_preadv_handler ARGUMENTS{
 
 RETTYPE sys_pwritev_handler ARGUMENTS{
     return sys_writev_handler(retVal, args);
+}
+
+RETTYPE sys_preadv2_handler ARGUMENTS{
+    return sys_preadv_handler(retVal, args);
+}
+
+RETTYPE sys_pwritev2_handler ARGUMENTS{
+    return sys_pwritev_handler(retVal, args);
 }
 
 // The next 2 syscalls transfer data between 2 processes address spaces. Since our tool is thought to detect overlaps
@@ -667,6 +678,10 @@ RETTYPE sys_renameat_handler ARGUMENTS{
     rename_args.push_back(args[1]);
     rename_args.push_back(args[3]);
     return sys_rename_handler(retVal, rename_args);
+}
+
+RETTYPE sys_renameat2_handler ARGUMENTS{
+    return sys_renameat_handler(retVal, args);
 }
 
 RETTYPE sys_mkdir_handler ARGUMENTS{
@@ -1249,6 +1264,295 @@ RETTYPE sys_rt_sigprocmask_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_sched_setattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal < 0)
+        return ret;
+
+    struct sched_attr* attr = (struct sched_attr*) args[1];
+    if(attr != NULL){
+        SyscallMemAccess attrMA(args[1], sizeof(struct sched_attr), AccessType::READ);
+        ret.insert(attrMA);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_sched_getattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal < 0)
+        return ret;
+
+    struct sched_attr* attr = (struct sched_attr*) args[1];
+    if(attr != NULL){
+        SyscallMemAccess attrMA(args[1], sizeof(struct sched_attr), AccessType::WRITE);
+        ret.insert(attrMA);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_getrandom_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((ssize_t) retVal == -1)
+        return ret;
+
+    // Return value is the number of bytes written into buffer args[0]. As happens with read system call,
+    // it may be less than the requested value
+    void* buf = (void*) args[0];
+    if(buf != NULL){
+        SyscallMemAccess ma(args[0], retVal, AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_memfd_create_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const char* name = (char*) args[0];
+    if(name != NULL){
+        SyscallMemAccess ma(args[0], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_bpf_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    union bpf_attr* attr = (union bpf_attr*) args[1];
+    if(attr != NULL){
+        SyscallMemAccess ma(args[1], args[2], AccessType::READ);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_statx_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const char* pathname = (char*) args[1];
+    struct statx* statxbuf = (struct statx*) args[4];
+    if(pathname != NULL){
+        SyscallMemAccess ma(args[1], strlen(pathname), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(statxbuf != NULL){
+        SyscallMemAccess ma(args[4], sizeof(struct statx), AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_setxattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const char* path = (char*) args[0];
+    const char* name = (char*) args[1];
+    const void* value = (void*) args[2];
+    if(path != NULL){
+        SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(name != NULL){
+        SyscallMemAccess ma(args[1], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(value != NULL){
+        SyscallMemAccess ma(args[2], args[3], AccessType::READ);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_lsetxattr_handler ARGUMENTS{
+    return sys_setxattr_handler(retVal, args);
+}
+
+RETTYPE sys_fsetxattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const char* name = (char*) args[1];
+    const void* value = (char*) args[2];
+    if(name != NULL){
+        SyscallMemAccess ma(args[1], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(value != NULL){
+        SyscallMemAccess ma(args[2], args[3], AccessType::READ);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_getxattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((ssize_t) retVal == -1)
+        return ret;
+
+    const char* path = (char*) args[0];
+    const char* name = (char*) args[1];
+    const void* value = (void*) args[2];
+    if(path != NULL){
+        SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(name != NULL){
+        SyscallMemAccess ma(args[1], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(value != NULL){
+        SyscallMemAccess ma(args[2], retVal, AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_lgetxattr_handler ARGUMENTS{
+    return sys_getxattr_handler(retVal, args);
+}
+
+RETTYPE sys_fgetxattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((ssize_t) retVal == -1)
+        return ret;
+
+    const char* name = (char*) args[1];
+    const void* value = (void*) args[2];
+    if(name != NULL){
+        SyscallMemAccess ma(args[1], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(value != NULL){
+        SyscallMemAccess ma(args[2], retVal, AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_listxattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((ssize_t) retVal == -1)
+        return ret;
+
+    const char* path = (char*) args[0];
+    char* list = (char*) args[1];
+    size_t size = (size_t) args[2];
+    if(path != NULL){
+        SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    ssize_t retSize = (ssize_t) retVal;
+    UINT32 writtenSize;
+    if(size <= (size_t) retSize){
+        writtenSize = size;
+    }
+    else{
+        writtenSize = retSize;
+    }
+
+    if(list != NULL && size != 0){
+        SyscallMemAccess ma(args[1], writtenSize, AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_llistxattr_handler ARGUMENTS{
+    return sys_listxattr_handler(retVal, args);
+}
+
+RETTYPE sys_flistxattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((ssize_t) retVal == -1)
+        return ret;
+
+    char* list = (char*) args[1];
+    size_t size = (size_t) args[2];
+
+    ssize_t retSize = (ssize_t) retVal;
+    UINT32 writtenSize;
+    if(size <= (size_t) retSize){
+        writtenSize = size;
+    }
+    else{
+        writtenSize = retSize;
+    }
+
+    if(list != NULL && size != 0){
+        SyscallMemAccess ma(args[1], writtenSize, AccessType::WRITE);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_removexattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const char* path = (char*) args[0];
+    const char* name = (char*) args[1];
+    if(path != NULL){
+        SyscallMemAccess ma(args[0], strlen(path), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    if(name != NULL){
+        SyscallMemAccess ma(args[1], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
+RETTYPE sys_lremovexattr_handler ARGUMENTS{
+    return sys_removexattr_handler(retVal, args);
+}
+
+RETTYPE sys_fremovexattr_handler ARGUMENTS{
+    set<SyscallMemAccess> ret;
+    if((int) retVal == -1)
+        return ret;
+
+    const char* name = (char*) args[1];
+    if(name != NULL){
+        SyscallMemAccess ma(args[1], strlen(name), AccessType::READ);
+        ret.insert(ma);
+    }
+
+    return ret;
+}
+
 #undef RETTYPE
 #undef ARGUMENTS
 
@@ -1343,6 +1647,18 @@ class HandlerSelector{
             SYSCALL_ENTRY(164, 2, sys_settimeofday_handler);
             SYSCALL_ENTRY(170, 2, sys_sethostname_handler);
             SYSCALL_ENTRY(171, 2, sys_setdomainname_handler);
+            SYSCALL_ENTRY(188, 5, sys_setxattr_handler);
+            SYSCALL_ENTRY(189, 5, sys_lsetxattr_handler);
+            SYSCALL_ENTRY(190, 5, sys_fsetxattr_handler);
+            SYSCALL_ENTRY(191, 4, sys_getxattr_handler);
+            SYSCALL_ENTRY(192, 4, sys_lgetxattr_handler);
+            SYSCALL_ENTRY(193, 4, sys_fgetxattr_handler);
+            SYSCALL_ENTRY(194, 3, sys_listxattr_handler);
+            SYSCALL_ENTRY(195, 3, sys_llistxattr_handler);
+            SYSCALL_ENTRY(196, 3, sys_flistxattr_handler);
+            SYSCALL_ENTRY(197, 2, sys_removexattr_handler);
+            SYSCALL_ENTRY(198, 2, sys_lremovexattr_handler);
+            SYSCALL_ENTRY(199, 2, sys_fremovexattr_handler);
             SYSCALL_ENTRY(201, 1, sys_time_handler);
             SYSCALL_ENTRY(217, 3, sys_getdents64_handler);
             SYSCALL_ENTRY(227, 2, sys_clock_settime);
@@ -1373,6 +1689,15 @@ class HandlerSelector{
             SYSCALL_ENTRY(307, 4, sys_sendmmsg_handler);
             SYSCALL_ENTRY(310, 6, sys_process_vm_readv_handler);
             SYSCALL_ENTRY(311, 6, sys_process_vm_writev_handler);
+            SYSCALL_ENTRY(314, 3, sys_sched_setattr_handler);
+            SYSCALL_ENTRY(315, 4, sys_sched_getattr_handler);
+            SYSCALL_ENTRY(316, 5, sys_renameat2_handler);
+            SYSCALL_ENTRY(318, 3, sys_getrandom_handler);
+            SYSCALL_ENTRY(319, 2, sys_memfd_create_handler);
+            SYSCALL_ENTRY(321, 3, sys_bpf_handler);
+            SYSCALL_ENTRY(327, 5, sys_preadv2_handler);
+            SYSCALL_ENTRY(328, 5, sys_pwritev2_handler);
+            SYSCALL_ENTRY(332, 5, sys_statx_handler);
 
             // Insert unused handlers into a vector in order to avoid compilation warnings
             // which are converted into errors by Intel PIN
@@ -1398,6 +1723,9 @@ class HandlerSelector{
             auto handler = handlers.find(sysNum);
             // If there's an handler in the map, execute it and return the result;
             // otherwise, just return an empty set
+            /*if(handler == handlers.end()){
+                std::cerr << "System call " << std::dec << sysNum << " not implemented" << std::endl;
+            }*/
             return handler == handlers.end() ? set<SyscallMemAccess>() : set<SyscallMemAccess>((*handler->second)(retVal, args));
         }
 
