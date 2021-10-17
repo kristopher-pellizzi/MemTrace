@@ -34,6 +34,7 @@
 #include "ShadowRegisterFile.h"
 #include "InstructionHandler.h"
 #include "misc/PendingReads.h"
+#include "misc/SetOps.h"
 #include "TagManager.h"
 
 using std::cerr;
@@ -2078,20 +2079,31 @@ VOID Instruction(INS ins, VOID* v){
     // Start inserting analysis functions
 
     /*
-        If the instruction is a mov instruction, avoid considering it a register usage.
-        Register status will be propagated and whenever an instruction different from "mov" is executed
-        the register usage will be detected, and the associated uninitialized read (if any) will be stored.
+        If the instruction is a mov or push instruction, avoid considering explicitly read registers as a register 
+        usage, because we're simply copying its value to another register or to memory.
+        However, we need to check if an implicitly read register is used uninitialized.
+        So, in these cases, simply remove all the explicitly read registers from the set of all src registers
+        and call |checkSourceRegisters|.
+
+        Examples:
+        1)  An uninitialized read loads register rbx. rbx is copied to rcx through a mov. rbx is an explicit src register,
+            so it will be removed from the set, and the uninitialized read won't be reported yet.
+            If either rbx or rcx is later used, the uninitialized read will be reported.
+        2)  An uninitialized read loads register rbx. rbx is then used as a base pointer to load something else through 
+            a mov. rbx is an implicitly read register (it's read to compute the address we're reading from), so it is not
+            removed from the set, and the uninitialized read is therefore reported.
     */
-    if(!isMovInstruction(opcode) && !isPushInstruction(opcode)){
-        INS_InsertPredicatedCall(
-            ins,
-            IPOINT_BEFORE,
-            (AFUNPTR) checkSourceRegisters,
-            IARG_PTR, srcRegs,
-            IARG_CALL_ORDER, CALL_ORDER_FIRST,
-            IARG_END
-        );
+    if(isPushInstruction(opcode) || isMovInstruction(opcode)){
+        setDiff(srcRegs, explicitSrcRegs);
     }
+    INS_InsertPredicatedCall(
+        ins,
+        IPOINT_BEFORE,
+        (AFUNPTR) checkSourceRegisters,
+        IARG_PTR, srcRegs,
+        IARG_CALL_ORDER, CALL_ORDER_FIRST,
+        IARG_END
+    );
 
     if(!isAutoMov(opcode, explicitSrcRegs, dstRegs)){
         INS_InsertPredicatedCall(
