@@ -220,6 +220,17 @@ bool isPushInstruction(OPCODE opcode){
         opcode == XED_ICLASS_PUSHFQ;
 }
 
+bool isPopInstruction(OPCODE opcode){
+    return 
+        opcode == XED_ICLASS_POP ||
+        opcode == XED_ICLASS_POPA ||
+        opcode == XED_ICLASS_POPAD ||
+        opcode == XED_ICLASS_POPF ||
+        opcode == XED_ICLASS_POPFD ||
+        opcode == XED_ICLASS_POPFQ;
+
+}
+
 // Similarly to the previous functions, the following returns true if the considered instruction
 // is a call instruction, which pushes on the stack the return address
 bool isCallInstruction(OPCODE opcode){
@@ -771,7 +782,7 @@ void storeMemoryAccess(set<tag_t>& tags){
 
 void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
-    if(isMovInstruction(opcode)){
+    if(isMovInstruction(opcode) || isPopInstruction(opcode)){
         addPendingRead(dstRegs, ai, ma);
         InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
     }
@@ -784,7 +795,7 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<R
 }
 
 void storeOrLeavePending(OPCODE opcode, set<REG>* dstRegs, set<tag_t>& tags){
-    if(isMovInstruction(opcode)){
+    if(isMovInstruction(opcode) || isPopInstruction(opcode)){
         addPendingRead(dstRegs, tags);
     }
     else{
@@ -2071,7 +2082,7 @@ VOID Instruction(INS ins, VOID* v){
         Register status will be propagated and whenever an instruction different from "mov" is executed
         the register usage will be detected, and the associated uninitialized read (if any) will be stored.
     */
-    if(!isMovInstruction(opcode)){
+    if(!isMovInstruction(opcode) && !isPushInstruction(opcode)){
         INS_InsertPredicatedCall(
             ins,
             IPOINT_BEFORE,
