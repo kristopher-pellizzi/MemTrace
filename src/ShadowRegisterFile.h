@@ -19,9 +19,9 @@ using std::string;
     enum SHDW_REG defined below.
     It accepts, as a parameter, another macro, which MUST accept exactly 4 arguments or be variadic.
     Parameters of the called macro |X| are:
-        [*] name: register name/index
+        [*] name: shadow register name/index
         [*] size: register size (in bits)
-        [*] superRegister: register the considered register is a sub-register of (e.g. eax will have SHDW_REG_RAX, 0).
+        [*] superRegister: register the considered register is a sub-register of (e.g. eax will have SHDW_REG_RAX).
             Note that registers that don't have any super-register (e.g. rax) will have their own index.
         [*] isOverwritingRegister: boolean flag (1->true; 0->false) specifying whether the register overwrites the upper bits
             of its super-register when it's written or not
@@ -216,7 +216,9 @@ using std::string;
     X(SHDW_REG_K4, 64, SHDW_REG_K4, 0) \
     X(SHDW_REG_K5, 64, SHDW_REG_K5, 0) \
     X(SHDW_REG_K6, 64, SHDW_REG_K6, 0) \
-    X(SHDW_REG_K7, 64, SHDW_REG_K7, 0)
+    X(SHDW_REG_K7, 64, SHDW_REG_K7, 0) \
+    X(SHDW_REG_RIP, 64, SHDW_REG_RIP, 0) \
+    X(SHDW_REG_EIP, 32, SHDW_REG_RIP, 1)
 
 
 enum SHDW_REG{
