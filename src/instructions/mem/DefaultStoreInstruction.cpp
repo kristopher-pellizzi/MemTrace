@@ -106,7 +106,8 @@ void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, 
         if(srcByteSize >= ma.getSize()){
             // Set to 0 all the bytes that are not actually part of the register status (e.g. for eax, set to 0 the 4 most significant bits)
             // as they are related to rax)
-            *data &= ((uint8_t) 0xff >> (8 - srcByteSize % 8));
+            if(srcByteSize % 8 != 0)
+                *data &= ((uint8_t) 0xff >> (8 - srcByteSize % 8));
             uint8_t* src = data;
             src += srcShadowSize - shadowSize;
             set_as_initialized(ma.getAddress(), ma.getSize(), src);
