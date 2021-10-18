@@ -232,6 +232,12 @@ bool isPopInstruction(OPCODE opcode){
 
 }
 
+bool isEndbrInstruction(OPCODE opcode){
+    return 
+        opcode == XED_ICLASS_ENDBR32 ||
+        opcode == XED_ICLASS_ENDBR64;
+}
+
 // Similarly to the previous functions, the following returns true if the considered instruction
 // is a call instruction, which pushes on the stack the return address
 bool isCallInstruction(OPCODE opcode){
@@ -1993,11 +1999,13 @@ bool isZeroingXor(INS ins, OPCODE opcode, set<REG>* dstRegs, set<REG>* srcRegs){
 }
 
 VOID Instruction(INS ins, VOID* v){
+    OPCODE opcode = INS_Opcode(ins);
+
     // Prefetch instruction is used to simply trigger memory areas in order to
     // move them to processor's cache. It does not affect program behaviour,
     // but PIN detects it as a memory read operation, thus producing
     // an uninitialized read.
-    if(INS_IsPrefetch(ins))
+    if(INS_IsPrefetch(ins) || isEndbrInstruction(opcode) || INS_IsNop(ins))
         return;
 
     
@@ -2006,7 +2014,6 @@ VOID Instruction(INS ins, VOID* v){
     UINT32 operandCount = INS_OperandCount(ins);
     UINT32 memoperands = INS_MemoryOperandCount(ins);
     UINT32 readRegisters = INS_MaxNumRRegs(ins);
-    OPCODE opcode = INS_Opcode(ins);
     set<REG>* srcRegs = NULL;
     set<REG>* explicitSrcRegs = NULL;
     set<REG>* dstRegs = NULL;
