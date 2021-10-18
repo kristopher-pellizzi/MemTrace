@@ -27,6 +27,8 @@ using std::string;
             of its super-register when it's written or not
 
     Of course, it is not necessary for the called macro to actually use all its parameters.
+
+    If you declare a new register, remember to add it to function |initMap| in ShadowRegisterFile.cpp.
 */
 #define REG_TABLE(X) \
     X(SHDW_REG_RAX, 64, SHDW_REG_RAX, 0) \

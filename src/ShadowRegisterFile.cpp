@@ -462,6 +462,8 @@ bool ShadowRegisterFile::isHighByteReg(SHDW_REG reg){
 */
 void ShadowRegisterFile::initMap(){
 #ifdef TARGET_IA32E
+    shadow_map[REG_RIP] = SHDW_REG_RIP;
+
     shadow_map[REG_RAX] = SHDW_REG_RAX;
     
     shadow_map[REG_RBX] = SHDW_REG_RBX;
@@ -619,6 +621,8 @@ void ShadowRegisterFile::initMap(){
 	shadow_map[REG_ZMM31] = SHDW_REG_ZMM31;
 
 #endif
+
+    shadow_map[REG_EIP] = SHDW_REG_EIP;
 
     shadow_map[REG_EAX] = SHDW_REG_EAX;
     shadow_map[REG_AX] = SHDW_REG_AX;
