@@ -5,10 +5,40 @@ InstructionHandler::InstructionHandler(){
     init();
 }
 
+InstructionHandler::~InstructionHandler(){
+    delete(defaultLoad);
+    delete(defaultRegPropagate);
+    delete(defaultStore);
+
+    // Delete emulator for CWD/CDQ/CQO
+    delete(regEmulators[XED_ICLASS_CWD]);
+
+    // Delete emulator for PMOVMSKB/VPMOVMSKB
+    delete(regEmulators[XED_ICLASS_PMOVMSKB]);
+
+    // Delete emulator for VPBROADCASTB/VPBROADCASTW/VPBROADCASTD/VPBROADCASTQ
+    delete(regEmulators[XED_ICLASS_VPBROADCASTB]);
+}
+
 void InstructionHandler::init(){
     defaultLoad = new DefaultLoadInstruction();
     defaultRegPropagate = new DefaultPropagateInstruction();
     defaultStore = new DefaultStoreInstruction();    
+
+    RegInstructionEmulator* convertInstructionEmulator = new ConvertInstruction();
+    regEmulators[XED_ICLASS_CWD] = convertInstructionEmulator;
+    regEmulators[XED_ICLASS_CDQ] = convertInstructionEmulator;
+    regEmulators[XED_ICLASS_CQO] = convertInstructionEmulator;
+
+    RegInstructionEmulator* PMOVMSKBEmulator = new PmovmskbInstruction();
+    regEmulators[XED_ICLASS_PMOVMSKB] = PMOVMSKBEmulator;
+    regEmulators[XED_ICLASS_VPMOVMSKB] = PMOVMSKBEmulator;
+
+    RegInstructionEmulator* VpbroadcastEmulator = new VpbroadcastInstruction();
+    regEmulators[XED_ICLASS_VPBROADCASTB] = VpbroadcastEmulator;
+    regEmulators[XED_ICLASS_VPBROADCASTW] = VpbroadcastEmulator;
+    regEmulators[XED_ICLASS_VPBROADCASTD] = VpbroadcastEmulator;
+    regEmulators[XED_ICLASS_VPBROADCASTQ] = VpbroadcastEmulator;
 }
 
 InstructionHandler& InstructionHandler::getInstance(){

@@ -19,6 +19,7 @@ class InstructionHandler{
         RegInstructionEmulator* defaultRegPropagate;
 
         InstructionHandler();
+        ~InstructionHandler();
         void init();
 
     public:
