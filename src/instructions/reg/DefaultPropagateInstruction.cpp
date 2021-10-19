@@ -1,5 +1,22 @@
 #include "DefaultPropagateInstruction.h"
 
+DefaultPropagateInstruction::DefaultPropagateInstruction(){
+    initVerifiedInstructions();
+}
+
+void DefaultPropagateInstruction::initVerifiedInstructions(){
+    verifiedInstructions.insert(XED_ICLASS_MOVD);
+    verifiedInstructions.insert(XED_ICLASS_MOVQ);
+    verifiedInstructions.insert(XED_ICLASS_VMOVD);
+    verifiedInstructions.insert(XED_ICLASS_VMOVQ);
+    verifiedInstructions.insert(XED_ICLASS_MOVZX);
+    verifiedInstructions.insert(XED_ICLASS_MOVSX);
+    verifiedInstructions.insert(XED_ICLASS_MOVSXD);
+    verifiedInstructions.insert(XED_ICLASS_CBW);
+    verifiedInstructions.insert(XED_ICLASS_CWDE);
+    verifiedInstructions.insert(XED_ICLASS_CDQE);
+}
+
 void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
     // There's nothing to propagate
     if(srcRegs == NULL || dstRegs == NULL)
@@ -10,6 +27,7 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
     uint8_t* srcStatusContent = srcStatus.getStatus();
     unsigned srcByteSize = srcStatus.getByteSize();
     unsigned srcShadowSize = srcStatus.getShadowSize();
+    bool isVerifiedInstruction = verifiedInstructions.find(opcode) != verifiedInstructions.end();
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     std::ofstream warningOpcodes;
@@ -20,7 +38,7 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
             
         unsigned byteSize = registerFile.getByteSize(*iter);
 
-        if(srcByteSize != byteSize){
+        if(!isVerifiedInstruction && srcByteSize != byteSize){
             #ifdef DEBUG
             cerr 
                 << "[DefaultPropagateInstruction] Warning: propagating bytes into "

@@ -17,6 +17,20 @@ static uint8_t* expandData(uint8_t* data, MemoryAccess& ma, unsigned shadowSize,
     return ret;
 }
 
+DefaultLoadInstruction::DefaultLoadInstruction(){
+    initVerifiedInstructions();
+}
+
+void DefaultLoadInstruction::initVerifiedInstructions(){
+    verifiedInstructions.insert(XED_ICLASS_MOVD);
+    verifiedInstructions.insert(XED_ICLASS_MOVQ);
+    verifiedInstructions.insert(XED_ICLASS_VMOVD);
+    verifiedInstructions.insert(XED_ICLASS_VMOVQ);
+    verifiedInstructions.insert(XED_ICLASS_MOVZX);
+    verifiedInstructions.insert(XED_ICLASS_MOVSX);
+    verifiedInstructions.insert(XED_ICLASS_MOVSXD);
+}
+
 void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If there are no destination registers, there's nothing to do
     if(dstRegs == NULL)
@@ -27,6 +41,7 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
     uint8_t* regData = cutUselessBits(uninitializedInterval, ma.getAddress(), ma.getSize());
     UINT32 shadowSize = ma.getSize() + ma.getAddress() % 8;
     shadowSize = shadowSize % 8 != 0 ? (shadowSize / 8) + 1 : shadowSize / 8;
+    bool isVerifiedInstruction = verifiedInstructions.find(ma.getOpcode()) != verifiedInstructions.end();
 
     // Get the content status of all source registers and merge it with status loaded from memory (bitwise AND)
     if(srcRegs != NULL){
@@ -35,7 +50,7 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
         unsigned srcByteSize = srcStatus.getByteSize();
         unsigned srcShadowSize = srcStatus.getShadowSize();
 
-        if(srcByteSize != ma.getSize()){
+        if(!isVerifiedInstruction && srcByteSize != ma.getSize()){
             #ifdef DEBUG
             cerr 
                 << "[DefaultLoadInstruction] Warning: reading source registers." << endl;
@@ -100,45 +115,49 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
         uint8_t* curr_data = regData + shadowSize - regShadowSize;
 
         if(regByteSize < ma.getSize()){
-            if(!warningOpcodes.is_open()){
-                warningOpcodes.open("warningOpcodes.log", std::ios::app);
+            if(!isVerifiedInstruction){
+                if(!warningOpcodes.is_open()){
+                    warningOpcodes.open("warningOpcodes.log", std::ios::app);
+                }
+
+                #ifdef DEBUG
+                cerr 
+                    << "[DefaultLoadInstruction] Warning: writing shadow register " 
+                    << ShadowRegisterFile::getInstance().getName(*iter) 
+                    << "." << endl;
+                cerr 
+                    << "Instruction : " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
+                    << "." << endl;
+                cerr
+                    << "Register size (" << std::dec << regByteSize << ") is lower than the read memory (" << ma.getSize() << ")." << endl;
+                cerr    
+                    << "It's possible that the information about uninitialized bytes stored into the shadow register is "
+                    << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+                #endif
+
+                warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is LOWER than memory size" << endl;
             }
-
-            #ifdef DEBUG
-            cerr 
-                << "[DefaultLoadInstruction] Warning: writing shadow register " 
-                << ShadowRegisterFile::getInstance().getName(*iter) 
-                << "." << endl;
-            cerr 
-                << "Instruction : " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) 
-                << "." << endl;
-            cerr
-                << "Register size (" << std::dec << regByteSize << ") is lower than the read memory (" << ma.getSize() << ")." << endl;
-            cerr    
-                << "It's possible that the information about uninitialized bytes stored into the shadow register is "
-                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
-            #endif
-
-            warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is LOWER than memory size" << endl;
         }
         else if(regByteSize > ma.getSize()){
-            #ifdef DEBUG
-            cerr 
-                << "[DefaultLoadInstruction] Warning: writing shadow register " 
-                << ShadowRegisterFile::getInstance().getName(*iter) 
-                << "." << endl;
-            cerr 
-                << "Instruction's opcode: " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode())
-                << "." << endl;
-            cerr 
-                << "Register size (" << std::dec << regByteSize << ") is higher than the read memory (" << ma.getSize() << ")." << endl;
-            cerr    
-                << "It's possible that the information about uninitialized bytes stored into the shadow register is "
-                << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
-            #endif
+            if(!isVerifiedInstruction){
+                #ifdef DEBUG
+                cerr 
+                    << "[DefaultLoadInstruction] Warning: writing shadow register " 
+                    << ShadowRegisterFile::getInstance().getName(*iter) 
+                    << "." << endl;
+                cerr 
+                    << "Instruction's opcode: " << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode())
+                    << "." << endl;
+                cerr 
+                    << "Register size (" << std::dec << regByteSize << ") is higher than the read memory (" << ma.getSize() << ")." << endl;
+                cerr    
+                    << "It's possible that the information about uninitialized bytes stored into the shadow register is "
+                    << "not correct. Probably it's required to implement an ad-hoc instruction handler." << endl << endl;
+                #endif
+                
+                warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is HIGHER than memory size" << endl;
+            }
 
-            warningOpcodes << LEVEL_CORE::OPCODE_StringShort(ma.getOpcode()) << " raised a warning 'cause register size is HIGHER than memory size" << endl;
-           
             uint8_t* expandedData = expandData(regData, ma, shadowSize, regByteSize, regShadowSize);
             curr_data = expandedData;
             ShadowRegisterFile::getInstance().setAsInitialized(*iter, curr_data);

@@ -47,6 +47,17 @@ static uint8_t* addOffset(uint8_t* data, unsigned offset, unsigned* srcShadowSiz
 
 }
 
+DefaultStoreInstruction::DefaultStoreInstruction(){
+    initVerifiedInstructions();
+}
+
+void DefaultStoreInstruction::initVerifiedInstructions(){
+    verifiedInstructions.insert(XED_ICLASS_MOVD);
+    verifiedInstructions.insert(XED_ICLASS_MOVQ);
+    verifiedInstructions.insert(XED_ICLASS_VMOVD);
+    verifiedInstructions.insert(XED_ICLASS_VMOVQ);
+}
+
 void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If there are no source registers, probably an immediate is going to be stored, so just set everything as initialized
     if(srcRegs == NULL){
@@ -61,8 +72,9 @@ void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, 
     uint8_t* srcStatusPtr = srcStatus.getStatus();
     unsigned srcByteSize = srcStatus.getByteSize();
     unsigned srcShadowSize = srcStatus.getShadowSize();
+    bool isVerifiedInstruction = verifiedInstructions.find(ma.getOpcode()) != verifiedInstructions.end();
 
-    if(srcByteSize != ma.getSize()){
+    if(!isVerifiedInstruction && srcByteSize != ma.getSize()){
         #ifdef DEBUG
         cerr 
             << "[DefaultStoreInstruction] Warning: reading source registers." << endl;
