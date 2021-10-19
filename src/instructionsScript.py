@@ -74,8 +74,8 @@ Please DO NOT modify this header manually\n*/\n\n"
             for file in os.scandir(obj_dir):
                 name, ext = file.name.split(".")
                 if not name in existing_instr:
-                    path = os.path.join(instr_obj_dir, file.name)
-                    os.remove(os.path.join(instr_obj_dir, path))
+                    path = os.path.join(obj_dir, file.name)
+                    os.remove(path)
 
 
 if __name__ == '__main__':
