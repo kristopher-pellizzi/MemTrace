@@ -17,6 +17,7 @@ class MemInstructionEmulator{
         uint8_t* cutUselessBits(uint8_t* uninitializedInterval, ADDRINT addr, UINT32 byteSize);
 
     public:
+        virtual ~MemInstructionEmulator();
         virtual void operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs) = 0;
 };
 

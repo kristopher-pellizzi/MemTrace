@@ -1,5 +1,10 @@
 #include "MemInstructionEmulator.h"
 
+/*
+    Cuts the bits of the |uninitializedInterval| which are there because of an existing offset, thus returning
+    only the bits related to the uninitialized read itself and those additional bits existing because the size of the
+    read is not a multiple of 8 bytes.
+*/
 uint8_t* MemInstructionEmulator::cutUselessBits(uint8_t* uninitializedInterval, ADDRINT addr, UINT32 byteSize){
     unsigned offset = addr % 8;
     UINT32 size = byteSize + offset;
@@ -23,3 +28,5 @@ uint8_t* MemInstructionEmulator::cutUselessBits(uint8_t* uninitializedInterval, 
     }
     return ret;
 }
+
+MemInstructionEmulator::~MemInstructionEmulator(){}
