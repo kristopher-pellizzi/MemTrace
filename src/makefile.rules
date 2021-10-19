@@ -209,6 +209,10 @@ $(OBJDIR)MemInstructionEmulator$(OBJ_SUFFIX): MemInstructionEmulator.cpp MemInst
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file
+$(OBJDIR)RegInstructionEmulator$(OBJ_SUFFIX): RegInstructionEmulator.cpp RegInstructionEmulator.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file
 $(OBJDIR)TagManager$(OBJ_SUFFIX): TagManager.cpp TagManager.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
@@ -234,6 +238,7 @@ $(OBJDIR)ShadowRegisterFile$(OBJ_SUFFIX) ShadowRegisterFile.h \
 $(OBJDIR)ShadowRegister$(OBJ_SUFFIX) ShadowRegister.h \
 $(OBJDIR)InstructionHandler$(OBJ_SUFFIX) InstructionHandler.h \
 $(OBJDIR)MemInstructionEmulator$(OBJ_SUFFIX) MemInstructionEmulator.h \
+$(OBJDIR)RegInstructionEmulator$(OBJ_SUFFIX) RegInstructionEmulator.h \
 $(OBJDIR)TagManager$(OBJ_SUFFIX) TagManager.h \
 $(MEM_INST_OBJ_FILES) \
 $(REG_INST_OBJ_FILES) \
@@ -285,6 +290,10 @@ $(DEBUGDIR)MemInstructionEmulator$(OBJ_SUFFIX): MemInstructionEmulator.cpp MemIn
 	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
 # Build the intermediate object file
+$(DEBUGDIR)RegInstructionEmulator$(OBJ_SUFFIX): RegInstructionEmulator.cpp RegInstructionEmulator.h
+	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
+
+# Build the intermediate object file
 $(DEBUGDIR)TagManager$(OBJ_SUFFIX): TagManager.cpp TagManager.h
 	$(CXX) $(TOOL_CXXFLAGS) -DDEBUG -g $(COMP_OBJ)$@ $<
 
@@ -310,6 +319,7 @@ $(DEBUGDIR)ShadowRegisterFile$(OBJ_SUFFIX) ShadowRegisterFile.h \
 $(DEBUGDIR)ShadowRegister$(OBJ_SUFFIX) ShadowRegister.h \
 $(DEBUGDIR)InstructionHandler$(OBJ_SUFFIX) InstructionHandler.h \
 $(DEBUGDIR)MemInstructionEmulator$(OBJ_SUFFIX) MemInstructionEmulator.h \
+$(DEBUGDIR)RegInstructionEmulator$(OBJ_SUFFIX) RegInstructionEmulator.h \
 $(DEBUGDIR)TagManager$(OBJ_SUFFIX) TagManager.h \
 $(MEM_INST_DBG_FILES) \
 $(REG_INST_DBG_FILES) \
