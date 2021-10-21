@@ -18,6 +18,11 @@ InstructionHandler::~InstructionHandler(){
 
     // Delete emulator for VPBROADCASTB/VPBROADCASTW/VPBROADCASTD/VPBROADCASTQ
     delete(regEmulators[XED_ICLASS_VPBROADCASTB]);
+    delete(memEmulators[XED_ICLASS_VPBROADCASTB]);
+
+    // Delete emulator for FST/FSTP
+    delete(regEmulators[XED_ICLASS_FST]);
+    delete(memEmulators[XED_ICLASS_FST]);
 }
 
 void InstructionHandler::init(){
@@ -39,6 +44,23 @@ void InstructionHandler::init(){
     regEmulators[XED_ICLASS_VPBROADCASTW] = VpbroadcastEmulator;
     regEmulators[XED_ICLASS_VPBROADCASTD] = VpbroadcastEmulator;
     regEmulators[XED_ICLASS_VPBROADCASTQ] = VpbroadcastEmulator;
+
+    RegInstructionEmulator* fstEmulator = new FstInstruction();
+    regEmulators[XED_ICLASS_FST] = fstEmulator;
+    regEmulators[XED_ICLASS_FSTP] = fstEmulator;
+
+    MemInstructionEmulator* memVpbroadcastEmulator = new MemVpbroadcastInstruction();
+    memEmulators[XED_ICLASS_VPBROADCASTB] = memVpbroadcastEmulator;
+    memEmulators[XED_ICLASS_VPBROADCASTW] = memVpbroadcastEmulator;
+    memEmulators[XED_ICLASS_VPBROADCASTD] = memVpbroadcastEmulator;
+    memEmulators[XED_ICLASS_VPBROADCASTQ] = memVpbroadcastEmulator;
+
+    MemInstructionEmulator* memFstEmulator = new MemFstInstruction();
+    memEmulators[XED_ICLASS_FST] = memFstEmulator;
+    memEmulators[XED_ICLASS_FSTP] = memFstEmulator;
+    memEmulators[XED_ICLASS_FIST] = memFstEmulator;
+    memEmulators[XED_ICLASS_FISTP] = memFstEmulator;
+
 }
 
 InstructionHandler& InstructionHandler::getInstance(){
