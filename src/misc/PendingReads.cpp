@@ -30,11 +30,12 @@ map<range_t, set<tag_t>, IncreasingStartRangeSorter> storedPendingUninitializedR
     It is responsibility of funtion |checkDestRegisters| to perform the required operations to check if
     super-registers should be kept in the structure or should be removed.
 */
-void addPendingRead(set<REG>* regs, const AccessIndex& ai, const MemoryAccess& ma){
-    if(regs == NULL)
+void addPendingRead(set<REG>* regs, const MemoryAccess& ma){
+    if(regs == NULL || !ma.getIsUninitializedRead())
         return;
     
     TagManager& tagManager = TagManager::getInstance();
+    AccessIndex ai(ma.getAddress(), ma.getSize());
     std::pair<AccessIndex, MemoryAccess> entry(ai, ma);
     tag_t entry_tag = tagManager.getTag(entry);
     set<unsigned> toAdd;
@@ -640,4 +641,21 @@ set<range_t, IncreasingStartRangeSorter>& rangeIntersect(set<range_t, Increasing
     ranges.insert(ret.begin(), ret.end());
 
     return ranges;
+}
+
+
+void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA){
+    map<range_t, set<tag_t>> toCopy = getStoredPendingReads(srcMA);
+    map<range_t, set<tag_t>> converted;
+    ADDRINT srcAddr = srcMA.getAddress();
+    ADDRINT dstAddr = dstMA.getAddress();
+
+    for(auto i = toCopy.begin(); i != toCopy.end(); ++i){
+        range_t range = i->first;
+        set<tag_t>& tagSet = i->second;
+
+        range.first = range.first - srcAddr + dstAddr;
+        range.second = range.first - srcAddr + dstAddr;
+        converted[range] = tagSet;
+    }
 }

@@ -28,7 +28,7 @@ class IncreasingEndRangeSorter{
 extern map<unsigned, set<tag_t>> pendingUninitializedReads;
 extern map<pair<ADDRINT, ADDRINT>, set<tag_t>, IncreasingStartRangeSorter> storedPendingUninitializedReads;
  
-void addPendingRead(set<REG>* regs, const AccessIndex& ai, const MemoryAccess& ma);
+void addPendingRead(set<REG>* regs, const MemoryAccess& ma);
 void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags);
 
 void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs);
@@ -36,6 +36,7 @@ void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs);
 void updateStoredPendingReads(const AccessIndex& ai);
 void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma);
 map<range_t, set<tag_t>> getStoredPendingReads(MemoryAccess& ma);
+void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA);
 
 /*
     Compute the difference |ranges| - |r2|, which means that we remove from range
