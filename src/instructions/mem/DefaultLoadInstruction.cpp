@@ -169,4 +169,6 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
     }
     warningOpcodes.close();
     free(regData);
+
+    addPendingRead(dstRegs, ma);
 }
