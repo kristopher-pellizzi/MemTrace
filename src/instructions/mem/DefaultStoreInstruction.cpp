@@ -78,11 +78,7 @@ void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, 
         unsigned shadowSize = ma.getSize() + ma.getAddress() % 8;
         unsigned offset = ma.getAddress() % 8;
         shadowSize = shadowSize % 8 != 0 ? (shadowSize / 8) + 1 : shadowSize / 8;
-        uint8_t* data = srcStatusPtr;
-
-        if(offset != 0){
-            data = addOffset(data, offset, &srcShadowSize, srcByteSize);
-        }
+        uint8_t* data = srcStatusPtr; 
         
         // Data from registers has size higher or equal than the written memory => 
         // write just the lowest {ma.getSize()} bytes.
@@ -91,6 +87,10 @@ void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, 
             // as they are related to rax)
             if(srcByteSize % 8 != 0)
                 *data &= ((uint8_t) 0xff >> (8 - srcByteSize % 8));
+
+            if(offset != 0){
+                data = addOffset(data, offset, &srcShadowSize, srcByteSize);
+            }
             uint8_t* src = data;
             src += srcShadowSize - shadowSize;
             set_as_initialized(ma.getAddress(), ma.getSize(), src);
@@ -99,6 +99,9 @@ void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, 
         // consider a zero or sign expansion of the value, so expand data as the highest bytes were initialized
         // and store the expanded data
         else{
+            if(offset != 0){
+                data = addOffset(data, offset, &srcShadowSize, srcByteSize);
+            }
             uint8_t* expandedData = expandData(data, shadowSize, srcShadowSize);
             set_as_initialized(ma.getAddress(), ma.getSize(), expandedData);
             free(expandedData);
@@ -110,4 +113,6 @@ void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, 
     }
 
     warningOpcodes.close();
+
+    storePendingReads(srcRegs, ma);
 }
