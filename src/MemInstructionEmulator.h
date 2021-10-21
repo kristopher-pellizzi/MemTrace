@@ -4,6 +4,8 @@
 #include "MemoryAccess.h"
 #include "ShadowRegisterFile.h"
 #include "ShadowMemory.h"
+#include "misc/MemoryStatus.h"
+#include "misc/PendingReads.h"
 
 using std::cerr;
 using std::endl;
@@ -13,9 +15,6 @@ using std::pair;
 #define MEMINSTRUCTIONEMULATOR
 
 class MemInstructionEmulator{
-    protected:
-        uint8_t* cutUselessBits(uint8_t* uninitializedInterval, ADDRINT addr, UINT32 byteSize);
-        uint8_t* addOffset(uint8_t* data, unsigned offset, unsigned* srcShadowSize, unsigned srcByteSize);
 
     public:
         virtual ~MemInstructionEmulator();
