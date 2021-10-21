@@ -78,4 +78,6 @@ void MemVpbroadcastInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, 
 
     broadcast(regData, dstReg, broadcastSize);
     free(regData);
+
+    addPendingRead(dstRegs, ma);
 }
