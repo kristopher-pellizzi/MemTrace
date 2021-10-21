@@ -45,7 +45,7 @@ static void broadcast(uint8_t* regData, REG dstReg, unsigned bcSize){
     }
 }
 
-void VpbroadcastInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void MemVpbroadcastInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     REG dstReg = *dstRegs->begin();
 
