@@ -28,9 +28,14 @@ class InstructionHandler{
         void operator=(const InstructionHandler& other) = delete;
 
         static InstructionHandler& getInstance();
+
         void handle(OPCODE op, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs);
         void handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs);
-
+        // This overloading method is thought to handle store instructions that simply initialize the whole
+        // memory location
+        void handle(const AccessIndex& ai);
+        // This overloading method is thought to handle the direct memory copy instructions (e.g. movsd)
+        void handle(MemoryAccess& srcMA, MemoryAccess& dstMA);
 };
 
 #endif //INSTRUCTIONHANDLER

@@ -1,5 +1,6 @@
 #include "InstructionHandler.h"
 #include "MemoryAccess.h"
+#include "misc/PendingReads.h"
 
 InstructionHandler::InstructionHandler(){
     init();
@@ -104,4 +105,64 @@ void InstructionHandler::handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs)
     else{
         defaultRegPropagate->operator()(op, srcRegs, dstRegs);
     }
+}
+
+void InstructionHandler::handle(const AccessIndex& ai){
+    ADDRINT addr = ai.getFirst();
+    UINT32 size = ai.getSecond();
+
+    set_as_initialized(addr, size);
+    updateStoredPendingReads(ai);
+}
+
+void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA){
+    UINT32 srcByteSize = srcMA.getSize();
+    UINT32 dstByteSize = dstMA.getSize();
+    ADDRINT srcAddr = srcMA.getAddress();
+    ADDRINT dstAddr = dstMA.getAddress();
+
+    uint8_t* srcStatus = cutUselessBits(srcMA.getUninitializedInterval(), srcAddr, srcByteSize);
+
+    unsigned dstOffset = dstAddr % 8;
+
+    unsigned srcShadowSize = srcByteSize;
+    srcShadowSize = srcShadowSize % 8 != 0 ? (srcShadowSize / 8) + 1 : srcShadowSize / 8;
+
+    unsigned dstShadowSize = dstByteSize + dstOffset;
+    dstShadowSize = dstShadowSize % 8 != 0 ? (dstShadowSize / 8) + 1 : dstShadowSize / 8;
+
+    if(srcByteSize % 8 != 0){
+        *srcStatus &= (uint8_t) 0xff >> (8 - srcByteSize % 8);
+    }
+
+    uint8_t* dstStatus = srcStatus;
+
+    if(dstOffset != 0)
+        dstStatus = addOffset(dstStatus, dstOffset, &srcShadowSize, srcByteSize);
+
+    if(srcByteSize >= dstByteSize){
+        uint8_t* srcPtr = dstStatus;
+        srcPtr += srcShadowSize - dstShadowSize;
+        set_as_initialized(dstAddr, dstByteSize, srcPtr);
+    }
+    else{
+        uint8_t* expandedData = (uint8_t*) malloc(sizeof(uint8_t) * dstShadowSize);
+        unsigned diff = dstShadowSize - srcShadowSize;
+        for(unsigned i = 0; i < diff; ++i){
+            *(expandedData + i) = 0xff;
+        }
+
+        unsigned j = 0;
+        for(unsigned i = diff; i < dstShadowSize; ++i, ++j){
+            *(expandedData + i) = *(dstStatus + j);
+        }
+
+        set_as_initialized(dstAddr, dstByteSize, expandedData);
+        free(expandedData);
+    }
+
+    free(srcStatus);
+    free(dstStatus);
+
+    copyStoredPendingReads(srcMA, dstMA);
 }
