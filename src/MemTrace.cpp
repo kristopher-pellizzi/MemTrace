@@ -2034,6 +2034,7 @@ VOID Instruction(INS ins, VOID* v){
     set<REG>* srcRegs = NULL;
     set<REG>* explicitSrcRegs = NULL;
     set<REG>* dstRegs = NULL;
+    REG repCountRegister = INS_RepCountRegister(ins);   
 
     /* 
         Take the explicitly written destination registers.
@@ -2046,7 +2047,7 @@ VOID Instruction(INS ins, VOID* v){
     for(UINT32 op = 0; op < operandCount; ++op){
         if(INS_OperandIsReg(ins, op)){
             REG reg = INS_OperandReg(ins, op);
-            if(REG_is_flags(reg))
+            if(REG_is_flags(reg) || (REG_valid(repCountRegister) && reg == repCountRegister))
                 continue;
 
             // If the register is explicitly written, add it to the destination registers set
@@ -2117,6 +2118,7 @@ VOID Instruction(INS ins, VOID* v){
             a mov. rbx is an implicitly read register (it's read to compute the address we're reading from), so it is not
             removed from the set, and the uninitialized read is therefore reported.
     */
+ 
     if(isPushInstruction(opcode) || isMovInstruction(opcode)){
         setDiff(srcRegs, explicitSrcRegs);
     }
