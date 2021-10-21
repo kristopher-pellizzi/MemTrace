@@ -18,35 +18,6 @@ static uint8_t* expandData(uint8_t* data, unsigned shadowSize, unsigned regShado
     return ret;
 }
 
-// Add the offset to the bit word (i.e. shift the whole bitmask by |offset| bits to the left)
-static uint8_t* addOffset(uint8_t* data, unsigned offset, unsigned* srcShadowSize, unsigned srcByteSize){
-    uint8_t* ret = data;
-    unsigned origShadowSize = *srcShadowSize;
-
-    if(srcByteSize % 8 == 0 || offset + srcByteSize % 8 > 8){
-        ++(*srcShadowSize);
-        ret = (uint8_t*) malloc(sizeof(uint8_t) * (*srcShadowSize));
-    }
-
-    unsigned i = 0;
-    unsigned j = 0;
-    // If we had to allocate a new byte, we need to store the 8 - offset most significant bytes in the least significant 
-    // bytes of the newly created byte
-    if(ret != data){
-        *ret = (uint8_t) 0 | (*data >> (8 - offset));
-        ++i;
-    }
-
-    for(; i < *srcShadowSize; ++i){
-        *(ret + i) = *(data + j++) << offset;
-        if(j < origShadowSize)
-            *(ret + i++) |= *(data + j) >> (8 - offset);
-    }
-
-    return ret;
-
-}
-
 DefaultStoreInstruction::DefaultStoreInstruction(){
     initVerifiedInstructions();
 }
