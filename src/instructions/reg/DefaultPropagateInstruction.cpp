@@ -94,4 +94,6 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
             free(data);
         }
     }
+
+    propagatePendingReads(srcRegs, dstRegs);
 }

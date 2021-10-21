@@ -1,5 +1,8 @@
 #include "ConvertInstruction.h"
 
+/*
+    Since the sign extension completely initialized the dst register, there's no need to call |propagatePendingReads|
+*/
 void ConvertInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
 

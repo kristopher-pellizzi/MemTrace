@@ -85,4 +85,5 @@ void VpbroadcastInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<RE
     }
 
     broadcast(srcReg, dstReg, broadcastSize);
+    propagatePendingReads(srcRegs, dstRegs);
 }

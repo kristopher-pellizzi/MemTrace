@@ -55,4 +55,6 @@ void PmovmskbInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>*
     registerFile.setAsInitialized(dstReg, dstStatus);
     free(dstStatus);
     free(srcStatus);
+
+    propagatePendingReads(srcRegs, dstRegs);
 }

@@ -19,4 +19,6 @@ void FstInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstR
     else{
         registerFile.setAsInitialized(dstReg);
     }
+
+    propagatePendingReads(srcRegs, dstRegs);
 }
