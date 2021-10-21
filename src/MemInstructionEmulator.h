@@ -15,6 +15,7 @@ using std::pair;
 class MemInstructionEmulator{
     protected:
         uint8_t* cutUselessBits(uint8_t* uninitializedInterval, ADDRINT addr, UINT32 byteSize);
+        uint8_t* addOffset(uint8_t* data, unsigned offset, unsigned* srcShadowSize, unsigned srcByteSize);
 
     public:
         virtual ~MemInstructionEmulator();
