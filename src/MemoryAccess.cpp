@@ -56,6 +56,10 @@ void MemoryAccess::setUninitializedRead(){
     isUninitializedRead = true;
 }
 
+void MemoryAccess::setAsInitialized(){
+    isUninitializedRead = false;
+}
+
 bool MemoryAccess::isStackAccess() const{
     return shadowMemory == stack.getPtr();
 }

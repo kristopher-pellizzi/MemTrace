@@ -99,6 +99,8 @@ class MemoryAccess{
 
         void setUninitializedRead();
 
+        void setAsInitialized();
+
         bool isStackAccess() const;
 
         set<std::pair<unsigned, unsigned>> computeIntervals() const;
