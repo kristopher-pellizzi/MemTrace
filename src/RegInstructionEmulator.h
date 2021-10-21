@@ -2,6 +2,7 @@
 #include <fstream>
 #include "pin.H"
 #include "ShadowRegisterFile.h"
+#include "misc/PendingReads.h"
 
 using std::cerr;
 using std::endl;

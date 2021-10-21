@@ -36,6 +36,7 @@
 #include "misc/PendingReads.h"
 #include "misc/SetOps.h"
 #include "TagManager.h"
+#include "PendingDirectMemoryCopy.h"
 
 using std::cerr;
 using std::string;
@@ -91,6 +92,8 @@ ADDRINT loaderHighestAddr = -1;
 
 ADDRINT lastExecutedInstruction;
 unsigned long long executedAccesses;
+
+PendingDirectMemoryCopy pendingDirectMemoryCopy;
 
 unordered_map<AccessIndex, unordered_set<MemoryAccess, MemoryAccess::MAHasher>, AccessIndex::AIHasher> memAccesses;
 
@@ -790,8 +793,15 @@ void storeMemoryAccess(set<tag_t>& tags){
 void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
     if(isMovInstruction(opcode) || isPopInstruction(opcode)){
-        addPendingRead(dstRegs, ai, ma);
-        InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
+        // If there's at least 1 dst register, it is a classic load from memory to register
+        if(dstRegs != NULL){
+            InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
+        }
+        // otherwise, it probably is a direct memory copy, so just store the current MemoryAccess object
+        // to be used by a possible later call to memtrace with a WRITE access.
+        else{
+           pendingDirectMemoryCopy = PendingDirectMemoryCopy(ma); 
+        }
     }
     // If it is anything but a mov instruction, the load is caused by an instruction directly using the loaded value (e.g. add instruction)
     // So, directly store the uninitialized read.
@@ -896,6 +906,7 @@ VOID FreeAfter(ADDRINT ptr){
         mmapShadows.erase(page_start);
     }
 
+    InstructionHandler& insHandler = InstructionHandler::getInstance();
     for(auto iter = mallocTemporaryWriteStorage.begin(); iter != mallocTemporaryWriteStorage.end(); ++iter){
         const AccessIndex& ai = iter->first;
 
@@ -913,8 +924,7 @@ VOID FreeAfter(ADDRINT ptr){
             continue;
         }
 
-        set_as_initialized(ai.getFirst(), ai.getSecond());
-        updateStoredPendingReads(ai);
+        insHandler.handle(ai);
     }
     mallocTemporaryWriteStorage.clear();    
 }
@@ -1029,9 +1039,13 @@ VOID MallocAfter(ADDRINT ret)
 
     // If this malloc happened before the entry point is executed, simply consider it as completely initialized.
     if(!entryPointExecuted){
-        heapShadow->set_as_initialized(ret, blockSize);
-        updateStoredPendingReads(AccessIndex(ret, ret + blockSize - 1));
+        currentShadow = heapShadow;
+        AccessIndex ai(ret, blockSize);
+        InstructionHandler::getInstance().handle(ai);
+        return;
     }
+
+    InstructionHandler& insHandler = InstructionHandler::getInstance();
 
     // NOTE: |mallocTemporaryWriteStorage| only contains write accesses happened during the execution of malloc
     // and that resulted to not be a heap address. In some cases, this may happen only because we still
@@ -1048,8 +1062,7 @@ VOID MallocAfter(ADDRINT ret)
             else{
                 currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
             }
-            set_as_initialized(ai.getFirst(), ai.getSecond());
-            updateStoredPendingReads(ai);
+            insHandler.handle(ai);
         }
     }
     mallocTemporaryWriteStorage.clear();
@@ -1240,16 +1253,19 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #endif
 
         lastWriteInstruction[ai] = ma;
-        
+
+        if(pendingDirectMemoryCopy.isValid() && ma.getActualIP() == pendingDirectMemoryCopy.getIp()){
+            InstructionHandler::getInstance().handle(pendingDirectMemoryCopy.getAccess(), ma);
+        }
         // Writes performed by system calls don't have any src register, just store them
-        if(isSyscallInstruction(opcode)){
-            set_as_initialized(addr, size);
+        else if(isSyscallInstruction(opcode)){
+            InstructionHandler::getInstance().handle(ai);
         }
         else{
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
         }
 
-        storePendingReads(srcRegs, ma);
+        pendingDirectMemoryCopy.setAsInvalid();
         
         //set_as_initialized(addr, size);
 
@@ -1278,8 +1294,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #endif
 
         bool pendingReadsExist = pendingUninitializedReads.size() != 0;
-        if(pendingReadsExist)
-            propagatePendingReads(srcRegs, dstRegs);
 
         // If the memory read is not an uninitialized read, simply propagate registers status
         if(uninitializedInterval == NULL){
@@ -1323,8 +1337,13 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     So, it's of no use reporting it, just propagate the status mask into destination registers and return.
                     If this is not the case (and therefore there are uninitialized bytes not coming from previous uninitialized reads)
                     also this read will be reported, and the propagation of status mask to registers will be performed by a later call to |storeOrLeavePending|
+
+                    However, the instructions emulators always add the current read to the dst registers.
+                    In order to avoid that, we can set the current read as NOT UNINITIALIZED, so that the status propagation
+                    is executed, but the read is not added pending to the dst registers.
                 */
                 if(ranges.size() == 0){
+                    ma.setAsInitialized();
                     InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
                     return;
                 }
@@ -1848,8 +1867,6 @@ VOID propagateRegisterStatus(UINT32 opcodeArg, VOID* srcRegsPtr, VOID* dstRegsPt
     set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
     OPCODE opcode = static_cast<OPCODE>(opcodeArg);
 
-    propagatePendingReads(srcRegs, dstRegs);
-
     InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
 }
 
@@ -2157,55 +2174,7 @@ VOID Instruction(INS ins, VOID* v){
             std::string* disassembly = NULL;
         #endif
 
-        for(UINT32 memop = 0; memop < memoperands; memop++){
-            // Write memory access
-            if(INS_MemoryOperandIsWritten(ins, memop) ){
-                // Procedure call instruction
-                if(isProcedureCall){
-                    INS_InsertPredicatedCall(
-                        ins,
-                        IPOINT_BEFORE,
-                        (AFUNPTR) procCallTrace,
-                        IARG_THREAD_ID, 
-                        IARG_CONTEXT, 
-                        IARG_UINT32, AccessType::WRITE, 
-                        IARG_INST_PTR, 
-                        IARG_MEMORYWRITE_EA, 
-                        IARG_MEMORYWRITE_SIZE,
-                        IARG_PTR, disassembly, 
-                        IARG_UINT32, opcode,
-                        IARG_PTR, explicitSrcRegs, 
-                        IARG_PTR, dstRegs,
-                        IARG_END
-                    );
-
-                    INS_InsertPredicatedCall(
-                        ins,
-                        IPOINT_BEFORE,
-                        (AFUNPTR) mallocNestedCall,
-                        IARG_END
-                    );
-                }
-                else{
-                    INS_InsertPredicatedCall(
-                        ins, 
-                        IPOINT_BEFORE, 
-                        (AFUNPTR) memtrace, 
-                        IARG_THREAD_ID, 
-                        IARG_CONTEXT, 
-                        IARG_UINT32, AccessType::WRITE, 
-                        IARG_INST_PTR, 
-                        IARG_MEMORYWRITE_EA, 
-                        IARG_MEMORYWRITE_SIZE,
-                        IARG_PTR, disassembly, 
-                        IARG_UINT32, opcode,
-                        IARG_PTR, explicitSrcRegs, 
-                        IARG_PTR, dstRegs,
-                        IARG_END
-                    ); 
-                }          
-            }
-
+        for(UINT32 memop = 0; memop < memoperands; memop++){ 
             // Read memory access
             if(INS_MemoryOperandIsRead(ins, memop)){
                 // It is a ret instruction
@@ -2254,6 +2223,55 @@ VOID Instruction(INS ins, VOID* v){
                     );
                 }
             }
+
+            // Write memory access
+            if(INS_MemoryOperandIsWritten(ins, memop) ){
+                // Procedure call instruction
+                if(isProcedureCall){
+                    INS_InsertPredicatedCall(
+                        ins,
+                        IPOINT_BEFORE,
+                        (AFUNPTR) procCallTrace,
+                        IARG_THREAD_ID, 
+                        IARG_CONTEXT, 
+                        IARG_UINT32, AccessType::WRITE, 
+                        IARG_INST_PTR, 
+                        IARG_MEMORYWRITE_EA, 
+                        IARG_MEMORYWRITE_SIZE,
+                        IARG_PTR, disassembly, 
+                        IARG_UINT32, opcode,
+                        IARG_PTR, explicitSrcRegs, 
+                        IARG_PTR, dstRegs,
+                        IARG_END
+                    );
+
+                    INS_InsertPredicatedCall(
+                        ins,
+                        IPOINT_BEFORE,
+                        (AFUNPTR) mallocNestedCall,
+                        IARG_END
+                    );
+                }
+                else{
+                    INS_InsertPredicatedCall(
+                        ins, 
+                        IPOINT_BEFORE, 
+                        (AFUNPTR) memtrace, 
+                        IARG_THREAD_ID, 
+                        IARG_CONTEXT, 
+                        IARG_UINT32, AccessType::WRITE, 
+                        IARG_INST_PTR, 
+                        IARG_MEMORYWRITE_EA, 
+                        IARG_MEMORYWRITE_SIZE,
+                        IARG_PTR, disassembly, 
+                        IARG_UINT32, opcode,
+                        IARG_PTR, explicitSrcRegs, 
+                        IARG_PTR, dstRegs,
+                        IARG_END
+                    ); 
+                }          
+            }
+
         }
     }
 }
