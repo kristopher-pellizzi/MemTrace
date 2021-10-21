@@ -37,7 +37,7 @@ void MemFstInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>
         uint8_t* srcStatus = registerFile.getContentStatus(srcReg);
         // Since srcReg is a FP register, it is 80 bit wide. So, the 6 most significative bits of its status are not related
         // to the register itself and must be set to 0.
-        *srcStatus >>= 6;
+        *srcStatus &= (uint8_t) 0xff >> 6;
         uint8_t* dstStatus = srcStatus;
         if(offset != 0)
             dstStatus = addOffset(srcStatus, offset, &srcShadowSize, srcByteSize);
@@ -48,4 +48,6 @@ void MemFstInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>
         free(srcStatus);
         free(dstStatus);
     }
+
+    storePendingReads(srcRegs, ma);
 }
