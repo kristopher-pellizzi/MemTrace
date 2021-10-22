@@ -232,6 +232,7 @@ enum SHDW_REG{
 
 class ShadowRegisterFile{ // Singleton
     private:
+        unsigned fpuStackIndex = 0;
         unsigned numRegisters;
         void* shadowRegistersPtr;
         ShadowRegister** shadowRegisters;
@@ -309,6 +310,14 @@ class ShadowRegisterFile{ // Singleton
         bool hasHighByte(REG pin_reg);
         bool isHighByteReg(SHDW_REG reg);
 
+        /*
+            x87 FPU registers (st0 ~ st7) are managed as a stack. Register st0 always refers to the stack top.
+            In order to emulate this behavior, an index is kept by the shadow register file.
+            Whenever a value is pushed, the index should be decremented before writing st0; 
+            when a value is popped, the register is read and then the index is incremented.
+        */
+        void decrementFpuStackIndex();
+        void incrementFpuStackIndex();
 
 
         class DecresingSizeRegisterSorter{
@@ -322,5 +331,10 @@ class ShadowRegisterFile{ // Singleton
                 bool operator()(const unsigned x, const unsigned y);
         };
 };
+
+
+SHDW_REG operator+=(const SHDW_REG& x, const SHDW_REG& y);
+SHDW_REG operator-=(const SHDW_REG& x, const SHDW_REG& y);
+SHDW_REG operator+=(const SHDW_REG& x, const unsigned y);
 
 #endif // SHDWREGISTERFILE

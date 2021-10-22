@@ -184,11 +184,26 @@ void ShadowRegisterFile::initShadowRegisters(){
 }
 
 
+/*
+    Converts a PIN register into a Shadow register.
+    To emulate the behavior of the FPU stack, the fpu stack index is always added to registers (st0 ~ st7), so that
+    the shadow register file reflects the actual state of the real fpu stack.
+*/
 SHDW_REG ShadowRegisterFile::convertPinReg(REG pin_reg){
     auto ret = shadow_map.find(pin_reg);
 
     if(ret != shadow_map.end()){
-        return ret->second;
+        SHDW_REG reg = ret->second;
+        
+        if(reg >= SHDW_REG_ST0 && reg <= SHDW_REG_ST7){
+            reg += fpuStackIndex;
+            if(reg > SHDW_REG_ST7){
+                reg -= SHDW_REG_ST7;
+                reg += SHDW_REG_ST0;
+            }
+        }
+
+        return reg;
     }
 
     #ifdef DEBUG
@@ -449,6 +464,44 @@ bool ShadowRegisterFile::hasHighByte(REG pin_reg){
 
 bool ShadowRegisterFile::isHighByteReg(SHDW_REG reg){
     return shadowRegisters[reg]->isHighByte();
+}
+
+
+void ShadowRegisterFile::decrementFpuStackIndex(){
+    if(--fpuStackIndex < 0){
+        fpuStackIndex += 8;
+    }
+}
+
+void ShadowRegisterFile::incrementFpuStackIndex(){
+    if(++fpuStackIndex > 7){
+        fpuStackIndex -= 8;
+    }
+}
+
+
+SHDW_REG operator+=(const SHDW_REG& x, const SHDW_REG& y){
+    unsigned intX = (unsigned) x;
+    unsigned intY = (unsigned) y;
+    unsigned ret = intX + intY;
+
+    return (SHDW_REG) ret;
+}
+
+
+SHDW_REG operator+=(const SHDW_REG& x, const unsigned y){
+    unsigned intX = (unsigned) x;
+    unsigned ret = intX + y;
+
+    return (SHDW_REG) ret;
+}
+
+SHDW_REG operator-=(const SHDW_REG& x, const SHDW_REG& y){
+    unsigned intX = (unsigned) x;
+    unsigned intY = (unsigned) y;
+    unsigned ret = intX - intY;
+
+    return (SHDW_REG) ret;
 }
 
 

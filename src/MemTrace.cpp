@@ -256,6 +256,37 @@ bool isSyscallInstruction(OPCODE opcode){
     return opcode == XED_ICLASS_SYSCALL_AMD;
 }
 
+bool isFpuPushInstruction(OPCODE opcode){
+    switch(opcode){
+        case XED_ICLASS_FLD:
+        case XED_ICLASS_FILD:
+        case XED_ICLASS_FBLD:
+        case XED_ICLASS_FLD1:
+        case XED_ICLASS_FLDL2E:
+        case XED_ICLASS_FLDL2T:
+        case XED_ICLASS_FLDLG2:
+        case XED_ICLASS_FLDLN2:
+        case XED_ICLASS_FLDZ:
+            return true;
+        
+        default:
+            return false;
+    }
+}
+
+bool isFpuPopInstruction(OPCODE opcode){
+    switch(opcode){
+        case XED_ICLASS_FBSTP:
+        case XED_ICLASS_FSTP:
+        case XED_ICLASS_FISTP:
+        case XED_ICLASS_FISTTP:
+            return true;
+
+        default:
+            return false;
+    }   
+}
+
 bool isMovInstruction(OPCODE opcode){
     switch(opcode){
         case XED_ICLASS_BNDMOV:
@@ -1881,6 +1912,20 @@ VOID updateLastExecutedInstruction(ADDRINT ip){
     lastExecutedInstruction = ip - loadOffset;
 }
 
+
+/*
+    The following 2 analysis functions are used in order to emulate the behavior of the FPU register stack without 
+    transfering values from a register to another one
+*/
+VOID decrementFpuStackIndex(){
+    ShadowRegisterFile::getInstance().decrementFpuStackIndex();
+}
+
+
+VOID incrementFpuStackIndex(){
+    ShadowRegisterFile::getInstance().incrementFpuStackIndex();
+}
+
 /* ===================================================================== */
 // Instrumentation callbacks
 /* ===================================================================== */
@@ -2104,6 +2149,18 @@ VOID Instruction(INS ins, VOID* v){
     // Start inserting analysis functions
 
     /*
+        If it's a FPU push instruction, decrement the fpu stack index before writing the register
+    */
+    if(isFpuPushInstruction(opcode)){
+        INS_InsertPredicatedCall(
+            ins,
+            IPOINT_BEFORE,
+            (AFUNPTR) decrementFpuStackIndex,
+            IARG_END
+        );
+    }
+
+    /*
         If the instruction is a mov or push instruction, avoid considering explicitly read registers as a register 
         usage, because we're simply copying its value to another register or to memory.
         However, we need to check if an implicitly read register is used uninitialized.
@@ -2127,7 +2184,6 @@ VOID Instruction(INS ins, VOID* v){
         IPOINT_BEFORE,
         (AFUNPTR) checkSourceRegisters,
         IARG_PTR, srcRegs,
-        IARG_CALL_ORDER, CALL_ORDER_FIRST,
         IARG_END
     );
 
@@ -2137,7 +2193,6 @@ VOID Instruction(INS ins, VOID* v){
             IPOINT_BEFORE,
             (AFUNPTR) checkDestRegisters,
             IARG_PTR, dstRegs,
-            IARG_CALL_ORDER, CALL_ORDER_FIRST + 1,
             IARG_END
         );
     }
@@ -2275,6 +2330,18 @@ VOID Instruction(INS ins, VOID* v){
             }
 
         }
+    }
+
+    /*
+        If it's a FPU pop instruction, increment the fpu stack index after the register has been read
+    */
+    if(isFpuPopInstruction(opcode)){
+       INS_InsertPredicatedCall(
+           ins, 
+           IPOINT_BEFORE,
+           (AFUNPTR) incrementFpuStackIndex,
+           IARG_END
+       );
     }
 }
 
