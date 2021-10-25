@@ -567,10 +567,17 @@ void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma){
 
 
 map<range_t, set<tag_t>> getStoredPendingReads(MemoryAccess& ma){
-    map<range_t, set<tag_t>> ret;
-
     ADDRINT addr = ma.getAddress();
     UINT32 size = ma.getSize();
+    AccessIndex ai(addr, size);
+    return getStoredPendingReads(ai);
+}
+
+map<range_t, set<tag_t>> getStoredPendingReads(AccessIndex& ai){
+    map<range_t, set<tag_t>> ret;
+
+    ADDRINT addr = ai.getFirst();
+    UINT32 size = ai.getSecond();
     range_t memRange(addr, addr + size - 1);
 
     for(auto iter = storedPendingUninitializedReads.begin(); iter != storedPendingUninitializedReads.end(); ++iter){
