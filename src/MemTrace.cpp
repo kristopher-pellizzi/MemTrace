@@ -263,11 +263,13 @@ bool isFpuPushInstruction(OPCODE opcode){
         case XED_ICLASS_FILD:
         case XED_ICLASS_FBLD:
         case XED_ICLASS_FLD1:
+        case XED_ICLASS_FLDPI:
         case XED_ICLASS_FLDL2E:
         case XED_ICLASS_FLDL2T:
         case XED_ICLASS_FLDLG2:
         case XED_ICLASS_FLDLN2:
         case XED_ICLASS_FLDZ:
+        case XED_ICLASS_FDECSTP:
             return true;
         
         default:
@@ -281,6 +283,20 @@ bool isFpuPopInstruction(OPCODE opcode){
         case XED_ICLASS_FSTP:
         case XED_ICLASS_FISTP:
         case XED_ICLASS_FISTTP:
+        case XED_ICLASS_FADDP:
+        case XED_ICLASS_FSUBP:
+        case XED_ICLASS_FSUBRP:
+        case XED_ICLASS_FMULP:
+        case XED_ICLASS_FDIVP:
+        case XED_ICLASS_FDIVRP:
+        case XED_ICLASS_FUCOMP:
+        case XED_ICLASS_FUCOMPP:
+        case XED_ICLASS_FUCOMIP:
+        case XED_ICLASS_FCOMIP:
+        case XED_ICLASS_FINCSTP:
+        case XED_ICLASS_FCOMP:
+        case XED_ICLASS_FCOMPP:
+        case XED_ICLASS_FICOMP:
             return true;
 
         default:
@@ -2192,8 +2208,8 @@ VOID HandleXsave(INS ins){
                     IARG_THREAD_ID,
                     IARG_CONTEXT,
                     IARG_INST_PTR,
-                    IARG_MEMORYWRITE_EA,
-                    IARG_MEMORYWRITE_SIZE,
+                    IARG_MEMORYREAD_EA,
+                    IARG_MEMORYREAD_SIZE,
                     IARG_PTR, disassembly,
                     IARG_UINT32, opcode,
                     IARG_END
@@ -2202,6 +2218,7 @@ VOID HandleXsave(INS ins){
         }
     }
 }
+
 
 VOID Instruction(INS ins, VOID* v){
     OPCODE opcode = INS_Opcode(ins);
@@ -2297,6 +2314,7 @@ VOID Instruction(INS ins, VOID* v){
     if(isZeroingXor(ins, opcode, dstRegs, srcRegs)){
         srcRegs->clear();
     }
+
 
     // Start inserting analysis functions
 
@@ -2488,12 +2506,22 @@ VOID Instruction(INS ins, VOID* v){
         If it's a FPU pop instruction, increment the fpu stack index after the register has been read
     */
     if(isFpuPopInstruction(opcode)){
-       INS_InsertPredicatedCall(
-           ins, 
-           IPOINT_BEFORE,
-           (AFUNPTR) incrementFpuStackIndex,
-           IARG_END
-       );
+        INS_InsertPredicatedCall(
+            ins,
+            IPOINT_BEFORE,
+            (AFUNPTR) incrementFpuStackIndex,
+            IARG_END
+        );
+
+        // These 2 instructions decrement the stack top twice
+        if(opcode == XED_ICLASS_FUCOMPP || opcode == XED_ICLASS_FCOMPP){
+            INS_InsertPredicatedCall(
+                ins, 
+                IPOINT_BEFORE,
+                (AFUNPTR) incrementFpuStackIndex,
+                IARG_END
+            );
+       }
     }
 }
 
