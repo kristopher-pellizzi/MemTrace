@@ -39,7 +39,7 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, s
     ofstream warningOpcodes;
     uint8_t* uninitializedInterval = ma.getUninitializedInterval();
     uint8_t* regData = cutUselessBits(uninitializedInterval, ma.getAddress(), ma.getSize());
-    UINT32 shadowSize = ma.getSize() + ma.getAddress() % 8;
+    UINT32 shadowSize = ma.getSize();
     shadowSize = shadowSize % 8 != 0 ? (shadowSize / 8) + 1 : shadowSize / 8;
     bool isVerifiedInstruction = verifiedInstructions.find(ma.getOpcode()) != verifiedInstructions.end();
 
