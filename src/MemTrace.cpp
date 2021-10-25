@@ -322,6 +322,23 @@ bool isXrstorInstruction(OPCODE opcode){
     }
 }
 
+bool shouldLeavePending(OPCODE opcode){
+    if(isXrstorInstruction(opcode)){
+        return true;
+    }
+
+    switch(opcode){
+        case XED_ICLASS_VPBROADCASTB:
+        case XED_ICLASS_VPBROADCASTW:
+        case XED_ICLASS_VPBROADCASTD:
+        case XED_ICLASS_VPBROADCASTQ:
+            return true;
+
+        default: 
+            return false;
+    }
+}
+
 bool isMovInstruction(OPCODE opcode){
     switch(opcode){
         case XED_ICLASS_BNDMOV:
@@ -858,7 +875,7 @@ void storeMemoryAccess(set<tag_t>& tags){
 
 void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
-    if(isMovInstruction(opcode) || isPopInstruction(opcode)){
+    if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
         // If there's at least 1 dst register, it is a classic load from memory to register
         if(dstRegs != NULL){
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
@@ -878,7 +895,7 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<R
 }
 
 void storeOrLeavePending(OPCODE opcode, set<REG>* dstRegs, set<tag_t>& tags){
-    if(isMovInstruction(opcode) || isPopInstruction(opcode)){
+    if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
         addPendingRead(dstRegs, tags);
     }
     else{
