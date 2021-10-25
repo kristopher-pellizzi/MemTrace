@@ -64,6 +64,7 @@ void InstructionHandler::init(){
     memEmulators[XED_ICLASS_FSTP] = memFstEmulator;
     memEmulators[XED_ICLASS_FIST] = memFstEmulator;
     memEmulators[XED_ICLASS_FISTP] = memFstEmulator;
+    memEmulators[XED_ICLASS_FISTTP] = memFstEmulator;
 
     MemInstructionEmulator* xsaveEmulator = new XsaveInstruction();
     memEmulators[XED_ICLASS_XSAVE] = xsaveEmulator;
