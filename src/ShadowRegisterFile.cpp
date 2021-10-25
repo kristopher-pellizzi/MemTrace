@@ -199,7 +199,13 @@ SHDW_REG ShadowRegisterFile::convertPinReg(REG pin_reg){
             reg += fpuStackIndex;
             if(reg > SHDW_REG_ST7){
                 reg -= SHDW_REG_ST7;
+                reg += -1; // Required because reg is already higher than SHDW_REG_ST7.
                 reg += SHDW_REG_ST0;
+            }
+            else if(reg < SHDW_REG_ST0){
+                SHDW_REG diff = SHDW_REG_ST0 - reg;
+                diff -= 1; // Required because diff range starts from 1. In that case, reg is exactly SHDW_REG_ST7
+                reg = SHDW_REG_ST7 - diff;
             }
         }
 
@@ -480,7 +486,50 @@ void ShadowRegisterFile::incrementFpuStackIndex(){
 }
 
 
-SHDW_REG operator+=(const SHDW_REG& x, const SHDW_REG& y){
+SHDW_REG& operator+=(SHDW_REG& x, const SHDW_REG& y){
+    unsigned intX = (unsigned) x;
+    unsigned intY = (unsigned) y;
+    unsigned ret = intX + intY;
+
+    x = (SHDW_REG) ret;
+    return x;
+}
+
+
+SHDW_REG& operator+=(SHDW_REG& x, const unsigned y){
+    unsigned intX = (unsigned) x;
+    unsigned ret = intX + y;
+
+    x = (SHDW_REG) ret;
+    return x;
+}
+
+SHDW_REG& operator-=(SHDW_REG& x, const unsigned y){
+    unsigned intX = (unsigned) x;
+    unsigned ret = intX - y;
+
+    x = (SHDW_REG) ret;
+    return x;
+}
+
+SHDW_REG& operator-=(SHDW_REG& x, const SHDW_REG& y){
+    unsigned intX = (unsigned) x;
+    unsigned intY = (unsigned) y;
+    unsigned ret = intX - intY;
+
+    x = (SHDW_REG) ret;
+    return x;
+}
+
+SHDW_REG operator-(const SHDW_REG& x, SHDW_REG y){
+    unsigned intX = (unsigned) x;
+    unsigned intY = (unsigned) y;
+    unsigned ret = intX - intY;
+
+    return (SHDW_REG) ret;
+}
+
+SHDW_REG operator+(const SHDW_REG& x, SHDW_REG y){
     unsigned intX = (unsigned) x;
     unsigned intY = (unsigned) y;
     unsigned ret = intX + intY;
@@ -488,21 +537,6 @@ SHDW_REG operator+=(const SHDW_REG& x, const SHDW_REG& y){
     return (SHDW_REG) ret;
 }
 
-
-SHDW_REG operator+=(const SHDW_REG& x, const unsigned y){
-    unsigned intX = (unsigned) x;
-    unsigned ret = intX + y;
-
-    return (SHDW_REG) ret;
-}
-
-SHDW_REG operator-=(const SHDW_REG& x, const SHDW_REG& y){
-    unsigned intX = (unsigned) x;
-    unsigned intY = (unsigned) y;
-    unsigned ret = intX - intY;
-
-    return (SHDW_REG) ret;
-}
 
 
 /*

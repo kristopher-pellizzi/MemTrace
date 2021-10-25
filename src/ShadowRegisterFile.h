@@ -232,7 +232,7 @@ enum SHDW_REG{
 
 class ShadowRegisterFile{ // Singleton
     private:
-        unsigned fpuStackIndex = 0;
+        int fpuStackIndex = 0;
         unsigned numRegisters;
         void* shadowRegistersPtr;
         ShadowRegister** shadowRegisters;
@@ -333,8 +333,11 @@ class ShadowRegisterFile{ // Singleton
 };
 
 
-SHDW_REG operator+=(const SHDW_REG& x, const SHDW_REG& y);
-SHDW_REG operator-=(const SHDW_REG& x, const SHDW_REG& y);
-SHDW_REG operator+=(const SHDW_REG& x, const unsigned y);
+SHDW_REG& operator+=(SHDW_REG& x, const SHDW_REG& y);
+SHDW_REG& operator-=(SHDW_REG& x, const SHDW_REG& y);
+SHDW_REG& operator+=(SHDW_REG& x, const unsigned y);
+SHDW_REG& operator-=(SHDW_REG& x, const unsigned y);
+SHDW_REG operator-(const SHDW_REG& x, SHDW_REG y);
+SHDW_REG operator-(const SHDW_REG& x, SHDW_REG y);
 
 #endif // SHDWREGISTERFILE
