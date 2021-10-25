@@ -37,6 +37,7 @@
 #include "misc/SetOps.h"
 #include "TagManager.h"
 #include "PendingDirectMemoryCopy.h"
+#include "XsaveHandler.h"
 
 using std::cerr;
 using std::string;
@@ -285,6 +286,40 @@ bool isFpuPopInstruction(OPCODE opcode){
         default:
             return false;
     }   
+}
+
+bool isXsaveInstruction(OPCODE opcode){
+    switch(opcode){
+        case XED_ICLASS_XSAVE:
+        case XED_ICLASS_XSAVE64:
+        case XED_ICLASS_XSAVEC:
+        case XED_ICLASS_XSAVEC64:
+        case XED_ICLASS_XSAVEOPT:
+        case XED_ICLASS_XSAVEOPT64:
+        case XED_ICLASS_XSAVES:
+        case XED_ICLASS_XSAVES64:
+        case XED_ICLASS_FXSAVE:
+        case XED_ICLASS_FXSAVE64:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+bool isXrstorInstruction(OPCODE opcode){
+    switch(opcode){
+        case XED_ICLASS_XRSTOR:
+        case XED_ICLASS_XRSTOR64:
+        case XED_ICLASS_XRSTORS:
+        case XED_ICLASS_XRSTORS64:
+        case XED_ICLASS_FXRSTOR:
+        case XED_ICLASS_FXRSTOR64:
+            return true;
+        
+        default:
+            return false;
+    }
 }
 
 bool isMovInstruction(OPCODE opcode){
@@ -1543,6 +1578,44 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     }
 }
 
+VOID XsaveAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size,  VOID* disassembly, UINT32 opcode_arg){
+    memtrace(tid, ctxt, AccessType::WRITE, ip, addr, size, disassembly, opcode_arg, NULL, NULL);
+    
+    // If there are no uninitialized registers, it's of no use to bother the XsaveHandler (it might require some time)
+    if(pendingUninitializedReads.size() == 0)
+        return;
+
+    OPCODE opcode = (OPCODE) opcode_arg;
+    set<AnalysisArgs> s = XsaveHandler::getInstance().getXsaveAnalysisArgs(ctxt, opcode, addr, size);
+
+    for(auto i = s.begin(); i != s.end(); ++i){
+        set<REG>* srcRegs = i->getRegs();
+        ADDRINT storeAddr = i->getAddr();
+        UINT32 storeSize = i->getSize();
+        regsPtrs.push_back(srcRegs);
+
+        memtrace(tid, ctxt, AccessType::WRITE, ip, storeAddr, storeSize, disassembly, opcode_arg, srcRegs, NULL);
+    }
+}
+
+
+VOID XrstorAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size,  VOID* disassembly, UINT32 opcode_arg){
+    if(storedPendingUninitializedReads.size() == 0)
+        return;
+
+    OPCODE opcode = (OPCODE) opcode_arg;
+    set<AnalysisArgs> s = XsaveHandler::getInstance().getXrstorAnalysisArgs(ctxt, opcode, addr, size);
+
+    for(auto i = s.begin(); i != s.end(); ++i){
+        set<REG>* dstRegs = i->getRegs();
+        ADDRINT loadAddr = i->getAddr();
+        UINT32 loadSize = i->getSize();
+        regsPtrs.push_back(dstRegs);
+
+        memtrace(tid, ctxt, AccessType::READ, ip, loadAddr, loadSize, disassembly, opcode_arg, NULL, dstRegs);
+    }
+}
+
 // Procedure call instruction pushes the return address on the stack. In order to insert it as initialized memory
 // for the callee frame, we need to first initialize a new frame and then insert the write access into its context.
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
@@ -2060,6 +2133,59 @@ bool isZeroingXor(INS ins, OPCODE opcode, set<REG>* dstRegs, set<REG>* srcRegs){
     return firstOperand == secondOperand;
 }
 
+VOID HandleXsave(INS ins){
+    OPCODE opcode = INS_Opcode(ins);
+    UINT32 memoperands = INS_MemoryOperandCount(ins);
+
+    #ifdef DEBUG
+        std::string* disassembly = new std::string(INS_Disassemble(ins));
+        // Constant complexity insertion
+        disasmPtrs.insert(disasmPtrs.end(), disassembly);
+    #else
+        std::string* disassembly = NULL;
+    #endif
+
+    if(isXsaveInstruction(opcode)){
+        for(UINT32 memop = 0; memop < memoperands; memop++){ 
+            if(INS_MemoryOperandIsWritten(ins, memop) ){
+                INS_InsertPredicatedCall(
+                    ins,
+                    IPOINT_BEFORE,
+                    (AFUNPTR) XsaveAnalysis,
+                    IARG_THREAD_ID,
+                    IARG_CONTEXT,
+                    IARG_INST_PTR,
+                    IARG_MEMORYWRITE_EA,
+                    IARG_MEMORYWRITE_SIZE,
+                    IARG_PTR, disassembly,
+                    IARG_UINT32, opcode,
+                    IARG_END
+                ); 
+            }
+
+        }
+    }
+    else{
+        for(UINT32 memop = 0; memop < memoperands; memop++){
+            if(INS_MemoryOperandIsRead(ins, memop)){
+                INS_InsertPredicatedCall(
+                    ins,
+                    IPOINT_BEFORE,
+                    (AFUNPTR) XrstorAnalysis,
+                    IARG_THREAD_ID,
+                    IARG_CONTEXT,
+                    IARG_INST_PTR,
+                    IARG_MEMORYWRITE_EA,
+                    IARG_MEMORYWRITE_SIZE,
+                    IARG_PTR, disassembly,
+                    IARG_UINT32, opcode,
+                    IARG_END
+                );
+            }
+        }
+    }
+}
+
 VOID Instruction(INS ins, VOID* v){
     OPCODE opcode = INS_Opcode(ins);
 
@@ -2070,6 +2196,14 @@ VOID Instruction(INS ins, VOID* v){
     if(INS_IsPrefetch(ins) || isEndbrInstruction(opcode) || INS_IsNop(ins))
         return;
 
+    /*
+        If it is an XSAVE instruction (or one of its variants), it must be specifically handled,
+        as Intel PIN won't tell us which registers are stored in memory.
+    */
+    if(isXsaveInstruction(opcode) || isXrstorInstruction(opcode)){
+        HandleXsave(ins);
+        return;
+    }
     
     bool isProcedureCall = INS_IsProcedureCall(ins);
     bool isRet = INS_IsRet(ins);
@@ -2080,6 +2214,7 @@ VOID Instruction(INS ins, VOID* v){
     set<REG>* explicitSrcRegs = NULL;
     set<REG>* dstRegs = NULL;
     REG repCountRegister = INS_RepCountRegister(ins);   
+
 
     /* 
         Take the explicitly written destination registers.
