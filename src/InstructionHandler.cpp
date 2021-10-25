@@ -24,6 +24,9 @@ InstructionHandler::~InstructionHandler(){
     // Delete emulator for FST/FSTP
     delete(regEmulators[XED_ICLASS_FST]);
     delete(memEmulators[XED_ICLASS_FST]);
+
+    // Delete emulator for XSAVE/XSAVEC/XSAVEOPT/XSAVES/FXSAVE
+    delete(memEmulators[XED_ICLASS_XSAVE]);
 }
 
 void InstructionHandler::init(){
@@ -61,6 +64,18 @@ void InstructionHandler::init(){
     memEmulators[XED_ICLASS_FSTP] = memFstEmulator;
     memEmulators[XED_ICLASS_FIST] = memFstEmulator;
     memEmulators[XED_ICLASS_FISTP] = memFstEmulator;
+
+    MemInstructionEmulator* xsaveEmulator = new XsaveInstruction();
+    memEmulators[XED_ICLASS_XSAVE] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVE64] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVEC] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVEC64] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVES] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVES64] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVEOPT] = xsaveEmulator;
+    memEmulators[XED_ICLASS_XSAVEOPT64] = xsaveEmulator;
+    memEmulators[XED_ICLASS_FXSAVE] = xsaveEmulator;
+    memEmulators[XED_ICLASS_FXSAVE64] = xsaveEmulator;
 
 }
 
