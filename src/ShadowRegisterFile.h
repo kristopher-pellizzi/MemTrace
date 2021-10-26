@@ -294,6 +294,7 @@ class ShadowRegisterFile{ // Singleton
         string& getName(SHDW_REG reg);
         void setAsInitialized(REG pin_reg, uint8_t* data);
         void setAsInitialized(REG pin_reg);
+        void setAsInitialized(set<REG>* regs);
         uint8_t* getContentStatus(REG pin_reg);
         uint8_t* getContentStatus(SHDW_REG reg);
         unsigned getShadowSize(REG pin_reg);

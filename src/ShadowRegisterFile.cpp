@@ -248,7 +248,6 @@ void ShadowRegisterFile::setAsInitialized(REG pin_reg, uint8_t* data){
     if(shadow_reg == (SHDW_REG) -1){
         return;
     }
-
     shadowRegisters[shadow_reg]->setAsInitialized(data);
 }
 
@@ -261,6 +260,14 @@ void ShadowRegisterFile::setAsInitialized(REG pin_reg){
     }
 
     shadowRegisters[shadow_reg]->setAsInitialized();
+}
+
+
+
+void ShadowRegisterFile::setAsInitialized(set<REG>* regs){
+    for(auto iter = regs->begin(); iter != regs->end(); ++iter){
+        setAsInitialized(*iter);
+    }
 }
 
 
