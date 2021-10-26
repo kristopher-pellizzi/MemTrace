@@ -1646,7 +1646,9 @@ VOID XsaveAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT3
         return;
 
     OPCODE opcode = (OPCODE) opcode_arg;
-    set<AnalysisArgs> s = XsaveHandler::getInstance().getXsaveAnalysisArgs(ctxt, opcode, addr, size);
+    ADDRINT eaxContextReg = PIN_GetContextReg(ctxt, REG_GAX);
+    uint32_t eaxContent = (uint32_t) eaxContextReg;
+    set<AnalysisArgs> s = XsaveHandler::getInstance().getXsaveAnalysisArgs(eaxContent, opcode, addr, size);
 
     for(auto i = s.begin(); i != s.end(); ++i){
         set<REG>* srcRegs = i->getRegs();
@@ -1664,7 +1666,9 @@ VOID XrstorAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT
         return;
 
     OPCODE opcode = (OPCODE) opcode_arg;
-    set<AnalysisArgs> s = XsaveHandler::getInstance().getXrstorAnalysisArgs(ctxt, opcode, addr, size);
+    ADDRINT eaxContextReg = PIN_GetContextReg(ctxt, REG_GAX);
+    uint32_t eaxContent = (uint32_t) eaxContextReg;
+    set<AnalysisArgs> s = XsaveHandler::getInstance().getXrstorAnalysisArgs(eaxContent, opcode, addr, size);
 
     for(auto i = s.begin(); i != s.end(); ++i){
         set<REG>* dstRegs = i->getRegs();

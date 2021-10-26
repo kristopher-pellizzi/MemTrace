@@ -141,14 +141,13 @@ bool XsaveHandler::isKmaskStored(uint32_t stateComponentBitmap){
     return tmp == 1;
 }
 
-set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(CONTEXT* ctxt, OPCODE opcode, ADDRINT addr, UINT32 size){
+set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE opcode, ADDRINT addr, UINT32 size){
     if(!XsaveFeaturesSupported){
         *out << "Error: call to XSAVE on a processor not supporting XSAVE features" << endl;
         exit(EXIT_FAILURE);
     }
     set<AnalysisArgs> ret;
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    uint32_t eaxContent = (uint32_t) PIN_GetContextReg(ctxt, REG_EAX);
     uint32_t xcr0Content = getXcr0Bitmap();
     uint32_t stateComponentBitmap = xcr0Content & eaxContent;
 
@@ -305,14 +304,13 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(CONTEXT* ctxt, OPCODE opcod
 
 
 
-set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(CONTEXT* ctxt, OPCODE opcode, ADDRINT addr, UINT32 size){
+set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCODE opcode, ADDRINT addr, UINT32 size){
     if(!XsaveFeaturesSupported){
         *out << "Error: call to XRSTOR on a processor not supporting XSAVE features" << endl;
         exit(EXIT_FAILURE);
     }
     set<AnalysisArgs> ret;
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    uint32_t eaxContent = (uint32_t) PIN_GetContextReg(ctxt, REG_EAX);
     uint32_t xcr0Content = getXcr0Bitmap();
     uint32_t stateComponentBitmap = xcr0Content & eaxContent;
     /*
@@ -321,7 +319,7 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(CONTEXT* ctxt, OPCODE opco
         only take them to be AND-ed with the current |stateComponentBitmap|
     */
     uint32_t xstate_bv_low32;
-    PIN_SafeCopy(&xstate_bv_low32, (void*) (addr + 512 + 4), 4);
+    PIN_SafeCopy(&xstate_bv_low32, (void*) (addr + 512), 4);
     uint32_t to_be_restored = stateComponentBitmap & xstate_bv_low32;
     uint32_t to_be_initialized = stateComponentBitmap & (~ xstate_bv_low32);
 

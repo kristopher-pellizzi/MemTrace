@@ -216,8 +216,8 @@ class XsaveHandler{
 
         static XsaveHandler& getInstance();
 
-        set<AnalysisArgs> getXsaveAnalysisArgs(CONTEXT* ctxt, OPCODE opcode, ADDRINT addr, UINT32 size);
-        set<AnalysisArgs> getXrstorAnalysisArgs(CONTEXT* ctxt, OPCODE opcode, ADDRINT addr, UINT32 size);
+        set<AnalysisArgs> getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE opcode, ADDRINT addr, UINT32 size);
+        set<AnalysisArgs> getXrstorAnalysisArgs(uint32_t eaxContent, OPCODE opcode, ADDRINT addr, UINT32 size);
 };
 
 #endif //XSAVEHANDLER
