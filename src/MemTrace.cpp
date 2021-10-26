@@ -339,6 +339,9 @@ bool isXrstorInstruction(OPCODE opcode){
 }
 
 bool shouldLeavePending(OPCODE opcode){
+    if(isXsaveInstruction(opcode))
+        return true;
+
     if(isXrstorInstruction(opcode)){
         return true;
     }
@@ -357,6 +360,11 @@ bool shouldLeavePending(OPCODE opcode){
         case XED_ICLASS_FIST:
         case XED_ICLASS_FISTP:
         case XED_ICLASS_FISTTP:
+        case XED_ICLASS_CWD:
+        case XED_ICLASS_CDQ:
+        case XED_ICLASS_CQO:
+        case XED_ICLASS_PMOVMSKB:
+        case XED_ICLASS_VPMOVMSKB:
             return true;
 
         default: 
