@@ -414,11 +414,18 @@ set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, set<RE
     }
 
     for(auto iter = regSet->begin(); iter != regSet->end(); ++iter){
+        if(getByteSize(*iter) < targetByteSize){
+            if(!isUnknownRegister(*iter))
+                corrRegs.insert(getShadowRegister(*iter));
+            continue;
+        }
+
         // If |reg| is a high byte register (e.g. ah) and the dst register does not have an aliasing high byte register,
         // set as the corresponding register the one whose size is 2 bytes
         if(targetIsHighByte && !hasHighByte(*iter)){
             targetByteSize = 2;
         }
+
 
         set<unsigned>& tmpAliasing = getAliasingRegisters(*iter);
         set<unsigned, ShadowRegisterFile::DecresingSizeRegisterSorter> aliasRegs;
