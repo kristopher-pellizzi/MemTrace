@@ -19,8 +19,20 @@ void DefaultPropagateInstruction::initVerifiedInstructions(){
 
 void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
     // There's nothing to propagate
-    if(srcRegs == NULL || dstRegs == NULL)
+    if(dstRegs == NULL)
         return;
+
+
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+
+    // If there are dst regs, but not src regs, it is probably loading an immediate to the dst registers, so just set them
+    // all as completely initialized
+    if(srcRegs == NULL){
+        for(auto iter = dstRegs->begin(); iter != dstRegs->end(); ++iter){
+            registerFile.setAsInitialized(*iter);
+        }
+        return;
+    }
 
     RegsStatus srcStatus = getSrcRegsStatus(srcRegs);
 
@@ -29,7 +41,6 @@ void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, 
     unsigned srcShadowSize = srcStatus.getShadowSize();
     bool isVerifiedInstruction = verifiedInstructions.find(opcode) != verifiedInstructions.end();
 
-    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     std::ofstream warningOpcodes;
 
     for(auto iter = dstRegs->begin(); iter != dstRegs->end(); ++iter){
