@@ -6,6 +6,7 @@ static void broadcast(REG srcReg, REG dstReg, unsigned bcSize){
     unsigned srcShadowSize = registerFile.getShadowSize(srcReg);
     unsigned dstShadowSize = registerFile.getShadowSize(dstReg);
     uint8_t* srcStatus = registerFile.getContentStatus(srcReg);
+    uint8_t* srcStatusPtr = srcStatus;
     srcStatus += srcShadowSize - 1;
     uint8_t lsbStatus = *srcStatus;
 
@@ -48,7 +49,7 @@ static void broadcast(REG srcReg, REG dstReg, unsigned bcSize){
         registerFile.setAsInitialized(dstReg);
     }
 
-    free(srcStatus);
+    free(srcStatusPtr);
 }
 
 void VpbroadcastInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
