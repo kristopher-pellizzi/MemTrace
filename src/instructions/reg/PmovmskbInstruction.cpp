@@ -10,7 +10,7 @@ void PmovmskbInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>*
         return;
 
     if(registerFile.isUnknownRegister(srcReg) || !registerFile.isUninitialized(srcReg)){
-        registerFile.setAsInitialized(srcReg);
+        registerFile.setAsInitialized(dstReg);
         return;
     }
 
@@ -22,7 +22,7 @@ void PmovmskbInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>*
     uint8_t* dstPtr = dstStatus + dstShadowSize - 1;
     uint8_t shiftCount = 0;
 
-    for(unsigned i = 0; i < srcShadowSize; i += 8){
+    for(unsigned i = 0; i < srcShadowSize; ++i){
         bool isUninitialized = *srcPtr != 0xff;
         
         if(!isUninitialized){
@@ -39,8 +39,11 @@ void PmovmskbInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>*
         --srcPtr;
     }
 
+    unsigned dstByteSize = registerFile.getByteSize(dstReg);
+    unsigned maxShiftCount = 8;
+
     if(shiftCount > 0){
-        while(shiftCount < 8){
+        while(shiftCount < std::min(maxShiftCount, dstByteSize)){
             *dstPtr |= ((uint8_t) 1 << shiftCount);
             ++shiftCount;
         }
