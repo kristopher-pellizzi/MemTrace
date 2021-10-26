@@ -46,7 +46,8 @@ void XsaveInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>*
 
     set_as_initialized(ma.getAddress(), byteSize, dstStatus);
     free(dstStatus);
-    free(srcStatus);
+    if(srcStatus != dstStatus)
+        free(srcStatus);
 
     storePendingReads(srcRegs, ma);
 }
