@@ -343,11 +343,20 @@ bool shouldLeavePending(OPCODE opcode){
         return true;
     }
 
+    if(isFpuPushInstruction(opcode))
+        return true;
+
     switch(opcode){
         case XED_ICLASS_VPBROADCASTB:
         case XED_ICLASS_VPBROADCASTW:
         case XED_ICLASS_VPBROADCASTD:
         case XED_ICLASS_VPBROADCASTQ:
+        case XED_ICLASS_FBSTP:
+        case XED_ICLASS_FST:
+        case XED_ICLASS_FSTP:
+        case XED_ICLASS_FIST:
+        case XED_ICLASS_FISTP:
+        case XED_ICLASS_FISTTP:
             return true;
 
         default: 
@@ -907,15 +916,20 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<R
     // Note that this also includes syscall instructions
     else{
         storeMemoryAccess(ai, ma);
+        // Since we are already reporting this uninitialized read, there's no need to continue propagate these uninitialized bytes
+        ShadowRegisterFile::getInstance().setAsInitialized(dstRegs);
     }
 }
 
-void storeOrLeavePending(OPCODE opcode, set<REG>* dstRegs, set<tag_t>& tags){
+// Returns true if the uninitialized read is left pending; returns false if the uninitialized read is stored
+bool storeOrLeavePending(OPCODE opcode, set<REG>* dstRegs, set<tag_t>& tags){
     if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
         addPendingRead(dstRegs, tags);
+        return true;
     }
     else{
         storeMemoryAccess(tags);
+        return false;
     }
 }
 
@@ -1420,8 +1434,9 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     rangeDiff(ranges, iter->first);
                 }
 
+                bool isLeftPending = false;
                 if(tags.size() > 0){
-                    storeOrLeavePending(opcode, dstRegs, tags);                    
+                    isLeftPending = storeOrLeavePending(opcode, dstRegs, tags);                    
                 }
 
                 set<pair<unsigned, unsigned>> intervals = ma.computeIntervals();
@@ -1442,8 +1457,12 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                     is executed, but the read is not added pending to the dst registers.
                 */
                 if(ranges.size() == 0){
-                    ma.setAsInitialized();
-                    InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
+                    // Only update register status if the uninitialized bytes are left pending on the dst registers.
+                    // If, instead, the uninitialized read is stored (because this read is a direct usage) do not update the status
+                    if(isLeftPending){
+                        ma.setAsInitialized();
+                        InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
+                    }
                     return;
                 }
             }
@@ -2346,7 +2365,7 @@ VOID Instruction(INS ins, VOID* v){
             removed from the set, and the uninitialized read is therefore reported.
     */
  
-    if(isPushInstruction(opcode) || isMovInstruction(opcode)){
+    if(isPushInstruction(opcode) || isMovInstruction(opcode) || shouldLeavePending(opcode)){
         setDiff(srcRegs, explicitSrcRegs);
     }
     INS_InsertPredicatedCall(
