@@ -2,6 +2,7 @@
 #include "pin.H"
 #include "AnalysisArgs.h"
 #include "ShadowRegisterFile.h"
+#include "InstructionHandler.h"
 #include "misc/PendingReads.h"
 
 #ifndef XSAVEHANDLER

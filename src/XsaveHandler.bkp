@@ -26,14 +26,10 @@ XsaveHandler::XsaveHandler(){
 void XsaveHandler::init(){
     uint32_t ecxContent;
 
-    // It is necessary to push and restore register rbx, because according to intel's manual it is a non-volatile
-    // register, so the caller expects it to be untouched on return, and cpuid overwrites register rbx
     asm(
-        "push %%rbx;"
         "mov $1, %%eax;"
         "cpuid;"
         "mov %%ecx, %0;"
-        "pop %%rbx;"
         : "=rm"(ecxContent)
         :
         : "%ecx"
@@ -65,14 +61,12 @@ XsaveComponent XsaveHandler::getComponentInfo(uint32_t compNum){
             uint32_t alignment;
 
             asm(
-                "push %%rbx;"
                 "mov $0x0d, %%eax;"
                 "mov %3, %%ecx;"
                 "cpuid;"
                 "mov %%eax, %1;"
                 "mov %%ebx, %0;"
                 "mov %%ecx, %2;"
-                "pop %%rbx;"
                 : "=rm"(offset), "=rm"(size), "=rm"(alignment)
                 : "r"(compNum)
                 : "%eax", "%ebx"
@@ -316,7 +310,7 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         exit(EXIT_FAILURE);
     }
     
-    set<AnalysisArgs> ret;
+    std::set<AnalysisArgs> ret;
     uint32_t xcr0Content = getXcr0Bitmap();
     uint32_t stateComponentBitmap = xcr0Content & eaxContent;
     /*
@@ -329,6 +323,7 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
     uint32_t to_be_restored = stateComponentBitmap & xstate_bv_low32;
     uint32_t to_be_initialized = stateComponentBitmap & (~ xstate_bv_low32);
 
+    std::cerr << "Starting handling X87 registers" << std::endl;
     if(isX87Stored(to_be_restored)){
         XsaveComponent X87Info = getComponentInfo(X87CompNum);
         ADDRINT loadAddr = addr + X87Info.offset;
