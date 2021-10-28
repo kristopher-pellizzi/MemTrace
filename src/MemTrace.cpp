@@ -1662,9 +1662,6 @@ VOID XsaveAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT3
 
 
 VOID XrstorAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT32 size,  VOID* disassembly, UINT32 opcode_arg){
-    if(storedPendingUninitializedReads.size() == 0)
-        return;
-
     OPCODE opcode = (OPCODE) opcode_arg;
     ADDRINT eaxContextReg = PIN_GetContextReg(ctxt, REG_GAX);
     uint32_t eaxContent = (uint32_t) eaxContextReg;
