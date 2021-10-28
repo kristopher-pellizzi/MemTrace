@@ -39,7 +39,7 @@ class InstructionHandler{
         // memory location
         void handle(const AccessIndex& ai);
         // This overloading method is thought to handle the direct memory copy instructions (e.g. movsd)
-        void handle(MemoryAccess& srcMA, MemoryAccess& dstMA);
+        void handle(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs);
 };
 
 #endif //INSTRUCTIONHANDLER

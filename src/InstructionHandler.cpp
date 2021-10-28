@@ -137,7 +137,50 @@ void InstructionHandler::handle(const AccessIndex& ai){
     updateStoredPendingReads(ai);
 }
 
-void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA){
+static uint8_t* andSrcRegsStatus(uint8_t* memStatus, unsigned& byteSize, unsigned& shadowSize, set<REG>* srcRegs){
+    RegsStatus srcRegsStatus = getSrcRegsStatus(srcRegs);
+    if(srcRegsStatus.isAllInitialized())
+        return memStatus;
+
+    uint8_t* regsStatus = srcRegsStatus.getStatus();
+    unsigned regsByteSize = srcRegsStatus.getByteSize();
+    unsigned regsShadowSize = srcRegsStatus.getShadowSize();
+    uint8_t* ret;
+    uint8_t* other;
+    unsigned retShadowSize;
+    unsigned otherShadowSize;
+
+    if(regsByteSize <= byteSize){
+        ret = memStatus;
+        other = regsStatus;
+        retShadowSize = shadowSize;
+        otherShadowSize = regsShadowSize;
+    }
+    else{
+        ret = (uint8_t*) malloc(sizeof(regsShadowSize));
+        other = memStatus;
+        retShadowSize = regsShadowSize;
+        otherShadowSize = shadowSize;
+        memcpy(ret, regsStatus, regsShadowSize);
+    }
+
+    uint8_t* ptr = ret + retShadowSize - 1;
+    uint8_t* otherPtr = other + otherShadowSize - 1;
+
+    for(unsigned i = 0; i < shadowSize; ++i, --ptr, --otherPtr){
+        *ptr &= *otherPtr;
+    }
+
+    if(ret != memStatus){
+        byteSize = regsByteSize;
+        shadowSize = regsShadowSize;
+        free(memStatus);
+    }
+
+    return ret;
+}
+
+void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs){
     UINT32 srcByteSize = srcMA.getSize();
     UINT32 dstByteSize = dstMA.getSize();
     ADDRINT srcAddr = srcMA.getAddress();
@@ -151,23 +194,30 @@ void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA){
     srcShadowSize = srcShadowSize % 8 != 0 ? (srcShadowSize / 8) + 1 : srcShadowSize / 8;
 
     unsigned dstShadowSize = dstByteSize + dstOffset;
-    dstShadowSize = dstShadowSize % 8 != 0 ? (dstShadowSize / 8) + 1 : dstShadowSize / 8;
+    dstShadowSize = dstShadowSize % 8 != 0 ? (dstShadowSize / 8) + 1 : dstShadowSize / 8; 
 
-    if(srcByteSize % 8 != 0){
-        *srcStatus &= (uint8_t) 0xff >> (8 - srcByteSize % 8);
-    }
+    if(srcRegs != NULL)
+        srcStatus = andSrcRegsStatus(srcStatus, srcByteSize, srcShadowSize, srcRegs);
 
     uint8_t* dstStatus = srcStatus;
 
-    if(dstOffset != 0)
-        dstStatus = addOffset(dstStatus, dstOffset, &srcShadowSize, srcByteSize);
-
     if(srcByteSize >= dstByteSize){
+        if(srcByteSize % 8 != 0){
+            *srcStatus &= (uint8_t) 0xff >> (8 - srcByteSize % 8);
+        }
+
+        if(dstOffset != 0)
+            dstStatus = addOffset(dstStatus, dstOffset, &srcShadowSize, srcByteSize);
+
         uint8_t* srcPtr = dstStatus;
         srcPtr += srcShadowSize - dstShadowSize;
         set_as_initialized(dstAddr, dstByteSize, srcPtr);
     }
     else{
+        if(dstOffset != 0){
+            dstStatus = addOffset(dstStatus, dstOffset, &srcShadowSize, srcByteSize);
+        }
+
         uint8_t* expandedData = (uint8_t*) malloc(sizeof(uint8_t) * dstShadowSize);
         unsigned diff = dstShadowSize - srcShadowSize;
         for(unsigned i = 0; i < diff; ++i){
@@ -179,12 +229,14 @@ void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA){
             *(expandedData + i) = *(dstStatus + j);
         }
 
+
         set_as_initialized(dstAddr, dstByteSize, expandedData);
         free(expandedData);
     }
 
     free(srcStatus);
-    free(dstStatus);
+    if(srcStatus != dstStatus)
+        free(dstStatus);
 
-    copyStoredPendingReads(srcMA, dstMA);
+    copyStoredPendingReads(srcMA, dstMA, srcRegs);
 }
