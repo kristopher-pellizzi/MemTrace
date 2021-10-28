@@ -123,6 +123,12 @@ void InstructionHandler::handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs)
     }
 }
 
+void InstructionHandler::handle(set<REG>* initializedRegs){
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    registerFile.setAsInitialized(initializedRegs);
+    updatePendingReads(initializedRegs);
+}
+
 void InstructionHandler::handle(const AccessIndex& ai){
     ADDRINT addr = ai.getFirst();
     UINT32 size = ai.getSecond();

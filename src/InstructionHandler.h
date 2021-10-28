@@ -31,6 +31,10 @@ class InstructionHandler{
 
         void handle(OPCODE op, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs);
         void handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs);
+        // This overloading method is thought to handle situations where a set of registers is simply to be 
+        // set as initialized, so it updates the corresponding status and removes any possible pending uninitialized
+        // read on those registers
+        void handle(set<REG>* initializedRegs);
         // This overloading method is thought to handle store instructions that simply initialize the whole
         // memory location
         void handle(const AccessIndex& ai);
