@@ -38,7 +38,7 @@ void updateStoredPendingReads(const AccessIndex& ai);
 void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma);
 map<range_t, set<tag_t>> getStoredPendingReads(MemoryAccess& ma);
 map<range_t, set<tag_t>> getStoredPendingReads(AccessIndex& ai);
-void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA);
+void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs);
 
 /*
     Compute the difference |ranges| - |r2|, which means that we remove from range

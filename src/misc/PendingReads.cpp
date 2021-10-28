@@ -665,18 +665,38 @@ set<range_t, IncreasingStartRangeSorter>& rangeIntersect(set<range_t, Increasing
 }
 
 
-void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA){
+void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs){
     map<range_t, set<tag_t>> toCopy = getStoredPendingReads(srcMA);
-    map<range_t, set<tag_t>> converted;
+    map<range_t, set<tag_t>, IncreasingStartRangeSorter> converted;
     ADDRINT srcAddr = srcMA.getAddress();
     ADDRINT dstAddr = dstMA.getAddress();
+    set<tag_t> regsTags;
+
+    if(srcRegs != NULL){
+        for(auto i = srcRegs->begin(); i != srcRegs->end(); ++i){
+            ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+            if(registerFile.isUnknownRegister(*i))
+                continue;
+
+            auto regIter = pendingUninitializedReads.find(registerFile.getShadowRegister(*i));
+            set<tag_t>& tags = regIter->second;
+            regsTags.insert(tags.begin(), tags.end());
+        }
+    }
 
     for(auto i = toCopy.begin(); i != toCopy.end(); ++i){
         range_t range = i->first;
-        set<tag_t>& tagSet = i->second;
+        set<tag_t> tagSet = i->second;
+        tagSet.insert(regsTags.begin(), regsTags.end());
 
         range.first = range.first - srcAddr + dstAddr;
         range.second = range.first - srcAddr + dstAddr;
         converted[range] = tagSet;
     }
+
+    range_t dstRange(dstMA.getAddress(), dstMA.getAddress() + dstMA.getSize() - 1);
+    if(storedPendingUninitializedReads.size() != 0)
+        removeStoredPendingReads(dstRange);
+
+    insertStoredPendingReads(converted);
 }
