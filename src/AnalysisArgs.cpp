@@ -24,3 +24,15 @@ UINT32 AnalysisArgs::getSize() const{
 bool AnalysisArgs::operator<(const AnalysisArgs& other) const{
     return this->addr > other.addr;
 }
+
+std::string AnalysisArgs::toString(){
+    std::ostringstream ss;
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    ss << "Registers ";
+    for(auto i = regs->begin(); i != regs->end(); ++i){
+        ss << registerFile.getName(*i) << " ";
+    }
+    ss << "stored @ 0x" << std::hex << addr << std::endl;
+
+    return ss.str();
+}

@@ -1,5 +1,7 @@
 #include <set>
+#include <sstream>
 #include "pin.H"
+#include "ShadowRegisterFile.h"
 
 #ifndef ANALYSISARGS
 #define ANALYSISARGS
@@ -19,6 +21,8 @@ class AnalysisArgs{
         ADDRINT getAddr() const ;
         UINT32 getSize() const;
         bool operator<(const AnalysisArgs& other) const;
+
+        std::string toString();
 };
 
 #endif //ANALYSISARGS
