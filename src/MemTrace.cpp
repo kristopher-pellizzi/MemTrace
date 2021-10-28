@@ -909,23 +909,19 @@ void storeMemoryAccess(set<tag_t>& tags){
 void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
     if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
-        // If there's at least 1 dst register, it is a classic load from memory to register
-        if(dstRegs != NULL){
+        if(dstRegs != NULL)
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
-        }
-        // otherwise, it probably is a direct memory copy, so just store the current MemoryAccess object
-        // to be used by a possible later call to memtrace with a WRITE access.
-        else{
-           pendingDirectMemoryCopy = PendingDirectMemoryCopy(ma); 
-        }
+        else
+            pendingDirectMemoryCopy = PendingDirectMemoryCopy(ma);
     }
     // If it is anything but a mov instruction, the load is caused by an instruction directly using the loaded value (e.g. add instruction)
     // So, directly store the uninitialized read.
     // Note that this also includes syscall instructions
     else{
         storeMemoryAccess(ai, ma);
-        // Since we are already reporting this uninitialized read, there's no need to continue propagate these uninitialized bytes
-        ShadowRegisterFile::getInstance().setAsInitialized(dstRegs);
+        if(dstRegs != NULL)
+            // Since we are already reporting this uninitialized read, there's no need to continue propagate these uninitialized bytes
+            ShadowRegisterFile::getInstance().setAsInitialized(dstRegs);
     }
 }
 
@@ -1375,8 +1371,11 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         lastWriteInstruction[ai] = ma;
 
+
         if(pendingDirectMemoryCopy.isValid() && ma.getActualIP() == pendingDirectMemoryCopy.getIp()){
-            InstructionHandler::getInstance().handle(pendingDirectMemoryCopy.getAccess(), ma);
+            MemoryAccess& pendingAccess = pendingDirectMemoryCopy.getAccess();
+            InstructionHandler::getInstance().handle(pendingAccess, ma, srcRegs);
+            AccessIndex ai(pendingAccess.getAddress(), pendingAccess.getSize());
         }
         // Writes performed by system calls don't have any src register, just store them
         else if(isSyscallInstruction(opcode)){
@@ -1388,8 +1387,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
         pendingDirectMemoryCopy.setAsInvalid();
         
-        //set_as_initialized(addr, size);
-
         // If this write is performed on the heap by a call to free, we save a copy of it on this ausiliary map.
         // This is useful because when |FreeAfter| will be called, it will re-initialized the shadow memory, including the
         // memory written by the free itself, thus possibly causing many false positives with following malloc calls.
@@ -1426,6 +1423,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         else{
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
+            
 
             // Check if the loaded value has bytes coming from stored pending reads
             if(storedPendingUninitializedReads.size() != 0){
@@ -1549,14 +1547,13 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
             containsUninitializedRead.insert(ai);
 
+
             size_t hash = maHasher(ma);
             auto overlapGroup = reportedGroups.find(ma);
-            bool shouldBeStored = dstRegs != NULL || isSyscallInstruction(opcode);
 
             if(overlapGroup == reportedGroups.end()){
                 // Store the read access
-                if (shouldBeStored)
-                    storeOrLeavePending(opcode, ai, ma, srcRegs, dstRegs);
+                storeOrLeavePending(opcode, ai, ma, srcRegs, dstRegs);
 
                 auto iter = lastWriteInstruction.lower_bound(AccessIndex(ma.getAddress(), 0));
                 ADDRINT iterFirstAccessedByte = iter->first.getFirst();
@@ -1624,8 +1621,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 // If this is the first time this read access is happening within this context, store it
                 if(reportedHashes.find(hash) == reportedHashes.end()){
                     // Store read access
-                    if(shouldBeStored)
-                        storeOrLeavePending(opcode, ai, ma, srcRegs, dstRegs);
+                    storeOrLeavePending(opcode, ai, ma, srcRegs, dstRegs);
 
                     for(std::pair<AccessIndex, MemoryAccess>& write_access : writes){
                         storeMemoryAccess(write_access.first, write_access.second);
@@ -2429,104 +2425,114 @@ VOID Instruction(INS ins, VOID* v){
             std::string* disassembly = NULL;
         #endif
 
+        set<UINT32> readMemOperands;
+        set<UINT32> writtenMemOperands;
+
         for(UINT32 memop = 0; memop < memoperands; memop++){ 
             // Read memory access
             if(INS_MemoryOperandIsRead(ins, memop)){
-                // It is a ret instruction
-                if(isRet){
-                    INS_InsertPredicatedCall(
-                        ins,
-                        IPOINT_BEFORE,
-                        (AFUNPTR) retTrace,
-                        IARG_THREAD_ID,
-                        IARG_CONTEXT,
-                        IARG_UINT32, AccessType::READ,
-                        IARG_INST_PTR,
-                        IARG_MEMORYREAD_EA,
-                        IARG_MEMORYREAD_SIZE,
-                        IARG_PTR, disassembly,
-                        IARG_UINT32, opcode,
-                        IARG_PTR, explicitSrcRegs,
-                        IARG_PTR, dstRegs,
-                        IARG_END
-                    );
-
-                    INS_InsertPredicatedCall(
-                        ins,
-                        IPOINT_BEFORE,
-                        (AFUNPTR) mallocRet,
-                        IARG_CONTEXT,
-                        IARG_END
-                    );
-                }
-                else{
-                    INS_InsertPredicatedCall(
-                        ins, 
-                        IPOINT_BEFORE, 
-                        (AFUNPTR) memtrace, 
-                        IARG_THREAD_ID, 
-                        IARG_CONTEXT, 
-                        IARG_UINT32, AccessType::READ, 
-                        IARG_INST_PTR, 
-                        IARG_MEMORYREAD_EA, 
-                        IARG_MEMORYREAD_SIZE, 
-                        IARG_PTR, disassembly,
-                        IARG_UINT32, opcode,
-                        IARG_PTR, explicitSrcRegs,
-                        IARG_PTR, dstRegs,
-                        IARG_END
-                    );
-                }
+                readMemOperands.insert(memop);
             }
 
-            // Write memory access
-            if(INS_MemoryOperandIsWritten(ins, memop) ){
-                // Procedure call instruction
-                if(isProcedureCall){
-                    INS_InsertPredicatedCall(
-                        ins,
-                        IPOINT_BEFORE,
-                        (AFUNPTR) procCallTrace,
-                        IARG_THREAD_ID, 
-                        IARG_CONTEXT, 
-                        IARG_UINT32, AccessType::WRITE, 
-                        IARG_INST_PTR, 
-                        IARG_MEMORYWRITE_EA, 
-                        IARG_MEMORYWRITE_SIZE,
-                        IARG_PTR, disassembly, 
-                        IARG_UINT32, opcode,
-                        IARG_PTR, explicitSrcRegs, 
-                        IARG_PTR, dstRegs,
-                        IARG_END
-                    );
-
-                    INS_InsertPredicatedCall(
-                        ins,
-                        IPOINT_BEFORE,
-                        (AFUNPTR) mallocNestedCall,
-                        IARG_END
-                    );
-                }
-                else{
-                    INS_InsertPredicatedCall(
-                        ins, 
-                        IPOINT_BEFORE, 
-                        (AFUNPTR) memtrace, 
-                        IARG_THREAD_ID, 
-                        IARG_CONTEXT, 
-                        IARG_UINT32, AccessType::WRITE, 
-                        IARG_INST_PTR, 
-                        IARG_MEMORYWRITE_EA, 
-                        IARG_MEMORYWRITE_SIZE,
-                        IARG_PTR, disassembly, 
-                        IARG_UINT32, opcode,
-                        IARG_PTR, explicitSrcRegs, 
-                        IARG_PTR, dstRegs,
-                        IARG_END
-                    ); 
-                }          
+            if(INS_MemoryOperandIsWritten(ins, memop)){
+                writtenMemOperands.insert(memop);
             }
+        }
 
+        for(auto i = readMemOperands.begin(); i != readMemOperands.end(); ++i){
+            // It is a ret instruction
+            if(isRet){
+                INS_InsertPredicatedCall(
+                    ins,
+                    IPOINT_BEFORE,
+                    (AFUNPTR) retTrace,
+                    IARG_THREAD_ID,
+                    IARG_CONTEXT,
+                    IARG_UINT32, AccessType::READ,
+                    IARG_INST_PTR,
+                    IARG_MEMORYREAD_EA,
+                    IARG_MEMORYREAD_SIZE,
+                    IARG_PTR, disassembly,
+                    IARG_UINT32, opcode,
+                    IARG_PTR, explicitSrcRegs,
+                    IARG_PTR, dstRegs,
+                    IARG_END
+                );
+
+                INS_InsertPredicatedCall(
+                    ins,
+                    IPOINT_BEFORE,
+                    (AFUNPTR) mallocRet,
+                    IARG_CONTEXT,
+                    IARG_END
+                );
+            }
+            else{
+                INS_InsertPredicatedCall(
+                    ins, 
+                    IPOINT_BEFORE, 
+                    (AFUNPTR) memtrace, 
+                    IARG_THREAD_ID, 
+                    IARG_CONTEXT, 
+                    IARG_UINT32, AccessType::READ, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYREAD_EA, 
+                    IARG_MEMORYREAD_SIZE, 
+                    IARG_PTR, disassembly,
+                    IARG_UINT32, opcode,
+                    IARG_PTR, explicitSrcRegs,
+                    IARG_PTR, dstRegs,
+                    IARG_END
+                );
+            }
+        }
+
+        // Write memory access
+        for(auto i = writtenMemOperands.begin(); i != writtenMemOperands.end(); ++i){
+            // Procedure call instruction
+            if(isProcedureCall){
+                INS_InsertPredicatedCall(
+                    ins,
+                    IPOINT_BEFORE,
+                    (AFUNPTR) procCallTrace,
+                    IARG_THREAD_ID, 
+                    IARG_CONTEXT, 
+                    IARG_UINT32, AccessType::WRITE, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYWRITE_EA, 
+                    IARG_MEMORYWRITE_SIZE,
+                    IARG_PTR, disassembly, 
+                    IARG_UINT32, opcode,
+                    IARG_PTR, explicitSrcRegs, 
+                    IARG_PTR, dstRegs,
+                    IARG_END
+                );
+
+                INS_InsertPredicatedCall(
+                    ins,
+                    IPOINT_BEFORE,
+                    (AFUNPTR) mallocNestedCall,
+                    IARG_END
+                );
+            }
+            else{
+                INS_InsertPredicatedCall(
+                    ins, 
+                    IPOINT_BEFORE, 
+                    (AFUNPTR) memtrace, 
+                    IARG_THREAD_ID, 
+                    IARG_CONTEXT, 
+                    IARG_UINT32, AccessType::WRITE, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYWRITE_EA, 
+                    IARG_MEMORYWRITE_SIZE,
+                    IARG_PTR, disassembly, 
+                    IARG_UINT32, opcode,
+                    IARG_PTR, explicitSrcRegs, 
+                    IARG_PTR, dstRegs,
+                    IARG_END
+                ); 
+            }          
         }
     }
 
