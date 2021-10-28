@@ -30,6 +30,7 @@ extern map<pair<ADDRINT, ADDRINT>, set<tag_t>, IncreasingStartRangeSorter> store
  
 void addPendingRead(set<REG>* regs, const MemoryAccess& ma);
 void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags);
+void updatePendingReads(set<REG>* dstRegs);
 
 void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs);
 

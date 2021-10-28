@@ -203,6 +203,20 @@ void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags){
     addPendingRead(shadowRegs, tags);
 }
 
+void updatePendingReads(set<REG>* dstRegs){
+    if(pendingUninitializedReads.size() == 0)
+        return;
+
+    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    for(auto i = dstRegs->begin(); i != dstRegs->end(); ++i){
+        if(registerFile.isUnknownRegister(*i))
+            continue;
+        
+        unsigned reg = registerFile.getShadowRegister(*i);
+        pendingUninitializedReads.erase(reg);
+    }
+}
+
 
 
 
