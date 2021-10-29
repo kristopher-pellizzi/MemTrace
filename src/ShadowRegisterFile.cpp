@@ -195,7 +195,11 @@ SHDW_REG ShadowRegisterFile::convertPinReg(REG pin_reg){
     if(ret != shadow_map.end()){
         SHDW_REG reg = ret->second;
         
-        if(reg >= SHDW_REG_ST0 && reg <= SHDW_REG_ST7){
+        // Whenever an MM register is read or written, the fpuStackIndex is reset
+        if(reg >= SHDW_REG_MM0 && reg <= SHDW_REG_MM7){
+            fpuStackIndex = 0;
+        }
+        else if(reg >= SHDW_REG_ST0 && reg <= SHDW_REG_ST7){
             reg += fpuStackIndex;
             if(reg > SHDW_REG_ST7){
                 reg -= SHDW_REG_ST7;
