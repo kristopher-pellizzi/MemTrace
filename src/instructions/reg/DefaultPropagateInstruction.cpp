@@ -15,7 +15,6 @@ void DefaultPropagateInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_CBW);
     verifiedInstructions.insert(XED_ICLASS_CWDE);
     verifiedInstructions.insert(XED_ICLASS_CDQE);
-    verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
 }
 
 void DefaultPropagateInstruction::operator() (OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
