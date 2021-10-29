@@ -171,8 +171,8 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
                     infoAlreadyInitialized = true;
                 }
 
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, storeAddr, storeSize);
                 ret.insert(args);
@@ -195,8 +195,8 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
                     infoAlreadyInitialized = true;
                 }
 
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, storeAddr, storeSize);
                 ret.insert(args);
@@ -225,8 +225,8 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
                     infoAlreadyInitialized = true;
                 }
 
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, storeAddr, storeSize);
                 ret.insert(args);
@@ -248,8 +248,8 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
                     infoAlreadyInitialized = true;
                 }
 
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, storeAddr, storeSize);
                 ret.insert(args);
@@ -272,8 +272,8 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
                     infoAlreadyInitialized = true;
                 }
 
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, storeAddr, storeSize);
                 ret.insert(args);
@@ -296,8 +296,8 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
                     infoAlreadyInitialized = true;
                 }
 
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, storeAddr, storeSize);
                 ret.insert(args);
@@ -335,21 +335,21 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         UINT32 loadSize = 16;
         // The following set is filled with registers which have been stored by a previous XSAVE in an initialized
         // state. This means they need to be reinitialized, if they are not.
-        set<REG> toReinit;
+        list<REG> toReinit;
 
         for(unsigned i = 0; i < 8; ++i, loadAddr += loadSize){
             REG reg = x87Regs[i];
             AccessIndex ai(loadAddr, loadSize);
             map<range_t, set<tag_t>> m = getStoredPendingReads(ai);
             if(m.size() != 0){
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, loadAddr, loadSize);
                 ret.insert(args);
             }
             else{
-                toReinit.insert(reg);
+                toReinit.push_back(reg);
             }
         }
 
@@ -358,9 +358,9 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         InstructionHandler::getInstance().handle(&toReinit);
     }
     else if(isX87Stored(to_be_initialized)){
-        set<REG> toReinit;
+        list<REG> toReinit;
         for(unsigned i = 0; i < 8; ++i){
-            toReinit.insert(x87Regs[i]);
+            toReinit.push_back(x87Regs[i]);
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
@@ -371,30 +371,30 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         XsaveComponent XmmInfo = getComponentInfo(XMMCompNum);
         ADDRINT loadAddr = addr + XmmInfo.offset;
         UINT32 loadSize = 16;
-        set<REG> toReinit;
+        list<REG> toReinit;
 
         for(unsigned i = 0; i < regsNum; ++i, loadAddr += loadSize){
             REG reg = xmmRegs[i];
             AccessIndex ai(loadAddr, loadSize);
             map<range_t, set<tag_t>> m = getStoredPendingReads(ai);
             if(m.size() != 0){
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, loadAddr, loadSize);
                 ret.insert(args);
             }
             else{
-                toReinit.insert(reg);
+                toReinit.push_back(reg);
             }
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
     }
     else if(isXmmStored(to_be_initialized)){
-        set<REG> toReinit;
+        list<REG> toReinit;
         for(unsigned i = 0; i < regsNum; ++i){
-            toReinit.insert(xmmRegs[i]);
+            toReinit.push_back(xmmRegs[i]);
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
@@ -408,30 +408,30 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         XsaveComponent YmmInfo = getComponentInfo(YMMCompNum);
         ADDRINT loadAddr = addr + YmmInfo.offset;
         UINT32 loadSize = 16;
-        set<REG> toReinit;
+        list<REG> toReinit;
 
         for(unsigned i = 0; i < regsNum; ++i, loadAddr += loadSize){
             REG reg = ymmRegs[i];
             AccessIndex ai(loadAddr, loadSize);
             map<range_t, set<tag_t>> m = getStoredPendingReads(ai);
             if(m.size() != 0){
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, loadAddr, loadSize);
                 ret.insert(args);
             }
             else{
-                toReinit.insert(reg);
+                toReinit.push_back(reg);
             }
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
     }
     else if(isYmmStored(to_be_initialized)){
-        set<REG> toReinit;
+        list<REG> toReinit;
         for(unsigned i = 0; i < regsNum; ++i){
-            toReinit.insert(ymmRegs[i]);
+            toReinit.push_back(ymmRegs[i]);
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
@@ -441,30 +441,30 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         XsaveComponent ZmmHighInfo = getComponentInfo(ZMMHighCompNum);
         ADDRINT loadAddr = addr + ZmmHighInfo.offset;
         UINT32 loadSize = 32;
-        set<REG> toReinit;
+        list<REG> toReinit;
 
         for(unsigned i = 0; i < regsNum; ++i, loadAddr += loadSize){
             REG reg = zmmRegs[i];
             AccessIndex ai(loadAddr, loadSize);
             map<range_t, set<tag_t>> m = getStoredPendingReads(ai);
             if(m.size() != 0){
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, loadAddr, loadSize);
                 ret.insert(args);
             }
             else{
-                toReinit.insert(reg);
+                toReinit.push_back(reg);
             }
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
     }
     else if(isZmmHighStored(to_be_initialized)){
-        set<REG> toReinit;
+        list<REG> toReinit;
         for(unsigned i = 0; i < regsNum; ++i){
-            toReinit.insert(zmmRegs[i]);
+            toReinit.push_back(zmmRegs[i]);
         }
         
         InstructionHandler::getInstance().handle(&toReinit);
@@ -474,30 +474,30 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         XsaveComponent ZmmFullInfo = getComponentInfo(ZMMFullCompNum);
         ADDRINT loadAddr = addr + ZmmFullInfo.offset;
         UINT32 loadSize = 64;
-        set<REG> toReinit;
+        list<REG> toReinit;
 
         for(unsigned i = regsNum; i < ZmmMaxNum; ++i, loadAddr += loadSize){
             REG reg = zmmRegs[i];
             AccessIndex ai(loadAddr, loadSize);
             map<range_t, set<tag_t>> m = getStoredPendingReads(ai);
             if(m.size() != 0){
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, loadAddr, loadSize);
                 ret.insert(args);
             }
             else{
-                toReinit.insert(reg);
+                toReinit.push_back(reg);
             }
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
     }
     else if(isZmmHighStored(to_be_initialized)){
-        set<REG> toReinit;
+        list<REG> toReinit;
         for(unsigned i = regsNum; i < ZmmMaxNum; ++i){
-            toReinit.insert(zmmRegs[i]);
+            toReinit.push_back(zmmRegs[i]);
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
@@ -507,30 +507,30 @@ set<AnalysisArgs> XsaveHandler::getXrstorAnalysisArgs(uint32_t eaxContent, OPCOD
         XsaveComponent KmaskInfo = getComponentInfo(KregsCompNum);
         ADDRINT loadAddr = addr + KmaskInfo.offset;
         UINT32 loadSize = 8;
-        set<REG> toReinit;
+        list<REG> toReinit;
 
         for(unsigned i = 0; i < 8; ++i, loadAddr += loadSize){
             REG reg = kRegs[i];
             AccessIndex ai(loadAddr, loadSize);
             map<range_t, set<tag_t>> m = getStoredPendingReads(ai);
             if(m.size() != 0){
-                set<REG>* regs = new set<REG>();
-                regs->insert(reg);
+                list<REG>* regs = new list<REG>();
+                regs->push_back(reg);
 
                 AnalysisArgs args(regs, loadAddr, loadSize);
                 ret.insert(args);
             }
             else{
-                toReinit.insert(reg);
+                toReinit.push_back(reg);
             }
         }
 
         InstructionHandler::getInstance().handle(&toReinit);
     }
     else if(isKmaskStored(to_be_initialized)){
-        set<REG> toReinit;
+        list<REG> toReinit;
         for(unsigned i = 0; i < 8; ++i){
-            toReinit.insert(kRegs[i]);
+            toReinit.push_back(kRegs[i]);
         }
 
         InstructionHandler::getInstance().handle(&toReinit);

@@ -18,7 +18,7 @@ class DefaultPropagateInstruction : public RegInstructionEmulator{
 
     public:
         DefaultPropagateInstruction();
-        void operator() (OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs) override;
+        void operator() (OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs) override;
 };
 
 #endif //DEFAULTPROPAGATEINSTRUCTION

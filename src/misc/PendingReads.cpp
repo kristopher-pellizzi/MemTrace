@@ -30,7 +30,7 @@ map<range_t, set<tag_t>, IncreasingStartRangeSorter> storedPendingUninitializedR
     It is responsibility of funtion |checkDestRegisters| to perform the required operations to check if
     super-registers should be kept in the structure or should be removed.
 */
-void addPendingRead(set<REG>* regs, const MemoryAccess& ma){
+void addPendingRead(list<REG>* regs, const MemoryAccess& ma){
     if(regs == NULL || !ma.getIsUninitializedRead())
         return;
     
@@ -131,7 +131,7 @@ static void addPendingRead(set<unsigned>& shdw_regs, set<tag_t>& accessSet){
 }
 
 
-void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
+void propagatePendingReads(list<REG>* srcRegs, list<REG>* dstRegs){
     // If srcRegs or dstRegs are empty, there's nothing to propagate
     if(pendingUninitializedReads.size() == 0 || srcRegs == NULL || dstRegs == NULL)
         return;
@@ -189,7 +189,7 @@ void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs){
     }
 }
 
-void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags){
+void addPendingRead(list<REG>* dstRegs, set<tag_t>& tags){
     set<unsigned> shadowRegs;
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
@@ -203,7 +203,7 @@ void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags){
     addPendingRead(shadowRegs, tags);
 }
 
-void updatePendingReads(set<REG>* dstRegs){
+void updatePendingReads(list<REG>* dstRegs){
     if(pendingUninitializedReads.size() == 0)
         return;
 
@@ -490,7 +490,7 @@ void updateStoredPendingReads(const AccessIndex& ai){
 }
 
 
-void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma){
+void storePendingReads(list<REG>* srcRegs, MemoryAccess& ma){
     // Remove all ranges overlapping the given MemoryAccess. If there are uninitialized src registers
     // the correct uninitialized ranges will be inserted again
     if(storedPendingUninitializedReads.size() != 0){
@@ -539,16 +539,18 @@ void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma){
             bool isHighByte = registerFile.isHighByteReg((SHDW_REG) *subRegsIter);
             ADDRINT start = isHighByte ? addr + 1 : addr + previousRegSize;
             ADDRINT end = isHighByte ? addr + 1 : addr + regByteSize - 1;
-            // In case the register size is higher than the written memory, the range should not go beyond the written memory location.
-            // Adjust the end point of the range in order to avoid writing something else
-            if(end > maHighAddr)
-                end = maHighAddr;
             // If we are writing only 1 byte to memory and it comes from a high byte register, fix start and end point 
             // of the memory range
             if(isHighByte && ma.getSize() == 1){
                 --start;
                 --end;
             }
+
+            // In case the register size is higher than the written memory, the range should not go beyond the written memory location.
+            // Adjust the end point of the range in order to avoid writing something else
+            if(end > maHighAddr)
+                end = maHighAddr;
+
             previousRegSize = isHighByte ? previousRegSize + regByteSize : regByteSize;
             /*
                 This irregular range may happen on those registers having a high byte register.
@@ -670,7 +672,7 @@ set<range_t, IncreasingStartRangeSorter>& rangeIntersect(set<range_t, Increasing
 }
 
 
-void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs){
+void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA, list<REG>* srcRegs){
     map<range_t, set<tag_t>> toCopy = getStoredPendingReads(srcMA);
     map<range_t, set<tag_t>, IncreasingStartRangeSorter> converted;
     ADDRINT srcAddr = srcMA.getAddress();

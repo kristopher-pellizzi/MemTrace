@@ -1,9 +1,7 @@
-#include <set>
 #include <iostream>
 #include <cstring>
 #include "ShadowRegisterFile.h"
 
-using std::set;
 
 /*
     The following set contains those shadow registers whose size is 1 byte, but that refer to the 
@@ -268,7 +266,7 @@ void ShadowRegisterFile::setAsInitialized(REG pin_reg){
 
 
 
-void ShadowRegisterFile::setAsInitialized(set<REG>* regs){
+void ShadowRegisterFile::setAsInitialized(list<REG>* regs){
     for(auto iter = regs->begin(); iter != regs->end(); ++iter){
         setAsInitialized(*iter);
     }
@@ -403,7 +401,7 @@ bool ShadowRegisterFile::IncreasingSizeRegisterSorter::operator()(const unsigned
     [*] Each returned register corresponds to |reg| (same size or different size but missing destination equivalent. 
         E.g. |reg| is bh, |regSet| only contains rsi. In that case, the corresponding register will be si)
 */
-set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, set<REG>* regSet){
+set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, list<REG>* regSet){
 
     set<unsigned> corrRegs;
     unsigned targetByteSize;

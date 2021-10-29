@@ -97,7 +97,7 @@ InstructionHandler& InstructionHandler::getInstance(){
     return instance;
 }
 
-void InstructionHandler::handle(OPCODE op, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void InstructionHandler::handle(OPCODE op, MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     auto instr = memEmulators.find(op);
 
     if(instr != memEmulators.end()){
@@ -119,7 +119,7 @@ void InstructionHandler::handle(OPCODE op, MemoryAccess& ma, set<REG>* srcRegs, 
     }
 }
 
-void InstructionHandler::handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs){
+void InstructionHandler::handle(OPCODE op, list<REG>* srcRegs, list<REG>* dstRegs){
     if(srcRegs == NULL || dstRegs == NULL){
         return;
     }
@@ -134,7 +134,7 @@ void InstructionHandler::handle(OPCODE op, set<REG>* srcRegs, set<REG>* dstRegs)
     }
 }
 
-void InstructionHandler::handle(set<REG>* initializedRegs){
+void InstructionHandler::handle(list<REG>* initializedRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     registerFile.setAsInitialized(initializedRegs);
     updatePendingReads(initializedRegs);
@@ -148,7 +148,7 @@ void InstructionHandler::handle(const AccessIndex& ai){
     updateStoredPendingReads(ai);
 }
 
-static uint8_t* andSrcRegsStatus(uint8_t* memStatus, unsigned& byteSize, unsigned& shadowSize, set<REG>* srcRegs){
+static uint8_t* andSrcRegsStatus(uint8_t* memStatus, unsigned& byteSize, unsigned& shadowSize, list<REG>* srcRegs){
     RegsStatus srcRegsStatus = getSrcRegsStatus(srcRegs);
     if(srcRegsStatus.isAllInitialized())
         return memStatus;
@@ -191,7 +191,7 @@ static uint8_t* andSrcRegsStatus(uint8_t* memStatus, unsigned& byteSize, unsigne
     return ret;
 }
 
-void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs){
+void InstructionHandler::handle(MemoryAccess& srcMA, MemoryAccess& dstMA, list<REG>* srcRegs){
     UINT32 srcByteSize = srcMA.getSize();
     UINT32 dstByteSize = dstMA.getSize();
     ADDRINT srcAddr = srcMA.getAddress();

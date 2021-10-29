@@ -19,7 +19,7 @@ class DefaultLoadInstruction : public MemInstructionEmulator{
 
     public:
         DefaultLoadInstruction();
-        void operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs) override;
+        void operator() (MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs) override;
 };
 
 #endif //DEFAULTLOADINSTRUCTION

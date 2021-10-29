@@ -26,8 +26,8 @@ def main():
     instr_obj_dir = os.path.realpath(os.path.join("..", objdir, "instructions"))
 
     args = {
-        "mem": "(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs)",
-        "reg": "(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs)"
+        "mem": "(MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs)",
+        "reg": "(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs)"
     }
     
     comment = "/*\nThis header file has been automatically generated with a script\n\

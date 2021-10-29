@@ -20,7 +20,7 @@ static uint8_t* getDstStatus(uint8_t* srcStatus, MemoryAccess& ma){
     return ret;
 }
 
-void XsaveInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void XsaveInstruction::operator()(MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     if(srcRegs == NULL){
         set_as_initialized(ma.getAddress(), ma.getSize());
         return;

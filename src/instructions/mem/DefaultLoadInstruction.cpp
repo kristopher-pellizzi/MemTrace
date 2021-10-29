@@ -32,7 +32,7 @@ void DefaultLoadInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
 }
 
-void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void  DefaultLoadInstruction::operator() (MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     // If there are no destination registers, there's nothing to do
     if(dstRegs == NULL)
         return;

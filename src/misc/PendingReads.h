@@ -1,4 +1,4 @@
-#include <set>
+#include <list>
 #include <map>
 #include "pin.H"
 #include "../TagManager.h"
@@ -7,7 +7,7 @@
 #include "../ShadowRegisterFile.h"
 
 using std::pair;
-using std::set;
+using std::list;
 using std::map;
 
 #ifndef PENDINGREADS
@@ -28,17 +28,17 @@ class IncreasingEndRangeSorter{
 extern map<unsigned, set<tag_t>> pendingUninitializedReads;
 extern map<pair<ADDRINT, ADDRINT>, set<tag_t>, IncreasingStartRangeSorter> storedPendingUninitializedReads;
  
-void addPendingRead(set<REG>* regs, const MemoryAccess& ma);
-void addPendingRead(set<REG>* dstRegs, set<tag_t>& tags);
-void updatePendingReads(set<REG>* dstRegs);
+void addPendingRead(list<REG>* regs, const MemoryAccess& ma);
+void addPendingRead(list<REG>* dstRegs, set<tag_t>& tags);
+void updatePendingReads(list<REG>* dstRegs);
 
-void propagatePendingReads(set<REG>* srcRegs, set<REG>* dstRegs);
+void propagatePendingReads(list<REG>* srcRegs, list<REG>* dstRegs);
 
 void updateStoredPendingReads(const AccessIndex& ai);
-void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma);
+void storePendingReads(list<REG>* srcRegs, MemoryAccess& ma);
 map<range_t, set<tag_t>> getStoredPendingReads(MemoryAccess& ma);
 map<range_t, set<tag_t>> getStoredPendingReads(AccessIndex& ai);
-void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA, set<REG>* srcRegs);
+void copyStoredPendingReads(MemoryAccess& srcMA, MemoryAccess& dstMA, list<REG>* srcRegs);
 
 /*
     Compute the difference |ranges| - |r2|, which means that we remove from range

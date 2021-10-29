@@ -52,7 +52,7 @@ static void broadcast(REG srcReg, REG dstReg, unsigned bcSize){
     free(srcStatusPtr);
 }
 
-void VpbroadcastInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+void VpbroadcastInstruction::operator()(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     REG srcReg = *srcRegs->begin();
     REG dstReg = *dstRegs->begin();

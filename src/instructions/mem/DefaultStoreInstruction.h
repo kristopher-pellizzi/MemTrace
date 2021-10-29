@@ -18,7 +18,7 @@ class DefaultStoreInstruction : public MemInstructionEmulator{
 
     public:
         DefaultStoreInstruction();
-        void operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs) override;
+        void operator() (MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs) override;
 };
 
 #endif //DEFAULTSTOREINSTRUCTION

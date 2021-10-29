@@ -30,7 +30,7 @@ void DefaultStoreInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
 }
 
-void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void  DefaultStoreInstruction::operator() (MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     // If there are no source registers, probably an immediate is going to be stored, so just set everything as initialized
     if(srcRegs == NULL){
         set_as_initialized(ma.getAddress(), ma.getSize());

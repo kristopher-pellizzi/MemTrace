@@ -2,7 +2,7 @@
 #include "SrcRegsStatus.h"
 
 // Returns a pair containing a pointer to the src registers status and the size in bytes of the biggest src register
-RegsStatus getSrcRegsStatus(set<REG>* srcRegs){
+RegsStatus getSrcRegsStatus(list<REG>* srcRegs){
     uint8_t* ptr = NULL;
     unsigned byteSize = 0;
     unsigned shadowSize = 0;

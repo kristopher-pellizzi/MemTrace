@@ -1,5 +1,6 @@
 #include <map>
 #include <set>
+#include <list>
 #include <string>
 #include <sys/mman.h>
 #include "Platform.h"
@@ -9,6 +10,7 @@
 
 using std::map;
 using std::set;
+using std::list;
 using std::string;
 
 #ifndef SHDWREGISTERFILE
@@ -294,7 +296,7 @@ class ShadowRegisterFile{ // Singleton
         string& getName(SHDW_REG reg);
         void setAsInitialized(REG pin_reg, uint8_t* data);
         void setAsInitialized(REG pin_reg);
-        void setAsInitialized(set<REG>* regs);
+        void setAsInitialized(list<REG>* regs);
         uint8_t* getContentStatus(REG pin_reg);
         uint8_t* getContentStatus(SHDW_REG reg);
         unsigned getShadowSize(REG pin_reg);
@@ -307,7 +309,7 @@ class ShadowRegisterFile{ // Singleton
         bool isUnknownRegister(REG pin_reg);
         set<unsigned>& getAliasingRegisters(REG pin_reg);
         set<unsigned>& getAliasingRegisters(SHDW_REG reg);
-        set<unsigned> getCorrespondingRegisters(SHDW_REG reg, set<REG>* regSet);
+        set<unsigned> getCorrespondingRegisters(SHDW_REG reg, list<REG>* regSet);
         bool hasHighByte(REG pin_reg);
         bool isHighByteReg(SHDW_REG reg);
 

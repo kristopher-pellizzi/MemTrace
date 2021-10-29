@@ -1,6 +1,6 @@
 #include "PmovmskbInstruction.h"
 
-void PmovmskbInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+void PmovmskbInstruction::operator()(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     
     REG srcReg = *srcRegs->begin();

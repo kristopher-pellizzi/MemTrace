@@ -1,6 +1,6 @@
 #include "FstInstruction.h"
 
-void FstInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+void FstInstruction::operator()(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
 
     /*

@@ -1,6 +1,6 @@
 #include "XrstorInstruction.h"
 
-void XrstorInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void XrstorInstruction::operator()(MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     REG dstReg = *dstRegs->begin();
     uint8_t* uninitializedInterval = ma.getUninitializedInterval();

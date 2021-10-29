@@ -18,7 +18,7 @@ void DefaultPropagateInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
 }
 
-void DefaultPropagateInstruction::operator() (OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+void DefaultPropagateInstruction::operator() (OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
     // There's nothing to propagate
     if(dstRegs == NULL)
         return;

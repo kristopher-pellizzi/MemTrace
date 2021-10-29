@@ -1,6 +1,6 @@
 #include "MemFstInstruction.h"
 
-void MemFstInstruction::operator()(MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void MemFstInstruction::operator()(MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     /*
         Note that this is an over-approximation of the real behavior of the instruction.
         Indeed, when we copy the value to a smaller register, the value is actually converted from an

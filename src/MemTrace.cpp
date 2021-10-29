@@ -77,7 +77,7 @@ std::ostream * out = &cerr;
 // NOTE: more than 1 MemoryAccess object may contain the same pointer, because Intel PIN uses an instruction cache to re-instrument instructions
 // that it recently instrumented (e.g. in loops)
 std::list<std::string*> disasmPtrs;
-std::list<std::set<REG>*> regsPtrs;
+std::list<std::list<REG>*> regsPtrs;
 
 bool heuristicEnabled = false;
 bool heuristicLibsOnly = false;
@@ -649,9 +649,9 @@ bool isCmpInstruction(OPCODE opcode){
     To avoid this problem (happening only because mov destination and source registers are the same), we'll remove entries from |pendingUninitializedReads|
     only if that is not an auto mov.
 */
-bool isAutoMov(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+bool isAutoMov(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
 
-    if(srcRegs == NULL || dstRegs == NULL || srcRegs->size() + dstRegs->size() != 2 || !isMovInstruction(opcode))
+    if(srcRegs == NULL || dstRegs == NULL || srcRegs->size() + dstRegs->size() <= 2 || !isMovInstruction(opcode))
         return false;
 
     REG srcReg = *srcRegs->begin();
@@ -906,13 +906,14 @@ void storeMemoryAccess(set<tag_t>& tags){
     }
 }
 
-void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
+void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
     if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
         if(dstRegs != NULL)
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
-        else
+        else{
             pendingDirectMemoryCopy = PendingDirectMemoryCopy(ma);
+        }
     }
     // If it is anything but a mov instruction, the load is caused by an instruction directly using the loaded value (e.g. add instruction)
     // So, directly store the uninitialized read.
@@ -926,7 +927,7 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, set<R
 }
 
 // Returns true if the uninitialized read is left pending; returns false if the uninitialized read is stored
-bool storeOrLeavePending(OPCODE opcode, set<REG>* dstRegs, set<tag_t>& tags){
+bool storeOrLeavePending(OPCODE opcode, list<REG>* dstRegs, set<tag_t>& tags){
     if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
         addPendingRead(dstRegs, tags);
         return true;
@@ -1361,8 +1362,8 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // are not deleted. We will perform a similar, more precise task after the program's execution terminated.
     static unordered_map<MemoryAccess, unordered_set<size_t>, MemoryAccess::NoOrderHasher, MemoryAccess::Comparator> reportedGroups;
     static MemoryAccess::NoOrderHasher maHasher;
-    set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
-    set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
+    list<REG>* dstRegs = static_cast<list<REG>*>(dstRegsPtr);
+    list<REG>* srcRegs = static_cast<list<REG>*>(srcRegsPtr);
 
     if(isWrite){
         #ifdef DEBUG
@@ -1370,7 +1371,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         #endif
 
         lastWriteInstruction[ai] = ma;
-
 
         if(pendingDirectMemoryCopy.isValid() && ma.getActualIP() == pendingDirectMemoryCopy.getIp()){
             MemoryAccess& pendingAccess = pendingDirectMemoryCopy.getAccess();
@@ -1423,7 +1423,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         else{
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
-            
 
             // Check if the loaded value has bytes coming from stored pending reads
             if(storedPendingUninitializedReads.size() != 0){
@@ -1647,7 +1646,7 @@ VOID XsaveAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT3
     set<AnalysisArgs> s = XsaveHandler::getInstance().getXsaveAnalysisArgs(eaxContent, opcode, addr, size);
 
     for(auto i = s.begin(); i != s.end(); ++i){
-        set<REG>* srcRegs = i->getRegs();
+        list<REG>* srcRegs = i->getRegs();
         ADDRINT storeAddr = i->getAddr();
         UINT32 storeSize = i->getSize();
         regsPtrs.push_back(srcRegs);
@@ -1664,7 +1663,7 @@ VOID XrstorAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT
     set<AnalysisArgs> s = XsaveHandler::getInstance().getXrstorAnalysisArgs(eaxContent, opcode, addr, size);
 
     for(auto i = s.begin(); i != s.end(); ++i){
-        set<REG>* dstRegs = i->getRegs();
+        list<REG>* dstRegs = i->getRegs();
         ADDRINT loadAddr = i->getAddr();
         UINT32 loadSize = i->getSize();
         regsPtrs.push_back(dstRegs);
@@ -1810,16 +1809,16 @@ VOID checkDestRegisters(VOID* dstRegs){
     if(!entryPointExecuted || dstRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
-    set<REG> regs = *static_cast<set<REG>*>(dstRegs);
+    list<REG> regs = *static_cast<list<REG>*>(dstRegs);
     set<unsigned> toRemove;
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     bool checkSuperRegisterCoverage = false;
-    set<REG> singleByteRegs;
+    list<REG> singleByteRegs;
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
         if(registerFile.getByteSize(*iter) == 1){
             checkSuperRegisterCoverage = true;
-            singleByteRegs.insert(*iter);
+            singleByteRegs.push_back(*iter);
         }
         unsigned shadowReg = registerFile.getShadowRegister(*iter);
         toRemove.insert(shadowReg);
@@ -1966,7 +1965,7 @@ VOID checkSourceRegisters(VOID* srcRegs){
 
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     set<MemoryAccess> alreadyInserted;
-    set<REG> regs = *static_cast<set<REG>*>(srcRegs);
+    list<REG> regs = *static_cast<list<REG>*>(srcRegs);
     set<unsigned> toCheck;
 
     for(auto iter = regs.begin(); iter != regs.end(); ++iter){
@@ -2024,8 +2023,8 @@ VOID propagateRegisterStatus(UINT32 opcodeArg, VOID* srcRegsPtr, VOID* dstRegsPt
     if(!entryPointExecuted || pendingUninitializedReads.size() == 0 || srcRegsPtr == NULL || dstRegsPtr == NULL)
         return;
 
-    set<REG>* srcRegs = static_cast<set<REG>*>(srcRegsPtr);
-    set<REG>* dstRegs = static_cast<set<REG>*>(dstRegsPtr);
+    list<REG>* srcRegs = static_cast<list<REG>*>(srcRegsPtr);
+    list<REG>* dstRegs = static_cast<list<REG>*>(dstRegsPtr);
     OPCODE opcode = static_cast<OPCODE>(opcodeArg);
 
     InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
@@ -2172,7 +2171,7 @@ VOID OnThreadStart(THREADID tid, CONTEXT* ctxt, INT32 flags, VOID* v){
 /*
 Return true if the xor instruction is a zeroing xor, i.e. an instruction of type "xor rdi, rdi"
 */
-bool isZeroingXor(INS ins, OPCODE opcode, set<REG>* dstRegs, set<REG>* srcRegs){
+bool isZeroingXor(INS ins, OPCODE opcode, list<REG>* dstRegs, list<REG>* srcRegs){
     if(srcRegs == NULL || dstRegs == NULL)
         return false;
 
@@ -2182,7 +2181,7 @@ bool isZeroingXor(INS ins, OPCODE opcode, set<REG>* dstRegs, set<REG>* srcRegs){
     */
     size_t readRegisters = dstRegs->size() + srcRegs->size();
 
-    if(opcode != XED_ICLASS_XOR || readRegisters != 2)
+    if(opcode != XED_ICLASS_XOR || readRegisters <= 2)
         return false;
 
     REG firstOperand = *(srcRegs->begin());
@@ -2268,9 +2267,9 @@ VOID Instruction(INS ins, VOID* v){
     UINT32 operandCount = INS_OperandCount(ins);
     UINT32 memoperands = INS_MemoryOperandCount(ins);
     UINT32 readRegisters = INS_MaxNumRRegs(ins);
-    set<REG>* srcRegs = NULL;
-    set<REG>* explicitSrcRegs = NULL;
-    set<REG>* dstRegs = NULL;
+    list<REG>* srcRegs = NULL;
+    list<REG>* explicitSrcRegs = NULL;
+    list<REG>* dstRegs = NULL;
     REG repCountRegister = INS_RepCountRegister(ins);   
 
 
@@ -2291,19 +2290,19 @@ VOID Instruction(INS ins, VOID* v){
             // If the register is explicitly written, add it to the destination registers set
             if(INS_RegWContain(ins, reg)){
                 if(dstRegs == NULL){
-                    dstRegs = new set<REG>();
+                    dstRegs = new list<REG>();
                     regsPtrs.push_back(dstRegs);
                 }
-                dstRegs->insert(reg);
+                dstRegs->push_back(reg);
             }
 
             // If the register is explicitly read, add it to the explicit source registers set
             if(INS_RegRContain(ins, reg)){
                 if(explicitSrcRegs == NULL){
-                    explicitSrcRegs = new set<REG>();
+                    explicitSrcRegs = new list<REG>();
                     regsPtrs.push_back(explicitSrcRegs);
                 }
-                explicitSrcRegs->insert(reg);
+                explicitSrcRegs->push_back(reg);
             }
         }
     }
@@ -2327,10 +2326,10 @@ VOID Instruction(INS ins, VOID* v){
             REG src = INS_RegR(ins, regop);
             if(!REG_is_flags(src)){
                 if(srcRegs == NULL){
-                    srcRegs = new set<REG>();
+                    srcRegs = new list<REG>();
                     regsPtrs.push_back(srcRegs);
                 }
-                srcRegs->insert(src);
+                srcRegs->push_back(src);
             }
         }
     }

@@ -1,4 +1,4 @@
-#include <set>
+#include <list>
 #include <sstream>
 #include "pin.H"
 #include "ShadowRegisterFile.h"
@@ -6,18 +6,18 @@
 #ifndef ANALYSISARGS
 #define ANALYSISARGS
 
-using std::set;
+using std::list;
 
 class AnalysisArgs{
     private:
-        set<REG>* regs;
+        list<REG>* regs;
         ADDRINT addr;
         UINT32 size;
 
     public:
-        AnalysisArgs(set<REG>* regs, ADDRINT addr, UINT32 size);
+        AnalysisArgs(list<REG>* regs, ADDRINT addr, UINT32 size);
 
-        set<REG>* getRegs() const;
+        list<REG>* getRegs() const;
         ADDRINT getAddr() const ;
         UINT32 getSize() const;
         bool operator<(const AnalysisArgs& other) const;

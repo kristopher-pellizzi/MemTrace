@@ -18,7 +18,7 @@ class MemInstructionEmulator{
 
     public:
         virtual ~MemInstructionEmulator();
-        virtual void operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs) = 0;
+        virtual void operator() (MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs) = 0;
 };
 
 #endif //MEMINSTRUCTIONEMULATOR

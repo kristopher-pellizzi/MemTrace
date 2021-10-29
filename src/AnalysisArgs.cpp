@@ -1,13 +1,13 @@
 #include "AnalysisArgs.h"
 
-AnalysisArgs::AnalysisArgs(set<REG>* regs, ADDRINT addr, UINT32 size) :
+AnalysisArgs::AnalysisArgs(list<REG>* regs, ADDRINT addr, UINT32 size) :
     regs(regs), 
     addr(addr), 
     size(size)
 {}
 
 
-set<REG>* AnalysisArgs::getRegs() const{
+list<REG>* AnalysisArgs::getRegs() const{
     return regs;
 }
 

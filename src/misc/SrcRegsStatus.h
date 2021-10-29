@@ -1,9 +1,9 @@
-#include <set>
+#include <list>
 #include "pin.H"
 #include "../ShadowRegisterFile.h"
 
 using std::pair;
-using std::set;
+using std::list;
 
 #ifndef REGSSTATUS
 #define REGSSTATUS
@@ -25,6 +25,6 @@ class RegsStatus{
         bool isAllInitialized();
 };
 
-RegsStatus getSrcRegsStatus(set<REG>* srcRegs);
+RegsStatus getSrcRegsStatus(list<REG>* srcRegs);
 
 #endif //REGSSTATUS

@@ -3,7 +3,7 @@
 /*
     Since the sign extension completely initialized the dst register, there's no need to call |propagatePendingReads|
 */
-void ConvertInstruction::operator()(OPCODE opcode, set<REG>* srcRegs, set<REG>* dstRegs){
+void ConvertInstruction::operator()(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
 
     // This kind of instruction has only 1 dst register, which can be either DX, EDX or RDX, according to the size of 
