@@ -27,6 +27,9 @@ InstructionHandler::~InstructionHandler(){
 
     // Delete emulator for XSAVE/XSAVEC/XSAVEOPT/XSAVES/FXSAVE
     delete(memEmulators[XED_ICLASS_XSAVE]);
+
+    // Delete emulator for XRSTOR/XRSTORS/FXRSTOR
+    delete(memEmulators[XED_ICLASS_XRSTOR]);
 }
 
 void InstructionHandler::init(){
@@ -77,6 +80,14 @@ void InstructionHandler::init(){
     memEmulators[XED_ICLASS_XSAVEOPT64] = xsaveEmulator;
     memEmulators[XED_ICLASS_FXSAVE] = xsaveEmulator;
     memEmulators[XED_ICLASS_FXSAVE64] = xsaveEmulator;
+
+    MemInstructionEmulator* xrstorEmulator = new XrstorInstruction();
+    memEmulators[XED_ICLASS_XRSTOR] = xrstorEmulator;
+    memEmulators[XED_ICLASS_XRSTOR64] = xrstorEmulator;
+    memEmulators[XED_ICLASS_XRSTORS] = xrstorEmulator;
+    memEmulators[XED_ICLASS_XRSTORS64] = xrstorEmulator;
+    memEmulators[XED_ICLASS_FXRSTOR] = xrstorEmulator;
+    memEmulators[XED_ICLASS_FXRSTOR64] = xrstorEmulator;
 
 }
 
