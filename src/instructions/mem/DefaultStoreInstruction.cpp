@@ -27,6 +27,7 @@ void DefaultStoreInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_MOVQ);
     verifiedInstructions.insert(XED_ICLASS_VMOVD);
     verifiedInstructions.insert(XED_ICLASS_VMOVQ);
+    verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
 }
 
 void  DefaultStoreInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){

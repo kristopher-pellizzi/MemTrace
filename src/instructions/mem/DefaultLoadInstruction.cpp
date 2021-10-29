@@ -29,6 +29,7 @@ void DefaultLoadInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_MOVZX);
     verifiedInstructions.insert(XED_ICLASS_MOVSX);
     verifiedInstructions.insert(XED_ICLASS_MOVSXD);
+    verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
 }
 
 void  DefaultLoadInstruction::operator() (MemoryAccess& ma, set<REG>* srcRegs, set<REG>* dstRegs){
