@@ -529,6 +529,7 @@ void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma){
         }
 
         unsigned previousRegSize = 0;
+        ADDRINT maHighAddr = addr + ma.getSize() - 1;
         for(auto subRegsIter = toCheck.begin(); subRegsIter != toCheck.end(); ++subRegsIter){
             if(!registerFile.isUninitialized((SHDW_REG) *subRegsIter)){
                 continue;
@@ -538,6 +539,10 @@ void storePendingReads(set<REG>* srcRegs, MemoryAccess& ma){
             bool isHighByte = registerFile.isHighByteReg((SHDW_REG) *subRegsIter);
             ADDRINT start = isHighByte ? addr + 1 : addr + previousRegSize;
             ADDRINT end = isHighByte ? addr + 1 : addr + regByteSize - 1;
+            // In case the register size is higher than the written memory, the range should not go beyond the written memory location.
+            // Adjust the end point of the range in order to avoid writing something else
+            if(end > maHighAddr)
+                end = maHighAddr;
             // If we are writing only 1 byte to memory and it comes from a high byte register, fix start and end point 
             // of the memory range
             if(isHighByte && ma.getSize() == 1){
