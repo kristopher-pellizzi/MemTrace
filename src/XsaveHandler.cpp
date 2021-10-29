@@ -162,12 +162,12 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
         ADDRINT storeAddr = 0;
         UINT32 storeSize = 16;
 
-        for(unsigned i = 0; i < 8; ++i, storeAddr += 16){
+        for(unsigned i = 0; i < 8; ++i, storeAddr += storeSize){
             REG reg = x87Regs[i];
             if(registerFile.isUninitialized(reg)){
                 if(!infoAlreadyInitialized){
                     XsaveComponent X87Info = getComponentInfo(X87CompNum);
-                    storeAddr = addr + X87Info.offset;
+                    storeAddr = addr + X87Info.offset + storeSize * i;
                     infoAlreadyInitialized = true;
                 }
 
@@ -186,12 +186,12 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
         ADDRINT storeAddr = 0;
         UINT32 storeSize = 16;
 
-        for(unsigned i = 0; i < regsNum; ++i, storeAddr += 16){
+        for(unsigned i = 0; i < regsNum; ++i, storeAddr += storeSize){
             REG reg = xmmRegs[i];
             if(registerFile.isUninitialized(reg)){
                 if(!infoAlreadyInitialized){
                     XsaveComponent XMMInfo = getComponentInfo(XMMCompNum);
-                    storeAddr = addr + XMMInfo.offset;
+                    storeAddr = addr + XMMInfo.offset + storeSize * i;
                     infoAlreadyInitialized = true;
                 }
 
@@ -216,12 +216,12 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
         // by storing XMM registers
         UINT32 storeSize = 16;
 
-        for(unsigned i = 0; i < regsNum; ++i, storeAddr += 16){
+        for(unsigned i = 0; i < regsNum; ++i, storeAddr += storeSize){
             REG reg = ymmRegs[i];
             if(registerFile.isUninitialized(reg)){
                 if(!infoAlreadyInitialized){
                     XsaveComponent YMMInfo = getComponentInfo(YMMCompNum);
-                    storeAddr = addr + YMMInfo.offset;
+                    storeAddr = addr + YMMInfo.offset + storeSize * i;
                     infoAlreadyInitialized = true;
                 }
 
@@ -239,12 +239,12 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
         ADDRINT storeAddr = 0;
         UINT32 storeSize = 32;
 
-        for(unsigned i = 0; i < regsNum; ++i, storeAddr += 32){
+        for(unsigned i = 0; i < regsNum; ++i, storeAddr += storeSize){
             REG reg = zmmRegs[i];
             if(registerFile.isUninitialized(reg)){
                 if(!infoAlreadyInitialized){
                     XsaveComponent ZMMHighInfo = getComponentInfo(ZMMHighCompNum);
-                    storeAddr = addr + ZMMHighInfo.offset;
+                    storeAddr = addr + ZMMHighInfo.offset + storeSize * i;
                     infoAlreadyInitialized = true;
                 }
 
@@ -263,12 +263,12 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
         ADDRINT storeAddr = 0;
         UINT32 storeSize = 64;
 
-        for(unsigned i = regsNum; i < ZmmMaxNum; ++i, storeAddr += 64){
+        for(unsigned i = regsNum; i < ZmmMaxNum; ++i, storeAddr += storeSize){
             REG reg = zmmRegs[i];
             if(registerFile.isUninitialized(reg)){
                 if(!infoAlreadyInitialized){
                     XsaveComponent ZMMFullInfo = getComponentInfo(ZMMFullCompNum);
-                    storeAddr = addr + ZMMFullInfo.offset;
+                    storeAddr = addr + ZMMFullInfo.offset + storeSize * i;
                     infoAlreadyInitialized = true;
                 }
 
@@ -287,12 +287,12 @@ set<AnalysisArgs> XsaveHandler::getXsaveAnalysisArgs(uint32_t eaxContent, OPCODE
         ADDRINT storeAddr = 0;
         UINT32 storeSize = 8;
 
-        for(unsigned i = 0; i < 8; ++i, storeAddr +=8){
+        for(unsigned i = 0; i < 8; ++i, storeAddr += storeSize){
             REG reg = kRegs[i];
             if(registerFile.isUninitialized(reg)){
                 if(!infoAlreadyInitialized){
                     XsaveComponent KregsInfo = getComponentInfo(KregsCompNum);
-                    storeAddr = addr + KregsInfo.offset;
+                    storeAddr = addr + KregsInfo.offset + storeSize * i;
                     infoAlreadyInitialized = true;
                 }
 
