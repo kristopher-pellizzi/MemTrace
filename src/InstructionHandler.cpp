@@ -142,6 +142,7 @@ void InstructionHandler::handle(OPCODE op, list<REG>* srcRegs, list<REG>* dstReg
 void InstructionHandler::handle(list<REG>* initializedRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     registerFile.setAsInitialized(initializedRegs);
+    updatePendingReads(initializedRegs);
 }
 
 void InstructionHandler::handle(const AccessIndex& ai){
