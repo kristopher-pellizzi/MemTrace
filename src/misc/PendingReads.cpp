@@ -86,12 +86,15 @@ namespace{
     };
 }
 
+
 static void addPendingRead(set<unsigned>& shdw_regs, set<tag_t>& accessSet){
     set<unsigned> toAdd;
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
+    TagManager& tagManager = TagManager::getInstance();
 
     for(auto iter = shdw_regs.begin(); iter != shdw_regs.end(); ++iter){
         toAdd.insert(*iter);
+ 
         SHDW_REG shdw_iter = (SHDW_REG) *iter;
         unsigned byteSize = registerFile.getByteSize(shdw_iter);
         set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(shdw_iter);
@@ -104,28 +107,19 @@ static void addPendingRead(set<unsigned>& shdw_regs, set<tag_t>& accessSet){
         }
     }
 
-    TagManager& tagManager = TagManager::getInstance();
     for(auto iter = toAdd.begin(); iter != toAdd.end(); ++iter){
-
         /*
-            In this case, we must replace the possible accesses stored for a register with a new set.
-            Indeed, since this function is called by iterating on registers sorted decreasingly according to
-            their size in bytes, if we are propagating access sets to any sub-register, we must replace its access set
-            with the access set stored for the corresponding src sub-register, which may be differente from the access 
-            set of the parent register.
-            In any case, if there are already some accesses stored, we must decrese their reference count, as they are going
-            to be deleted.
+            If dst register still has some pending read associated, we need to keep them
+            in the access set to propagate
         */
-        auto readIter = pendingUninitializedReads.find(*iter);
-        if(readIter != pendingUninitializedReads.end()){
-            #ifdef DEBUG
-            std::cerr << "Overwriting " << registerFile.getName((SHDW_REG)*iter) << std::endl;
-            #endif
-            set<tag_t>& tags = readIter->second;
-            tagManager.decreaseRefCount(tags);
+        auto findIter = pendingUninitializedReads.find(*iter);
+        if(findIter != pendingUninitializedReads.end()){
+            pendingUninitializedReads[*iter].insert(accessSet.begin(), accessSet.end());
+        }
+        else{
+            pendingUninitializedReads[*iter] = accessSet;
         }
 
-        pendingUninitializedReads[*iter] = accessSet;
         tagManager.increaseRefCount(accessSet);
     }
 }
@@ -183,6 +177,13 @@ void propagatePendingReads(list<REG>* srcRegs, list<REG>* dstRegs){
             SHDW_REG shdw_iter = (SHDW_REG) *iter;
             set<tag_t>& pendingReadSet = pendingReadIter->second;
             set<unsigned> correspondingRegisters = registerFile.getCorrespondingRegisters(shdw_iter, dstRegs);
+            TagManager& tagManager = TagManager::getInstance();
+
+            for(auto corrIter = correspondingRegisters.begin(); corrIter != correspondingRegisters.end(); ++corrIter){
+                set<tag_t>& corrTags = pendingUninitializedReads[*corrIter];
+                tagManager.decreaseRefCount(corrTags);
+                pendingUninitializedReads.erase(*corrIter);
+            }
 
             addPendingRead(correspondingRegisters, pendingReadSet);
         }
