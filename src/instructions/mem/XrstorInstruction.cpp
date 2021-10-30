@@ -37,4 +37,8 @@ void XrstorInstruction::operator()(MemoryAccess& ma, list<REG>* srcRegs, list<RE
     registerFile.setAsInitialized(dstReg, dstStatus);
 
     addPendingRead(dstRegs, ma);
+
+    free(srcStatus);
+    free(regStatus);
+    free(dstStatus);
 }
