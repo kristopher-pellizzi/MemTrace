@@ -153,9 +153,6 @@ void propagatePendingReads(list<REG>* srcRegs, list<REG>* dstRegs){
                     // is different from the access set of the src register
                     addPendingRead(correspondingRegisters, aliasPendingReadSet);
                 }
-                else{
-                    addPendingRead(correspondingRegisters, pendingReadSet);
-                }
             }
         }
     }
