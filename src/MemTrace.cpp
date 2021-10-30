@@ -35,6 +35,7 @@
 #include "InstructionHandler.h"
 #include "misc/PendingReads.h"
 #include "misc/SetOps.h"
+#include "misc/DstRegsChecker.h"
 #include "misc/InstructionClassification.h"
 #include "TagManager.h"
 #include "PendingDirectMemoryCopy.h"

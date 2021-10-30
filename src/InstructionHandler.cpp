@@ -1,6 +1,7 @@
 #include "InstructionHandler.h"
 #include "MemoryAccess.h"
 #include "misc/PendingReads.h"
+#include "misc/DstRegsChecker.h"
 
 InstructionHandler::InstructionHandler(){
     init();
