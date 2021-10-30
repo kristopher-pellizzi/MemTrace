@@ -89,25 +89,9 @@ namespace{
 
 static void addPendingRead(set<unsigned>& shdw_regs, set<tag_t>& accessSet){
     set<unsigned> toAdd;
-    ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     TagManager& tagManager = TagManager::getInstance();
 
     for(auto iter = shdw_regs.begin(); iter != shdw_regs.end(); ++iter){
-        toAdd.insert(*iter);
- 
-        SHDW_REG shdw_iter = (SHDW_REG) *iter;
-        unsigned byteSize = registerFile.getByteSize(shdw_iter);
-        set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(shdw_iter);
-        
-        for(auto aliasIter = aliasingRegisters.begin(); aliasIter != aliasingRegisters.end(); ++aliasIter){
-            SHDW_REG shdw_alias = (SHDW_REG) *aliasIter;
-            if(registerFile.getByteSize(shdw_alias) < byteSize){
-                toAdd.insert(*aliasIter);
-            }
-        }
-    }
-
-    for(auto iter = toAdd.begin(); iter != toAdd.end(); ++iter){
         /*
             If dst register still has some pending read associated, we need to keep them
             in the access set to propagate
@@ -150,42 +134,29 @@ void propagatePendingReads(list<REG>* srcRegs, list<REG>* dstRegs){
             addPendingRead(correspondingRegisters, pendingReadSet);
         }
 
+        /*
+            For each sub-register of the src registers, if it has any associated pending read, propagate them to the 
+            corresponding registers of the dst registers; otherwise, just propagate the tag set from the original src register
+        */
         set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
         for(auto aliasIter = aliasingRegisters.begin(); aliasIter != aliasingRegisters.end(); ++aliasIter){
             SHDW_REG aliasShdwReg = (SHDW_REG) *aliasIter;
 
             // If the alias register is a sub-register
             if(registerFile.getByteSize(aliasShdwReg) < byteSize){
+                set<unsigned> correspondingRegisters = registerFile.getCorrespondingRegisters((SHDW_REG) *aliasIter, dstRegs);
                 pendingReadIter = pendingUninitializedReads.find(*aliasIter);
                 // If it has an associated pending uninitialized read (it should have, this is simply to avoid run-time errors)
                 if(pendingReadIter != pendingUninitializedReads.end()){
                     set<tag_t>& aliasPendingReadSet = pendingReadIter->second;
                     // Add to the set of registers still to be propagated only those sub-registers whose associated access set
                     // is different from the access set of the src register
-                    if(aliasPendingReadSet != pendingReadSet){
-                        toPropagate.insert(*aliasIter);
-                    }
+                    addPendingRead(correspondingRegisters, aliasPendingReadSet);
+                }
+                else{
+                    addPendingRead(correspondingRegisters, pendingReadSet);
                 }
             }
-        }
-    }
-
-    // We must propagate changes done to sub-registers of src, if any
-    for(auto iter = toPropagate.begin(); iter != toPropagate.end(); ++iter){
-        auto pendingReadIter = pendingUninitializedReads.find(*iter);
-        if(pendingReadIter != pendingUninitializedReads.end()){
-            SHDW_REG shdw_iter = (SHDW_REG) *iter;
-            set<tag_t>& pendingReadSet = pendingReadIter->second;
-            set<unsigned> correspondingRegisters = registerFile.getCorrespondingRegisters(shdw_iter, dstRegs);
-            TagManager& tagManager = TagManager::getInstance();
-
-            for(auto corrIter = correspondingRegisters.begin(); corrIter != correspondingRegisters.end(); ++corrIter){
-                set<tag_t>& corrTags = pendingUninitializedReads[*corrIter];
-                tagManager.decreaseRefCount(corrTags);
-                pendingUninitializedReads.erase(*corrIter);
-            }
-
-            addPendingRead(correspondingRegisters, pendingReadSet);
         }
     }
 }
