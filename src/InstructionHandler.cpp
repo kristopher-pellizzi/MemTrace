@@ -89,6 +89,10 @@ void InstructionHandler::init(){
     memEmulators[XED_ICLASS_FXRSTOR] = xrstorEmulator;
     memEmulators[XED_ICLASS_FXRSTOR64] = xrstorEmulator;
 
+    RegInstructionEmulator* movsd_xmmEmulator = new MovsdInstruction();
+    regEmulators[XED_ICLASS_MOVSD_XMM] = movsd_xmmEmulator;
+    checkDestSize[XED_ICLASS_MOVSD_XMM] = 64;
+
 }
 
 InstructionHandler& InstructionHandler::getInstance(){
@@ -137,7 +141,6 @@ void InstructionHandler::handle(OPCODE op, list<REG>* srcRegs, list<REG>* dstReg
 void InstructionHandler::handle(list<REG>* initializedRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
     registerFile.setAsInitialized(initializedRegs);
-    updatePendingReads(initializedRegs);
 }
 
 void InstructionHandler::handle(const AccessIndex& ai){
