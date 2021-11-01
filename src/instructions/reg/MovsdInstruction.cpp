@@ -21,7 +21,14 @@ void MovsdInstruction::operator()(OPCODE opcode, list<REG>* srcRegs, list<REG>* 
     */
     *dstPtr = *srcPtr;
 
-    registerFile.setAsInitialized(dstReg, dstStatus);
+    /*
+        We are sure dstReg is a Hybrid Register which should behave as a NORMAL shadow register (i.e. do not overwrite super-registers).
+        However, ShadowRegisterFile only exposes a method to select the behavior according to the opcode.
+    */
+    registerFile.setAsInitialized(dstReg, opcode, dstStatus);
 
     propagatePendingReads(srcRegs, dstRegs);
+
+    free(srcStatus);
+    free(dstStatus);
 }
