@@ -296,7 +296,46 @@ class ShadowRegisterFile{ // Singleton
         string& getName(SHDW_REG reg);
         void setAsInitialized(REG pin_reg, uint8_t* data);
         void setAsInitialized(REG pin_reg);
-        void setAsInitialized(list<REG>* regs);
+        /*
+            Overload method used to completely set as initialized a register.
+            This method differs from |setAsInitialized| because when |pin_reg| is an hybrid register,
+            it uses |opcode| to decide how to handle the register.
+        */
+        void setAsInitialized(REG pin_reg, OPCODE opcode);
+
+        /*
+            Overload method used to completely set as initialized a register.
+            This method differs from |setAsInitialized| because when |pin_reg| is an hybrid register,
+            it uses |opcode| to decide how to handle the register.
+        */
+        void setAsInitialized(REG pin_reg, OPCODE opcode, uint8_t* data);
+
+        /*
+            Sets bits belonging to the register passed as parameter as initialized.
+            This method differs from |setAsInitialized| as it ignores any possible additional behavior.
+            E.g. |setAsInitialized| called on EAX, also sets RAX as initialized, because of how the processor manages
+            those registers.
+            |setBitsAsInitialized|, instead, will initialize only bits belonging to EAX, leaving those belonging to RAX untouched
+        */
+        void setBitsAsInitialized(REG pin_reg);
+
+        /*
+            Sets bits belonging to the register passed as parameter as initialized.
+            This method differs from |setAsInitialized| as it ignores any possible additional behavior.
+            E.g. |setAsInitialized| called on EAX, also sets RAX as initialized, because of how the processor manages
+            those registers.
+            |setBitsAsInitialized|, instead, will initialize only bits belonging to EAX, leaving those belonging to RAX untouched
+        */
+        void setBitsAsInitialized(REG pin_reg, uint8_t* data);
+
+        /*
+            Sets bits belonging to the register passed as parameter as initialized.
+            This method differs from |setAsInitialized| as it ignores any possible additional behavior.
+            E.g. |setAsInitialized| called on EAX, also sets RAX as initialized, because of how the processor manages
+            those registers.
+            |setBitsAsInitialized|, instead, will initialize only bits belonging to EAX, leaving those belonging to RAX untouched
+        */
+        void setBitsAsInitialized(list<REG>* regs);
         uint8_t* getContentStatus(REG pin_reg);
         uint8_t* getContentStatus(SHDW_REG reg);
         unsigned getShadowSize(REG pin_reg);

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include "ShadowRegisterFile.h"
+#include "misc/InstructionClassification.h"
 
 
 /*
@@ -81,7 +82,12 @@ ShadowRegister* ShadowRegisterFile::getNewShadowSubRegister(const char* name, un
         haveHighByte.insert(idx);
     }
     else if(isOverwritingReg){
-        ret = new ShadowOverwritingSubRegister(name, size, contentPtr, parentRegister->getContentPtr());
+        if(idx >= SHDW_REG_XMM0 && idx <= SHDW_REG_XMM31){
+            ret = new ShadowHybridRegister(name, size, contentPtr, parentRegister->getContentPtr());
+        }
+        else{
+            ret = new ShadowOverwritingSubRegister(name, size, contentPtr, parentRegister->getContentPtr());
+        }
     }
     else{
         ret = new ShadowRegister(name, size, contentPtr);
@@ -266,9 +272,75 @@ void ShadowRegisterFile::setAsInitialized(REG pin_reg){
 
 
 
-void ShadowRegisterFile::setAsInitialized(list<REG>* regs){
+
+void ShadowRegisterFile::setAsInitialized(REG pin_reg, OPCODE opcode){
+    SHDW_REG shadow_reg = convertPinReg(pin_reg);
+
+    if(shadow_reg == (SHDW_REG) -1)
+        return;
+
+    // This can't be an hybrid register => just use the method's version which does not use 
+    // the OPCODE parameter
+    if(shadow_reg < SHDW_REG_XMM0 || shadow_reg > SHDW_REG_XMM31){
+        return setAsInitialized(pin_reg);
+    }
+
+    ShadowHybridRegister* reg = (ShadowHybridRegister*) shadowRegisters[shadow_reg];
+    ShadowHybridRegister::BehaviorSelector selector;
+
+    if(isSSEInstruction(opcode))
+        selector = ShadowHybridRegister::BehaviorSelector::NORMAL;
+    else
+        selector = ShadowHybridRegister::BehaviorSelector::OVERWRITING;
+
+    reg->setAsInitialized(selector);
+}
+
+void ShadowRegisterFile::setAsInitialized(REG pin_reg, OPCODE opcode, uint8_t* data){
+    SHDW_REG shadow_reg = convertPinReg(pin_reg);
+
+    if(shadow_reg == (SHDW_REG) -1)
+        return;
+
+    if(shadow_reg < SHDW_REG_XMM0 || shadow_reg > SHDW_REG_XMM31){
+        return setAsInitialized(pin_reg, data);
+    }
+
+    ShadowHybridRegister* reg = (ShadowHybridRegister*) shadowRegisters[shadow_reg];
+    ShadowHybridRegister::BehaviorSelector selector;
+
+    if(isSSEInstruction(opcode))
+        selector = ShadowHybridRegister::BehaviorSelector::NORMAL;
+    else
+        selector = ShadowHybridRegister::BehaviorSelector::OVERWRITING;
+
+    reg->setAsInitialized(data, selector);
+}
+
+
+void ShadowRegisterFile::setBitsAsInitialized(REG pin_reg){
+    SHDW_REG shadow_reg = convertPinReg(pin_reg);
+
+    if(shadow_reg == (SHDW_REG) - 1)
+        return;
+
+    shadowRegisters[shadow_reg]->ShadowRegister::setAsInitialized();
+}
+
+
+void ShadowRegisterFile::setBitsAsInitialized(REG pin_reg, uint8_t* data){
+    SHDW_REG shadow_reg = convertPinReg(pin_reg);
+
+    if(shadow_reg == (SHDW_REG) -1)
+        return;
+
+    shadowRegisters[shadow_reg]->ShadowRegister::setAsInitialized(data);
+}
+
+
+void ShadowRegisterFile::setBitsAsInitialized(list<REG>* regs){
     for(auto iter = regs->begin(); iter != regs->end(); ++iter){
-        setAsInitialized(*iter);
+        setBitsAsInitialized(*iter);
     }
 }
 
