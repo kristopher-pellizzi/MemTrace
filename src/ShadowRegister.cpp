@@ -175,3 +175,22 @@ bool ShadowHighByteSubRegister::isUninitialized(){
 bool ShadowHighByteSubRegister::isHighByte(){
     return true;
 }
+
+
+void ShadowHybridRegister::setAsInitialized(BehaviorSelector selector){
+    uint8_t* data = getFullyInitializedData();
+
+    setAsInitialized(data, selector);
+}
+
+
+void ShadowHybridRegister::setAsInitialized(uint8_t* data, BehaviorSelector selector){
+    if(selector == BehaviorSelector::NORMAL){
+        ShadowRegister* reg = this;
+        reg->setAsInitialized(data);
+    }
+    else{
+        ShadowOverwritingSubRegister* reg = this;
+        reg->setAsInitialized(data);
+    }
+}

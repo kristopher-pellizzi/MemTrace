@@ -75,4 +75,28 @@ class ShadowHighByteSubRegister : public ShadowRegister{
         bool isHighByte() override;
 };
 
+
+/*
+    This is a class representing a register which could be either a normal shadow register or an overwriting shadow register
+    according to the instruction that is executed.
+    This happens with XMM registers:
+        [*] If the instruction being executed is from any SSE extension, then they behave as a normal register
+        [*] otherwise, they behave like an overwriting register, thus overwriting also their super-registers
+*/
+class ShadowHybridRegister : public ShadowOverwritingSubRegister{
+    public:
+
+        enum class BehaviorSelector{
+            NORMAL,
+            OVERWRITING
+        };
+
+        ShadowHybridRegister(const char* name, unsigned size, uint8_t* content, uint8_t* superRegisterContent) :
+            ShadowOverwritingSubRegister(name, size, content, superRegisterContent)
+        {}
+
+        void setAsInitialized(BehaviorSelector selector);
+        void setAsInitialized(uint8_t* data, BehaviorSelector selector);
+};
+
 #endif //SHDWREGISTER
