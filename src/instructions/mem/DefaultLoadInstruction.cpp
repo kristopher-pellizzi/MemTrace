@@ -30,6 +30,9 @@ void DefaultLoadInstruction::initVerifiedInstructions(){
     verifiedInstructions.insert(XED_ICLASS_MOVSX);
     verifiedInstructions.insert(XED_ICLASS_MOVSXD);
     verifiedInstructions.insert(XED_ICLASS_MOVSD_XMM);
+    verifiedInstructions.insert(XED_ICLASS_VMOVSD);
+    verifiedInstructions.insert(XED_ICLASS_MOVSS);
+    verifiedInstructions.insert(XED_ICLASS_VMOVSS);
 }
 
 void  DefaultLoadInstruction::operator() (MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
@@ -161,12 +164,12 @@ void  DefaultLoadInstruction::operator() (MemoryAccess& ma, list<REG>* srcRegs, 
 
             uint8_t* expandedData = expandData(regData, ma, shadowSize, regByteSize, regShadowSize);
             curr_data = expandedData;
-            ShadowRegisterFile::getInstance().setAsInitialized(*iter, curr_data);
+            ShadowRegisterFile::getInstance().setAsInitialized(*iter, ma.getOpcode(), curr_data);
             free(expandedData);
             continue;
         }
 
-        ShadowRegisterFile::getInstance().setAsInitialized(*iter, curr_data);
+        ShadowRegisterFile::getInstance().setAsInitialized(*iter, ma.getOpcode(), curr_data);
     }
     warningOpcodes.close();
     free(regData);
