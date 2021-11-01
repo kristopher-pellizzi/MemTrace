@@ -31,6 +31,18 @@ InstructionHandler::~InstructionHandler(){
 
     // Delete emulator for XRSTOR/XRSTORS/FXRSTOR
     delete(memEmulators[XED_ICLASS_XRSTOR]);
+
+    // Delete emulator for MOVSD_XMM
+    delete(regEmulators[XED_ICLASS_MOVSD_XMM]);
+
+    // Delete emulator for VMOVSD
+    delete(regEmulators[XED_ICLASS_VMOVSD]);
+
+   // Delete emulator for MOVSS
+   delete(regEmulators[XED_ICLASS_MOVSS]);
+
+   // Delete emulator for VMOVSS
+   delete(regEmulators[XED_ICLASS_VMOVSS]); 
 }
 
 void InstructionHandler::init(){
@@ -94,6 +106,16 @@ void InstructionHandler::init(){
     regEmulators[XED_ICLASS_MOVSD_XMM] = movsd_xmmEmulator;
     checkDestSize[XED_ICLASS_MOVSD_XMM] = 64;
 
+    RegInstructionEmulator* vmovsdEmulator = new VmovsdInstruction();
+    regEmulators[XED_ICLASS_VMOVSD] = vmovsdEmulator;
+
+    RegInstructionEmulator* movssEmulator = new MovssInstruction();
+    regEmulators[XED_ICLASS_MOVSS] = movssEmulator;
+    checkDestSize[XED_ICLASS_MOVSS] = 32;
+
+    RegInstructionEmulator* vmovssEmulator = new VmovssInstruction();
+    regEmulators[XED_ICLASS_VMOVSS] = vmovssEmulator;
+
 }
 
 InstructionHandler& InstructionHandler::getInstance(){
@@ -141,7 +163,7 @@ void InstructionHandler::handle(OPCODE op, list<REG>* srcRegs, list<REG>* dstReg
 
 void InstructionHandler::handle(list<REG>* initializedRegs){
     ShadowRegisterFile& registerFile = ShadowRegisterFile::getInstance();
-    registerFile.setAsInitialized(initializedRegs);
+    registerFile.setBitsAsInitialized(initializedRegs);
     updatePendingReads(initializedRegs);
 }
 
