@@ -475,7 +475,7 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, list<
         storeMemoryAccess(ai, ma);
         if(dstRegs != NULL)
             // Since we are already reporting this uninitialized read, there's no need to continue propagate these uninitialized bytes
-            ShadowRegisterFile::getInstance().setAsInitialized(dstRegs);
+            ShadowRegisterFile::getInstance().setBitsAsInitialized(dstRegs);
     }
 }
 
@@ -1664,6 +1664,10 @@ VOID HandleXsave(INS ins){
 
 VOID Instruction(INS ins, VOID* v){
     OPCODE opcode = INS_Opcode(ins);
+    INT32 ext = INS_Extension(ins);
+    if(isSSEInstruction(ext)){
+        sseInstructions.insert(opcode);
+    }
 
     // Prefetch instruction is used to simply trigger memory areas in order to
     // move them to processor's cache. It does not affect program behaviour,
