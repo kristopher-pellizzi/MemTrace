@@ -1,5 +1,30 @@
 #include "InstructionClassification.h"
 
+set<OPCODE> sseInstructions;
+
+bool isSSEInstruction(INT32 extension){
+    switch(extension){
+        case XED_EXTENSION_SSE:
+        case XED_EXTENSION_SSE2:
+        case XED_EXTENSION_SSE3:
+        case XED_EXTENSION_SSE4:
+        case XED_EXTENSION_SSE4A:
+            return true;
+        
+        default:
+            return false;
+    }
+}
+
+bool isSSEInstruction(OPCODE opcode){
+    auto iter = sseInstructions.find(opcode);
+
+    if(iter != sseInstructions.end())
+        return true;
+    
+    return false;
+}
+
 /*
     We call an "auto mov" a mov instruction whose src and destination register is the same.
     This function is used to manage a very specific problem.
