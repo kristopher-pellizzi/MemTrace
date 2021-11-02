@@ -186,11 +186,9 @@ void ShadowHybridRegister::setAsInitialized(BehaviorSelector selector){
 
 void ShadowHybridRegister::setAsInitialized(uint8_t* data, BehaviorSelector selector){
     if(selector == BehaviorSelector::NORMAL){
-        ShadowRegister* reg = this;
-        reg->setAsInitialized(data);
+        ShadowRegister::setAsInitialized(data);
     }
     else{
-        ShadowOverwritingSubRegister* reg = this;
-        reg->setAsInitialized(data);
+        ShadowOverwritingSubRegister::setAsInitialized(data);
     }
 }
