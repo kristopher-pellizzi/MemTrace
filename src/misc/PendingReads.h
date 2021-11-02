@@ -54,4 +54,6 @@ set<range_t, IncreasingStartRangeSorter>& rangeDiff(set<range_t, IncreasingStart
 */
 set<range_t, IncreasingStartRangeSorter>& rangeIntersect(set<range_t, IncreasingStartRangeSorter>& ranges, set<range_t, IncreasingStartRangeSorter>& intersectSet);
 
+bool rangeOverlaps(const range_t& r, set<range_t, IncreasingStartRangeSorter>& ranges);
+
 #endif //PENDINGREADS

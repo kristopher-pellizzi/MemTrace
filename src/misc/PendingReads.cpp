@@ -619,6 +619,16 @@ set<range_t, IncreasingStartRangeSorter>& rangeDiff(set<range_t, IncreasingStart
     return ranges;
 }
 
+
+bool rangeOverlaps(const range_t& r, set<range_t, IncreasingStartRangeSorter>& ranges){
+    for(auto iter = ranges.begin(); iter != ranges.end(); ++iter){
+        if(r.first <= iter->second && r.second >= iter->first)
+            return true;
+    }
+
+    return false;
+}
+
 set<range_t, IncreasingStartRangeSorter>& rangeIntersect(set<range_t, IncreasingStartRangeSorter>& ranges, set<range_t, IncreasingStartRangeSorter>& intersectSet){
     set<range_t, IncreasingStartRangeSorter> ret;
 
