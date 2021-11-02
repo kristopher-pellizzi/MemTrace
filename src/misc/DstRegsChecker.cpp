@@ -9,7 +9,7 @@ static std::ostream* out = &std::cerr;
 map<OPCODE, unsigned> checkDestSize;
 
 
-VOID checkDestRegisters(list<REG>* dstRegs){
+VOID checkDestRegisters(list<REG>* dstRegs, OPCODE opcode){
     if(dstRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
@@ -29,7 +29,7 @@ VOID checkDestRegisters(list<REG>* dstRegs){
         // It's not a problem to tamper with destination register's content here,
         // because this function is called before |memtrace|, so the real status will be lately update.
         // Of course, this is valid only for destination registers. Other registers should not be modified.
-        registerFile.setAsInitialized(*iter);
+        registerFile.setAsInitialized(*iter, opcode);
 
         for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
             SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
@@ -156,7 +156,7 @@ VOID checkDestRegisters(list<REG>* dstRegs){
 }
 
 
-VOID checkDestRegisters(list<REG>* dstRegs, unsigned bits){
+VOID checkDestRegisters(list<REG>* dstRegs, OPCODE opcode, unsigned bits){
     if(dstRegs == NULL || pendingUninitializedReads.size() == 0)
         return;
 
@@ -174,7 +174,6 @@ VOID checkDestRegisters(list<REG>* dstRegs, unsigned bits){
             singleByteRegs.push_back(*iter);
         }
         unsigned shadowReg = registerFile.getShadowRegister(*iter);
-        toRemove.insert(shadowReg);
         set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
         uint8_t* regStatus = registerFile.getContentStatus(*iter);
         unsigned dstShadowSize = registerFile.getShadowSize(*iter);
@@ -200,10 +199,13 @@ VOID checkDestRegisters(list<REG>* dstRegs, unsigned bits){
         // It's not a problem to tamper with destination register's content here,
         // because this function is called before |memtrace|, so the real status will be lately update.
         // Of course, this is valid only for destination registers. Other registers should not be modified.
-        registerFile.setAsInitialized(*iter, dstStatus);
+        registerFile.setAsInitialized(*iter, opcode, dstStatus);
 
         free(dstStatus);
         free(regStatus);
+
+        if(!registerFile.isUninitialized((SHDW_REG) shadowReg))
+            toRemove.insert(shadowReg);
 
         for(auto aliasReg = aliasingRegisters.begin(); aliasReg != aliasingRegisters.end(); ++aliasReg){
             SHDW_REG shdw_reg = (SHDW_REG) *aliasReg;
