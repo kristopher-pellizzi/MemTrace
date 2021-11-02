@@ -985,8 +985,17 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 set<tag_t> tags;
                 set<range_t, IncreasingStartRangeSorter> ranges;
                 ranges.insert(memRange);
+                set<pair<unsigned, unsigned>> intervals = ma.computeIntervals();
+                set<range_t, IncreasingStartRangeSorter> uninitRanges;
+                for(auto iter = intervals.begin(); iter != intervals.end(); ++iter){
+                    uninitRanges.insert(range_t(addr + iter->first, addr + iter->second));
+                }
+                rangeIntersect(ranges, uninitRanges);
     
                 for(auto iter = pendingReads.begin(); iter != pendingReads.end(); ++iter){
+                    if(!rangeOverlaps(iter->first, ranges))
+                        continue;
+
                     set<tag_t>& iterTags = iter->second;
                     tags.insert(iterTags.begin(), iterTags.end());
                     rangeDiff(ranges, iter->first);
@@ -995,14 +1004,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 bool isLeftPending = false;
                 if(tags.size() > 0){
                     isLeftPending = storeOrLeavePending(opcode, dstRegs, tags);                    
-                }
-
-                set<pair<unsigned, unsigned>> intervals = ma.computeIntervals();
-                set<range_t, IncreasingStartRangeSorter> uninitRanges;
-                for(auto iter = intervals.begin(); iter != intervals.end(); ++iter){
-                    uninitRanges.insert(range_t(addr + iter->first, addr + iter->second));
-                }
-                rangeIntersect(ranges, uninitRanges);
+                } 
 
                 /*
                     The load is uninitialized only because a previous uninitialized read has been stored there.
