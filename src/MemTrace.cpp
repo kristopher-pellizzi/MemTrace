@@ -1364,10 +1364,10 @@ VOID checkDestRegistersAnalysis(UINT32 opcode_arg, VOID* dstRegsPtr){
     auto findIter = checkDestSize.find(opcode);
     if(findIter != checkDestSize.end()){
         unsigned bitSize = findIter->second;
-        checkDestRegisters(dstRegs, bitSize);
+        checkDestRegisters(dstRegs, opcode, bitSize);
     }
     else{
-        checkDestRegisters(dstRegs);
+        checkDestRegisters(dstRegs, opcode);
     }
 }
 
