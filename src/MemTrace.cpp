@@ -1413,7 +1413,6 @@ VOID checkSourceRegisters(VOID* srcRegs){
     }
 
     TagManager& tagManager = TagManager::getInstance();
-
     for(auto iter = toCheck.begin(); iter != toCheck.end(); ++iter){
 
         /*
@@ -1435,7 +1434,8 @@ VOID checkSourceRegisters(VOID* srcRegs){
                     alreadyInserted.insert(access.second);
                 }
             }
-            //pendingUninitializedReads.erase(readIter);
+            pendingUninitializedReads.erase(readIter);
+            registerFile.setBitsAsInitialized((SHDW_REG) *iter);
         }
     }
 }
@@ -1663,6 +1663,77 @@ VOID HandleXsave(INS ins){
     }
 }
 
+/*
+    Effective address computation:
+    Effective address = Displacement + BaseReg + IndexReg * Scale
+
+    So an instruction reads the stack top if these conditions hold simultaneously:
+    [*] Base register is the stack ptr
+    [*] There is no displacement from the base register
+    [*] There is no index register or there's the index register, but the scale is 0
+
+    The function checks if any of them does not hold, in which case returns false;
+    otherwise it returns true
+*/
+bool MemoryOperandReadsStackTop(INS ins, UINT32 memop){ 
+    if(
+        INS_OperandMemoryBaseReg(ins, memop) != REG_STACK_PTR ||
+        INS_OperandMemoryDisplacement(ins, memop) != 0 ||
+        (REG_valid(INS_OperandMemoryIndexReg(ins, memop)) && INS_OperandMemoryScale(ins, memop) != 0)
+    )
+        return false;
+
+    return true;
+}
+
+
+/*
+    Returns true if the instruction is of type
+    SUB rsp, {PAGE_SIZE}.
+
+    This functions checks:
+    [*] Opcode is SUB
+    [*] The only register operand is the stack pointer
+    [*] Immediate is PAGE_SIZE
+    [*] There are no operands which are not a register, nor an immediate
+
+    If any of the conditions above does not hold, the function returns false,
+    otherwise returns true.
+*/
+bool isStackPageSizeAlloc(INS ins){
+    OPCODE opcode = INS_Opcode(ins);
+    UINT32 operandCount = INS_OperandCount(ins);
+
+    /*
+        Stack allocations are performed by simply decrementing the stack pointer
+        through a SUB instruction
+    */
+    if(opcode != XED_ICLASS_SUB)
+        return false;
+
+    for(UINT32 i = 0; i < operandCount; ++i){
+        /*
+            If the operand is a register different from the stack pointer, it is not a
+            stack allocation
+        */
+        if(INS_OperandIsReg(ins, i)){
+            REG reg = INS_OperandReg(ins, i);
+            if(reg != REG_STACK_PTR)
+                return false;
+        }
+        else if(INS_OperandIsImmediate(ins, i)){
+            UINT64 immediate = INS_OperandImmediate(ins, i);
+            if(immediate != PAGE_SIZE)
+                return false;
+        }
+        else{
+            return false;
+        }
+    }           
+
+    return true;
+}
+
 
 VOID Instruction(INS ins, VOID* v){
     OPCODE opcode = INS_Opcode(ins);
@@ -1856,6 +1927,17 @@ VOID Instruction(INS ins, VOID* v){
         for(UINT32 memop = 0; memop < memoperands; memop++){ 
             // Read memory access
             if(INS_MemoryOperandIsRead(ins, memop)){
+                /*
+                    If this read access may be caused by the compiler mitigation against
+                    stack clash vulnerability, avoid analyzing it in order to remove all those 
+                    false positives
+                */
+                if(MemoryOperandReadsStackTop(ins, memop)){
+                    INS prevIns = INS_Prev(ins);
+                    if(isStackPageSizeAlloc(prevIns))
+                        return;
+                }
+
                 readMemOperands.insert(memop);
             }
 
