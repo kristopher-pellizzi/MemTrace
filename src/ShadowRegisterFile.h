@@ -318,6 +318,7 @@ class ShadowRegisterFile{ // Singleton
             |setBitsAsInitialized|, instead, will initialize only bits belonging to EAX, leaving those belonging to RAX untouched
         */
         void setBitsAsInitialized(REG pin_reg);
+        void setBitsAsInitialized(SHDW_REG reg);
 
         /*
             Sets bits belonging to the register passed as parameter as initialized.

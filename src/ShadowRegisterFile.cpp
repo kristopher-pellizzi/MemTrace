@@ -331,6 +331,17 @@ void ShadowRegisterFile::setBitsAsInitialized(REG pin_reg){
 }
 
 
+void ShadowRegisterFile::setBitsAsInitialized(SHDW_REG reg){
+    if(reg >= numRegisters)
+        return;
+
+    if(isHighByteReg(reg))
+        shadowRegisters[reg]->setAsInitialized();
+    else
+        shadowRegisters[reg]->ShadowRegister::setAsInitialized();
+}
+
+
 void ShadowRegisterFile::setBitsAsInitialized(REG pin_reg, uint8_t* data){
     SHDW_REG shadow_reg = convertPinReg(pin_reg);
 
