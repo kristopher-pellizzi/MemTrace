@@ -29,14 +29,14 @@ Please DO NOT modify this header manually\n*/\n\n"
         with open(mem_header_path, "w") as f:
             f.write(comment)
             base_path = os.path.join("instructions", "mem")
-            f.write("#include \"{0}\"".format(os.path.join(base_path, "DefaultLoadInstruction.h\n")))
-            f.write("#include \"{0}\"".format(os.path.join(base_path, "DefaultStoreInstruction.h\n")))
+            f.write("#include \"{0}\"\n".format(os.path.join(base_path, "DefaultLoadInstruction.h")))
+            f.write("#include \"{0}\"\n".format(os.path.join(base_path, "DefaultStoreInstruction.h")))
 
     if not os.path.exists(reg_header_path):
         with open(reg_header_path, "w") as f:
             f.write(comment)
             base_path = os.path.join("instructions", "reg")
-            f.write("#include \"{0}\"".format(os.path.join(base_path, "DefaultPropagateInstruction.h\n")))
+            f.write("#include \"{0}\"\n".format(os.path.join(base_path, "DefaultPropagateInstruction.h")))
 
     with open(mem_header_path, "r") as f:
         lines = f.readlines()
