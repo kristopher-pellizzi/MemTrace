@@ -45,6 +45,13 @@ Please DO NOT modify this header manually\n*/\n\n"
         with open(out_header_file, mode) as f:
             if mode == "w":
                 f.write(comment)
+                base_path = os.path.join("instructions")
+                mem_path = os.path.join(base_path, "mem")
+                reg_path = os.path.join(base_path, "reg")
+
+                f.write("#include \"{0}\"".format(os.path.join(mem_path, "DefaultLoadInstruction.h")))
+                f.write("#include \"{0}\"".format(os.path.join(mem_path, "DefaultStoreInstruction.h")))
+                f.write("#include \"{0}\"".format(os.path.join(reg_path, "DefaultPropagateInstruction.h")))
             src_path = os.path.join(instr_path, dir.name)
             for file in os.scandir(src_path):
                 name, ext = file.name.split(".")
