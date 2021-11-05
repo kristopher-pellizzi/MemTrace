@@ -109,7 +109,7 @@ Please DO NOT modify this header manually\n*/\n\n"
                 included_headers.remove(header_name)
 
         if not deleted_lines:
-            return
+            continue
 
         header_path = os.path.join(cwd, "{0}Instructions.h".format(dir.name.capitalize()))
         lines = None
