@@ -41,13 +41,13 @@ Please DO NOT modify this header manually\n*/\n\n"
     with open(mem_header_path, "r") as f:
         lines = f.readlines()
         lines = map(lambda x: x.split()[1], filter(lambda y: y.startswith("#include"), lines))
-        headers = set(map(lambda x: os.path.split(x)[1][:-1], lines))
+        headers = set(map(lambda x: os.path.split(x)[1].strip()[:-1], lines))
         included_headers.update(headers)
 
     with open(reg_header_path, "r") as f:
         lines = f.readlines()
         lines = map(lambda x: x.split()[1], filter(lambda y: y.startswith("#include"), lines))
-        headers = set(map(lambda x: os.path.split(x)[1][:-1], lines))
+        headers = set(map(lambda x: os.path.split(x)[1].strip()[:-1], lines))
         included_headers.update(headers)
 
     include_str = '#include "{0}"\n'.format(os.path.join("instructions", "{0}", "{1}"))
@@ -100,23 +100,32 @@ Please DO NOT modify this header manually\n*/\n\n"
 
         for file in os.scandir(obj_dir):
             name, ext = file.name.split(".")
+            if ext.strip() == "d":
+                os.remove(os.path.join(obj_dir, file.name))
+                continue
             if not name in existing_instr:
                 path = os.path.join(obj_dir, file.name)
                 os.remove(path)
-                header_name = "{0}.h".format(name)
+                header_name = "{0}.h".format(name.strip())
+
                 if header_name in included_headers:
                     deleted_lines = True
-                included_headers.remove(header_name)
+                    included_headers.remove(header_name)
 
         if not deleted_lines:
             continue
-
+        
+        print("Removing {0}".format(os.path.realpath(os.path.join("..", objdir, "MemTrace.d"))))
+        os.remove(os.path.join("..", objdir, "MemTrace.d"))
+        os.remove(os.path.join("..", objdir, "MemTrace.o"))
+        os.remove(os.path.join("..", objdir, "InstructionHandler.d"))
+        os.remove(os.path.join("..", objdir, "InstructionHandler.o"))
         header_path = os.path.join(cwd, "{0}Instructions.h".format(dir.name.capitalize()))
         lines = None
         with open(header_path, "r") as f:
             lines = f.readlines()
 
-        lines = list(filter(lambda x: os.path.split(x.split()[1])[1] in included_headers, filter(lambda y: y.startswith("#include"), lines)))
+        lines = list(filter(lambda x: os.path.split(x.split()[1])[1].strip()[:-1] in included_headers, filter(lambda y: y.startswith("#include"), lines)))
 
         with open(header_path, "w") as f:
             f.write(comment)
