@@ -18,7 +18,39 @@ def main():
     out_path = os.path.join(cwd, "{0}Instructions.h")
 
     instr_path = os.path.join(cwd, "instructions")
-    include_str = '#include "instructions/{0}/{1}"\n'
+    mem_header_path = os.path.join(cwd, "MemInstructions.h")
+    reg_header_path = os.path.join(cwd, "RegInstructions.h")
+    included_headers = set()
+
+    comment = "/*\nThis header file has been automatically generated with a script\n\
+Please DO NOT modify this header manually\n*/\n\n"
+
+    if not os.path.exists(mem_header_path):
+        with open(mem_header_path, "w") as f:
+            f.write(comment)
+            base_path = os.path.join("instructions", "mem")
+            f.write("#include \"{0}\"".format(os.path.join(base_path, "DefaultLoadInstruction.h")))
+            f.write("#include \"{0}\"".format(os.path.join(base_path, "DefaultStoreInstruction.h")))
+
+    if not os.path.exists(reg_header_path):
+        with open(reg_header_path, "w") as f:
+            f.write(comment)
+            base_path = os.path.join("instructions", "reg")
+            f.write("#include \"{0}\"".format(os.path.join(base_path, "DefaultPropagateInstruction.h")))
+
+    with open(mem_header_path, "r") as f:
+        lines = f.readlines()
+        lines = map(lambda x: x.split()[1], filter(lambda y: y.startswith("#include"), lines))
+        headers = set(map(lambda x: os.path.split(x)[1][:-1], lines))
+        included_headers.update(headers)
+
+    with open(reg_header_path, "r") as f:
+        lines = f.readlines()
+        lines = map(lambda x: x.split()[1], filter(lambda y: y.startswith("#include"), lines))
+        headers = set(map(lambda x: os.path.split(x)[1][:-1], lines))
+        included_headers.update(headers)
+
+    include_str = '#include "{0}"\n'.format(os.path.join("instructions", "{0}", "{1}"))
     template_path = os.path.join(cwd, "EmulatorTemplate.h")
     emulator_template = None
     existing_instr = set()
@@ -28,30 +60,14 @@ def main():
     args = {
         "mem": "(MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs)",
         "reg": "(OPCODE opcode, list<REG>* srcRegs, list<REG>* dstRegs)"
-    }
-    
-    comment = "/*\nThis header file has been automatically generated with a script\n\
-Please DO NOT modify this header manually\n*/\n\n"
+    } 
 
     with open(template_path, "r") as f:
         emulator_template = f.read()
 
     for dir in os.scandir(instr_path):
         out_header_file = out_path.format(dir.name.capitalize())
-        if os.path.exists(out_header_file):
-            mode = "a"
-        else:
-            mode = "w"
-        with open(out_header_file, mode) as f:
-            if mode == "w":
-                f.write(comment)
-                base_path = os.path.join("instructions")
-                mem_path = os.path.join(base_path, "mem")
-                reg_path = os.path.join(base_path, "reg")
-
-                f.write("#include \"{0}\"".format(os.path.join(mem_path, "DefaultLoadInstruction.h")))
-                f.write("#include \"{0}\"".format(os.path.join(mem_path, "DefaultStoreInstruction.h")))
-                f.write("#include \"{0}\"".format(os.path.join(reg_path, "DefaultPropagateInstruction.h")))
+        with open(out_header_file, "a") as f:
             src_path = os.path.join(instr_path, dir.name)
             for file in os.scandir(src_path):
                 name, ext = file.name.split(".")
@@ -65,6 +81,8 @@ Please DO NOT modify this header manually\n*/\n\n"
                 # If the header file already exists, it has already been generated and added to the header file
                 if os.path.exists(header_path):
                     print("{0} already exists".format(header_path))
+                    if not header_file in included_headers:
+                        f.write(include_str.format(dir.name, header_file))
                     continue
 
                 # Generate header file
@@ -76,13 +94,34 @@ Please DO NOT modify this header manually\n*/\n\n"
                 f.write(include_str.format(dir.name, header_file))
             f.write("")
 
-            # Remove not-existing instructions object files (if any)
-            obj_dir = os.path.join(instr_obj_dir, dir.name)
-            for file in os.scandir(obj_dir):
-                name, ext = file.name.split(".")
-                if not name in existing_instr:
-                    path = os.path.join(obj_dir, file.name)
-                    os.remove(path)
+        # Remove not-existing instructions object files (if any)
+        obj_dir = os.path.join(instr_obj_dir, dir.name)
+        deleted_lines = False
+
+        for file in os.scandir(obj_dir):
+            name, ext = file.name.split(".")
+            if not name in existing_instr:
+                path = os.path.join(obj_dir, file.name)
+                os.remove(path)
+                header_name = "{0}.h".format(name)
+                if header_name in included_headers:
+                    deleted_lines = True
+                included_headers.remove(header_name)
+
+        if not deleted_lines:
+            return
+
+        header_path = os.path.join(cwd, "{0}Instructions.h".format(dir.name.capitalize()))
+        lines = None
+        with open(header_path, "r") as f:
+            lines = f.readlines()
+
+        lines = list(filter(lambda x: os.path.split(x.split()[1])[1] in included_headers, filter(lambda y: y.startswith("#include"), lines)))
+
+        with open(header_path, "w") as f:
+            f.write(comment)
+            for line in lines:
+                f.write(line)
 
 
 if __name__ == '__main__':
