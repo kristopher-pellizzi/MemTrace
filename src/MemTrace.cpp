@@ -40,6 +40,7 @@
 #include "TagManager.h"
 #include "PendingDirectMemoryCopy.h"
 #include "XsaveHandler.h"
+#include "StackAllocation.h"
 
 using std::cerr;
 using std::string;
@@ -94,6 +95,7 @@ ADDRINT loaderBaseAddr = -1;
 ADDRINT loaderHighestAddr = -1;
 
 ADDRINT lastExecutedInstruction;
+StackAllocation lastStackAllocation;
 unsigned long long executedAccesses;
 
 PendingDirectMemoryCopy pendingDirectMemoryCopy;
@@ -817,6 +819,61 @@ bool initUpToNullByte(unsigned nulIndex, set<std::pair<unsigned, unsigned>> inte
     return nulIndex > firstInterval->second;
 }
 
+
+/*
+    This analysis function is used in order to store the last stack allocation in a global variable.
+    That variable is then used whenever a memory read is executed in order to check whether it is accessing the newly 
+    allocated stack space before any write happened, in which case it is considered to be part of the mitigation of the compiler
+    against the so-called stack clash vulnerability.
+*/
+VOID updateLastStackAlloc(CONTEXT* ctxt, VOID* srcRegsPtr, UINT64 immediate){
+    static bool stackClashMaybeEnabled = false;
+
+    list<REG>* srcRegs = static_cast<list<REG>*>(srcRegsPtr);
+    UINT64 size = 0;
+    ADDRINT startAddr = PIN_GetContextReg(ctxt, REG_STACK_PTR);
+    bool requiresProbe = true;
+
+    if(srcRegs->size() == 1){
+        size = immediate;
+        /*
+            When allocation size is an immediate, if it is lower than the page size, it is a tail allocation, which does not require
+            a probe.
+            If it is higher than a page size, it means the stack clash mitigation is not enabled at all, because with that mitigation enabled,
+            the compiler splits any stack allocation higher than a page size in many allocations whose size is exactly a page size + a tail allocation.
+        */
+        if(size != PAGE_SIZE)
+            requiresProbe = false;
+        else
+            stackClashMaybeEnabled = true;
+    }
+    else{
+        REG srcReg;
+        auto iter = srcRegs->begin();
+        while(*iter == REG_STACK_PTR){
+            ++iter;
+        }
+        srcReg = *iter;
+        size = PIN_GetContextReg(ctxt, srcReg);
+        requiresProbe = requiresProbe && stackClashMaybeEnabled;
+    }
+
+    lastStackAllocation = StackAllocation(startAddr, size, requiresProbe);
+}
+
+
+bool maybeStackClashMitigation(ADDRINT addr){
+    if(!lastStackAllocation.requiresProbe())
+        return false;
+
+    ADDRINT start = lastStackAllocation.getStartAddr();
+    ADDRINT end = start + lastStackAllocation.getSize();
+    ++start;
+
+    return (addr >= start && addr <= end);
+}
+
+
 VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                 UINT32 opcode_arg, VOID* srcRegsPtr, VOID* dstRegsPtr)
 {
@@ -843,6 +900,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     // If malloc has been called and it is a write access, save it temporarily. After the malloc completed (and we 
     // can therefore decide which of these writes were done on the heap) the interesting ones are stored as normally.
     else if((mallocCalled || memalignCalled) && isWrite){
+        lastStackAllocation.unsetRequiresProbeFlag();
         currentShadow = heap.getPtr();
 
         // NOTE: according to Intel PIN manual, REG_GBP should be register EBP on 32 bit machines, while it is
@@ -919,6 +977,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
     list<REG>* srcRegs = static_cast<list<REG>*>(srcRegsPtr);
 
     if(isWrite){
+        lastStackAllocation.unsetRequiresProbeFlag();
         #ifdef DEBUG
             print_profile(applicationTiming, "\tTracing write access");
         #endif
@@ -972,8 +1031,15 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
                 // If memory is fully initialized, this handler avoids considering memory at all, thus
                 // optimizing performance
                 InstructionHandler::getInstance().handle(opcode, srcRegs, dstRegs);
+            lastStackAllocation.unsetRequiresProbeFlag();
         }
         else{
+
+            if(maybeStackClashMitigation(addr)){
+                lastStackAllocation.unsetRequiresProbeFlag();
+                return;
+            }
+
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
 
@@ -1700,36 +1766,17 @@ bool MemoryOperandReadsStackTop(INS ins, UINT32 memop){
     If any of the conditions above does not hold, the function returns false,
     otherwise returns true.
 */
-bool isStackPageSizeAlloc(INS ins){
-    OPCODE opcode = INS_Opcode(ins);
-    UINT32 operandCount = INS_OperandCount(ins);
-
+bool isStackAlloc(OPCODE opcode, list<REG>* dstRegs){
     /*
         Stack allocations are performed by simply decrementing the stack pointer
         through a SUB instruction
     */
-    if(opcode != XED_ICLASS_SUB)
+    if(opcode != XED_ICLASS_SUB){
         return false;
+    }
 
-    for(UINT32 i = 0; i < operandCount; ++i){
-        /*
-            If the operand is a register different from the stack pointer, it is not a
-            stack allocation
-        */
-        if(INS_OperandIsReg(ins, i)){
-            REG reg = INS_OperandReg(ins, i);
-            if(reg != REG_STACK_PTR)
-                return false;
-        }
-        else if(INS_OperandIsImmediate(ins, i)){
-            UINT64 immediate = INS_OperandImmediate(ins, i);
-            if(immediate != PAGE_SIZE)
-                return false;
-        }
-        else{
-            return false;
-        }
-    }           
+    if(dstRegs->size() != 1 || *dstRegs->begin() != REG_STACK_PTR)
+        return false;
 
     return true;
 }
@@ -1836,6 +1883,25 @@ VOID Instruction(INS ins, VOID* v){
 
 
     // Start inserting analysis functions
+    if(isStackAlloc(opcode, dstRegs)){
+        UINT64 immediate = 0;
+
+        for(UINT32 i = 0; i < operandCount; ++i){
+            if(INS_OperandIsImmediate(ins, i)){
+                immediate = INS_OperandImmediate(ins, i);
+            }
+        }
+
+        INS_InsertPredicatedCall(
+            ins,
+            IPOINT_BEFORE,
+            (AFUNPTR) updateLastStackAlloc,
+            IARG_CONTEXT,
+            IARG_PTR, srcRegs,
+            IARG_UINT64, immediate,
+            IARG_END
+        );
+    }
 
     /*
         If it's a FPU push instruction, decrement the fpu stack index before writing the register
@@ -1927,17 +1993,6 @@ VOID Instruction(INS ins, VOID* v){
         for(UINT32 memop = 0; memop < memoperands; memop++){ 
             // Read memory access
             if(INS_MemoryOperandIsRead(ins, memop)){
-                /*
-                    If this read access may be caused by the compiler mitigation against
-                    stack clash vulnerability, avoid analyzing it in order to remove all those 
-                    false positives
-                */
-                if(MemoryOperandReadsStackTop(ins, memop)){
-                    INS prevIns = INS_Prev(ins);
-                    if(isStackPageSizeAlloc(prevIns))
-                        return;
-                }
-
                 readMemOperands.insert(memop);
             }
 
