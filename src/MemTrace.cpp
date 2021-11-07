@@ -1775,7 +1775,7 @@ bool isStackAlloc(OPCODE opcode, list<REG>* dstRegs){
         return false;
     }
 
-    if(dstRegs->size() != 1 || *dstRegs->begin() != REG_STACK_PTR)
+    if(dstRegs == NULL || dstRegs->size() != 1 || *dstRegs->begin() != REG_STACK_PTR)
         return false;
 
     return true;
