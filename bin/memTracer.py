@@ -525,16 +525,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             su.copy(el[1], input_cpy_path)
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
 
-            full_cmd = list(tracer_cmd)
-            # If there isn't any fuzzed input file, use the generated file as stdin
-            if len(input_path_indices) == 0:
-                tracer_stdin = open(input_cpy_path, "rb")
-            # otherwise, set stdin to an empty file, so that if the program tries to read from that
-            # it won't stuck waiting for input
-            else:
-                empty_file = open("empty_file", "w")
-                empty_file.close()
-                tracer_stdin = open("empty_file", "rb")
+            full_cmd = list(tracer_cmd) 
             
             if len(processes) == args.processes:
                 processes = wait_process_termination(processes, strikes)
@@ -588,6 +579,17 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             # Argv is not fuzzed, but we must keep the arguments passed from the command line
             else:
                 full_cmd.extend(exec_cmd[1:])
+
+            # If there isn't any fuzzed input file, use the generated file as stdin
+            if len(input_path_indices) == 0:
+                tracer_stdin = open(input_cpy_path, "rb")
+            # otherwise, set stdin to an empty file, so that if the program tries to read from that
+            # it won't stuck waiting for input
+            else:
+                empty_file = open("empty_file", "w")
+                empty_file.close()
+                tracer_stdin = open("empty_file", "rb")
+
             #print("[Tracer Thread] FULL_CMD: ", full_cmd)
             if args.store_tracer_out:
                 output_file_path = os.path.join(input_folder, "output")
