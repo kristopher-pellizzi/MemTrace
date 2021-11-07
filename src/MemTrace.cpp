@@ -867,10 +867,10 @@ bool maybeStackClashMitigation(ADDRINT addr){
         return false;
 
     ADDRINT start = lastStackAllocation.getStartAddr();
-    ADDRINT end = start + lastStackAllocation.getSize();
-    ++start;
+    ADDRINT end = start - lastStackAllocation.getSize();
+    --start;
 
-    return (addr >= start && addr <= end);
+    return (addr <= start && addr >= end);
 }
 
 
