@@ -79,6 +79,29 @@ bool isPopInstruction(OPCODE opcode){
 
 }
 
+bool isXorInstruction(OPCODE opcode){
+    switch(opcode){
+        case XED_ICLASS_KXORB:
+        case XED_ICLASS_KXORW:
+        case XED_ICLASS_KXORD:
+        case XED_ICLASS_KXORQ:
+        case XED_ICLASS_XOR:
+        case XED_ICLASS_XORPD:
+        case XED_ICLASS_XORPS:
+        case XED_ICLASS_PXOR:
+        case XED_ICLASS_VPXOR:
+        case XED_ICLASS_VPXORD:
+        case XED_ICLASS_VPXORQ:
+        case XED_ICLASS_VXORPD:
+        case XED_ICLASS_VXORPS:
+
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 bool isEndbrInstruction(OPCODE opcode){
     return 
         opcode == XED_ICLASS_ENDBR32 ||

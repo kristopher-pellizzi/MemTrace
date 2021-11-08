@@ -1668,11 +1668,12 @@ bool isZeroingXor(INS ins, OPCODE opcode, list<REG>* dstRegs, list<REG>* srcRegs
     */
     size_t readRegisters = dstRegs->size() + srcRegs->size();
 
-    if(opcode != XED_ICLASS_XOR || readRegisters <= 2)
+    if(isXorInstruction(opcode) || readRegisters <= 2)
         return false;
 
-    REG firstOperand = *(srcRegs->begin());
-    REG secondOperand = *(dstRegs->begin());
+    auto iter = srcRegs->begin();
+    REG firstOperand = *(iter++);
+    REG secondOperand = *iter;
     return firstOperand == secondOperand;
 }
 
