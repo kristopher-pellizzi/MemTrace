@@ -24,6 +24,8 @@ bool isPushInstruction(OPCODE opcode);
 
 bool isPopInstruction(OPCODE opcode);
 
+bool isXorInstruction(OPCODE opcode);
+
 bool isEndbrInstruction(OPCODE opcode);
 
 bool isCallInstruction(OPCODE opcode);
