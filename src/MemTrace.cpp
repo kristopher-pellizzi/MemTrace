@@ -827,8 +827,6 @@ bool initUpToNullByte(unsigned nulIndex, set<std::pair<unsigned, unsigned>> inte
     against the so-called stack clash vulnerability.
 */
 VOID updateLastStackAlloc(CONTEXT* ctxt, VOID* srcRegsPtr, UINT64 immediate){
-    static bool stackClashMaybeEnabled = false;
-
     list<REG>* srcRegs = static_cast<list<REG>*>(srcRegsPtr);
     UINT64 size = 0;
     ADDRINT startAddr = PIN_GetContextReg(ctxt, REG_STACK_PTR);
@@ -844,8 +842,6 @@ VOID updateLastStackAlloc(CONTEXT* ctxt, VOID* srcRegsPtr, UINT64 immediate){
         */
         if(size != PAGE_SIZE)
             requiresProbe = false;
-        else
-            stackClashMaybeEnabled = true;
     }
     else{
         REG srcReg;
@@ -855,7 +851,6 @@ VOID updateLastStackAlloc(CONTEXT* ctxt, VOID* srcRegsPtr, UINT64 immediate){
         }
         srcReg = *iter;
         size = PIN_GetContextReg(ctxt, srcReg);
-        requiresProbe = requiresProbe && stackClashMaybeEnabled;
     }
 
     lastStackAllocation = StackAllocation(startAddr, size, requiresProbe);
