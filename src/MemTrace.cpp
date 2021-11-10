@@ -1663,7 +1663,7 @@ bool isZeroingXor(INS ins, OPCODE opcode, list<REG>* dstRegs, list<REG>* srcRegs
     */
     size_t readRegisters = dstRegs->size() + srcRegs->size();
 
-    if(isXorInstruction(opcode) || readRegisters <= 2)
+    if(!isXorInstruction(opcode) || readRegisters <= 2)
         return false;
 
     auto iter = srcRegs->begin();
