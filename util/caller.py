@@ -95,7 +95,10 @@ def main():
         while len(line) > 0:
             line = line.decode('utf-8')
             splitted = line.split("=")
-            environ[splitted[0]] = splitted[1]
+            # By doing this way, we can keep untouched any value string even if that contains '='
+            # This may happen, for instance, with environment variable 'LS_COLOR'
+            key_len = len(splitted[0])
+            environ[splitted[0]] = line[key_len + 1 : ]
             line = f.readline()[:-1]
 
     if args.stdin:
