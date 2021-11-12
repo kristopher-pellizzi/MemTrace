@@ -628,7 +628,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             return
         time.sleep(10)
 
-    # TODO: wait for all processes in deque |processes| to be terminated
+    while len(processes) > 0:
+        processes = wait_process_termination()
     print("[Tracer Thread] Generating textual report...")
     apply_string_filter = not args.disable_string_filter
     merge_reports(tracer_out, apply_string_filter = apply_string_filter, report_unique_access_sets = args.unique_access_sets)
