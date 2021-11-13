@@ -391,12 +391,24 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
     def get_argv_from_file(file_path):
         ret = []
         with open(file_path, "rb") as f:
+            partial_arg = list()
             while True:
                 # Ignore last byte (\n)
-                line = f.readline()[:-1]
+                line = f.readline()
                 if not line:
+                    if len(partial_arg) > 0:
+                        arg = b"".join(partial_arg)
+                        ret.append(arg)
                     break
-                ret.append(line)
+
+                if line[-9 : ] == b"<endarg;\n":
+                    partial_arg.append(line[:-9])
+                    arg = b"".join(partial_arg)
+                    ret.append(arg)
+                    partial_arg.clear()
+                else:
+                    partial_arg.append(line)
+
         return ret
 
 
@@ -525,7 +537,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             su.copy(el[1], input_cpy_path)
             tracer_cmd[2] = os.path.join(input_folder, "overlaps.bin")
 
-            full_cmd = list(tracer_cmd) 
+            full_cmd = list(map(lambda x: x.encode('utf-8'), tracer_cmd)) 
             
             if len(processes) == args.processes:
                 processes = wait_process_termination(processes, strikes)
@@ -556,7 +568,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                     args_file_path = os.path.join(args_dir, el[0], input_folder_basename)
                     if not os.path.exists(args_file_path):
                         continue
-                    argv = get_argv_from_file(args_file_path)
+                    argv = get_argv(input_cpy_path)
+                    #argv = get_argv_from_file(args_file_path)
                     su.copy(args_file_path, argv_file_path)
                 else:
                     # Retrieve arguments from input file and cut it to remove last 128 bytes
@@ -565,7 +578,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                     with open(argv_file_path, "wb") as f:
                         for cmd_arg in argv:
                             f.write(cmd_arg)
-                            f.write(b"\n")
+                            f.write(b"<endarg;\n")
 
                     su.copy(argv_file_path, os.path.join(args_dir, el[0], input_folder_basename))
                 
@@ -591,6 +604,10 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 tracer_stdin = open("empty_file", "rb")
 
             #print("[Tracer Thread] FULL_CMD: ", full_cmd)
+            with open(os.path.join(input_folder, "full_cmd"), "wb") as f:
+                for cmd_part in full_cmd:
+                    f.write(cmd_part)
+                    f.write(b' ')
             if args.store_tracer_out:
                 output_file_path = os.path.join(input_folder, "output")
                 with open(output_file_path, "w") as out:
@@ -629,7 +646,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         time.sleep(10)
 
     while len(processes) > 0:
-        processes = wait_process_termination()
+        processes = wait_process_termination(processes, strikes)
     print("[Tracer Thread] Generating textual report...")
     apply_string_filter = not args.disable_string_filter
     merge_reports(tracer_out, apply_string_filter = apply_string_filter, report_unique_access_sets = args.unique_access_sets)
