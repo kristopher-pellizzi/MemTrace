@@ -412,6 +412,31 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         return ret
 
 
+    def cut_raw_args_from_input_file(input_file_path):
+        with open(input_file_path, "rb") as f, open(tmp_file_path, "wb") as temp:
+            buf_size = 1024
+            args_parsed = False
+            while True:
+                buf = f.read(buf_size)
+
+                if buf == b"":
+                    break
+
+                # If we did not finished parsing arguments (\x00\x00 not found), keep searching the delimiter
+                if not args_parsed:
+                    m = re.search(b"\x00\x00", buf)
+                    # \x00\x00 found. Delete everything up to \x00\x00 from the input file.
+                    if m is not None:
+                        start_idx = m.start()
+                        temp.write(buf[start_idx + 2 :])
+                        args_parsed = True
+                # We already found the arguments list delimiter
+                else:
+                    temp.write(buf)
+
+        os.replace(tmp_file_path, input_file_path)
+
+
     def get_environ_from_file(file_path):
         ret = dict()
         with open(file_path, "rb") as f:
@@ -568,8 +593,8 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                     args_file_path = os.path.join(args_dir, el[0], input_folder_basename)
                     if not os.path.exists(args_file_path):
                         continue
-                    argv = get_argv(input_cpy_path)
-                    #argv = get_argv_from_file(args_file_path)
+                    argv = get_argv_from_file(args_file_path)
+                    cut_raw_args_from_input_file(input_cpy_path)
                     su.copy(args_file_path, argv_file_path)
                 else:
                     # Retrieve arguments from input file and cut it to remove last 128 bytes
