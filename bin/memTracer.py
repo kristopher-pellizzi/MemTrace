@@ -270,6 +270,13 @@ def parse_args(args):
         dest = "no_fuzzing"    
     )
 
+    parser.add_argument("--stdin",
+        action = "store_true",
+        help =  "Flag used to specify that the input file should be read as stdin, and not as an input file. Note that this is meaningful only when '--no-fuzzing' is enabled, too."
+                "If this flag is used, but '--no-fuzzing' is not, it is simply ignored.",
+        dest =  "stdin"
+    )
+
     parser.add_argument("--store-tracer-out",
         action = "store_true",
         help =  "This option allows the tracer thread to redirect both stdout and stdin of every spawned tracer process to a file saved in the same folder where "
@@ -618,15 +625,23 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             else:
                 full_cmd.extend(exec_cmd[1:])
 
-            # If there isn't any fuzzed input file, use the generated file as stdin
-            if len(input_path_indices) == 0:
-                tracer_stdin = open(input_cpy_path, "rb")
-            # otherwise, set stdin to an empty file, so that if the program tries to read from that
-            # it won't stuck waiting for input
+            if args.no_fuzzing:
+                if args.stdin:
+                    tracer_stdin = open(input_cpy_path, "rb")
+                else:
+                    empty_file = open("empty_file", "w")
+                    empty_file.close()
+                    tracer_stdin = open("empty_file", "rb")
             else:
-                empty_file = open("empty_file", "w")
-                empty_file.close()
-                tracer_stdin = open("empty_file", "rb")
+                # If there isn't any fuzzed input file, use the generated file as stdin
+                if len(input_path_indices) == 0:
+                    tracer_stdin = open(input_cpy_path, "rb")
+                # otherwise, set stdin to an empty file, so that if the program tries to read from that
+                # it won't stuck waiting for input
+                else:
+                    empty_file = open("empty_file", "w")
+                    empty_file.close()
+                    tracer_stdin = open("empty_file", "rb")
 
             #print("[Tracer Thread] FULL_CMD: ", full_cmd)
             with open(os.path.join(input_folder, "full_cmd"), "wb") as f:
