@@ -56,8 +56,8 @@ def main():
     argv.extend(argv_ext)
     
     if os.path.exists(args_path):
-        args = get_argv_from_file(args_path)
-        argv.extend(args)
+        parsed_args = get_argv_from_file(args_path)
+        argv.extend(parsed_args)
 
     environ = dict()
     with open(environ_path, "rb") as f:
