@@ -5,6 +5,7 @@ import os
 import argparse
 from time import sleep
 import sys
+from arg_getter import *
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -55,14 +56,8 @@ def main():
     argv.extend(argv_ext)
     
     if os.path.exists(args_path):
-        with open(args_path, "rb") as f:
-            arg = f.readline()
-            while len(arg) > 0:
-                if isInputPath(arg, testcase_path):
-                    argv.append(os.path.join(testcase_path, b"input"))
-                else:
-                    argv.append(arg[:-1])
-                arg = f.readline()
+        args = get_argv_from_file(args_path)
+        argv.extend(args)
 
     environ = dict()
     with open(environ_path, "rb") as f:
@@ -76,9 +71,8 @@ def main():
             environ[splitted[0]] = line[key_len + 1 : ]
             line = f.readline()[:-1]
 
-    with open("output", "w") as f:
-        p = subp.Popen(argv, env = environ)
-        p.wait()
+    p = subp.Popen(argv, env = environ)
+    p.wait()
 
 
 if __name__ == "__main__":

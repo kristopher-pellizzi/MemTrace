@@ -5,6 +5,8 @@ import os
 import argparse
 import sys
 
+from arg_getter import *
+
 def parse_args():
 
     def parse_heuristic_status(s: str):
@@ -71,20 +73,14 @@ def main():
  
     launcher = os.path.realpath(os.path.join(sys.path[0], "..", "bin", "launcher"))
     if not os.path.exists(launcher):
-        print("launcher not exists, please execute 'make debug' from the root folder of the project")
+        print("launcher not exists, please execute 'make' from the root folder of the project")
         return
 
 
     argv = [launcher, '-u', args.heuristic_status, '--', executable_path]
     if os.path.exists(args_path):
-        with open(args_path, "rb") as f:
-            arg = f.readline()
-            while len(arg) > 0:
-                if isInputPath(arg, testcase_path):
-                    argv.append(os.path.join(testcase_path, b"input"))
-                else:
-                    argv.append(arg[:-1])
-                arg = f.readline()
+        args = get_argv_from_file(args_path) 
+        argv.extend(args)
     elif not args.stdin:
         print("Arguments file not found")
         return
@@ -104,12 +100,11 @@ def main():
     if args.stdin:
         input_file_path = os.path.join(testcase_path, b"input")
         with open(input_file_path, "rb") as f:
-            p = subp.Popen(argv, end = environ, stdin = f)
+            p = subp.Popen(argv, env = environ, stdin = f)
             p.wait()
     else:
-        with open("output", "w") as f:
-            p = subp.Popen(argv, env = environ)
-            p.wait()
+        p = subp.Popen(argv, env = environ)
+        p.wait()
 
 
 if __name__ == "__main__":
