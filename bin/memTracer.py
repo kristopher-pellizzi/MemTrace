@@ -464,9 +464,6 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
 
 
     def replace_files_private_cpy(argv, input_folder):
-        print("Input folder: ", input_folder)
-        print("Files: ", initial_fixed_input_files)
-        print("BEFORE: ", argv)
         bytes_input_path = os.fsencode(input_folder)
         arg_index = 0
         for arg in argv:
