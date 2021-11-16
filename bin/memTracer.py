@@ -43,6 +43,11 @@ AFL_PATH = os.path.join(sys.path[0], "..", "third_party", "AFLPlusPlus", "afl-fu
 
 input_path_indices = list()
 
+# The following list will contain the paths of input files passed as command argument when we launch the tool.
+# These input files will be copied inside each testcase folder, so that every execution will use its own private copy and won't
+# interfere with other execution (e.g. may modify the content of the file).
+initial_fixed_input_files = set()
+
 
 def parse_help_flag(argv_str):
     pat = r"(\s-h)($|\s)"
@@ -458,6 +463,21 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         return ret
 
 
+    def replace_files_private_cpy(argv, input_folder):
+        print("Input folder: ", input_folder)
+        print("Files: ", initial_fixed_input_files)
+        print("BEFORE: ", argv)
+        bytes_input_path = os.fsencode(input_folder)
+        arg_index = 0
+        for arg in argv:
+            if arg in initial_fixed_input_files:
+                dst_path = os.path.join(bytes_input_path, os.path.basename(arg))
+                su.copy(arg, dst_path)
+                argv[arg_index] = dst_path
+            arg_index += 1
+        print(" AFTER: ", argv)
+
+
     print("[Tracer Thread] Tracer thread started...")
     if fuzzer_error_event is None:
         fuzzer_error_event = t.Event()
@@ -580,6 +600,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
 
             environ = None
 
+            # Save/restore environment variables
             if args.no_fuzzing:
                 environ_file_path = os.path.join(environ_dir, el[0], input_folder_basename)
                 if not os.path.exists(environ_file_path):
@@ -595,6 +616,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
 
                 su.copy(env_file_path, os.path.join(environ_dir, el[0], input_folder_basename))
 
+            # Save/restore command line arguments
             if args.argv_rand:
                 if args.no_fuzzing:
                     args_file_path = os.path.join(args_dir, el[0], input_folder_basename)
@@ -618,13 +640,17 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 with open(os.path.join(input_folder, "argv.txt"), "w") as f:
                     for cmd_arg in argv:
                         f.write("{0}\n".format(cmd_arg))
+
+                replace_files_private_cpy(argv, input_folder)
                     
                 # Append arguments to full_cmd
                 full_cmd.extend(argv)
             # Argv is not fuzzed, but we must keep the arguments passed from the command line
             else:
+                replace_files_private_cpy(exec_cmd[1:], input_folder)
                 full_cmd.extend(exec_cmd[1:])
 
+            # Set stdin to be either the input file or an empty file, according to the flags used to launch the tool
             if args.no_fuzzing:
                 if args.stdin:
                     tracer_stdin = open(input_cpy_path, "rb")
@@ -643,11 +669,13 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                     empty_file.close()
                     tracer_stdin = open("empty_file", "rb")
 
+            # Store the exact command used to launch the execution of the analyzed program
             #print("[Tracer Thread] FULL_CMD: ", full_cmd)
             with open(os.path.join(input_folder, "full_cmd"), "wb") as f:
                 for cmd_part in full_cmd:
                     f.write(cmd_part)
                     f.write(b' ')
+
             if args.store_tracer_out:
                 output_file_path = os.path.join(input_folder, "output")
                 with open(output_file_path, "w") as out:
@@ -853,6 +881,8 @@ def main():
             if args[i].strip() == '@@':
                 # Append i + 1, because argv[0] is always the executable name
                 input_path_indices.append(str(i + 1))
+            elif os.path.exists(args[i]):
+                initial_fixed_input_files.add(args[i].encode('utf-8'))
 
         if len(input_path_indices) > 0:
             env_var = ",".join(input_path_indices)
@@ -972,6 +1002,10 @@ def main():
 
     if args.argv_rand:
         executable = adjust_executable(executable, FUZZ_IN)
+    else:
+        for arg in executable[1:]:
+            if os.path.exists(arg):
+                initial_fixed_input_files.add(arg.encode('utf-8'))
 
     if not os.path.exists(FUZZ_DIR):
         raise IOError("Folder {0} must exist and must contain all the required files/folders for the fuzzer to work (e.g. initial testcases)".format(FUZZ_DIR))
