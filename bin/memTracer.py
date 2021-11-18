@@ -446,33 +446,53 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                 else:
                     temp.write(buf)
 
-        os.replace(tmp_file_path, input_file_path)
+        # If \x00\x00 is not found (args_parsed is false) the input file does not contain the raw bytes composing the arguments
+        # so, we must not replace the input file, otherwise we will simply delete everything
+        if args_parsed:
+            os.replace(tmp_file_path, input_file_path)
 
 
     def get_environ_from_file(file_path):
         ret = dict()
         with open(file_path, "rb") as f:
-            while True:
-                # Ignore last byte (\n)
-                line = f.readline()[:-1].decode('utf-8')
-                if not line:
-                    break
+            line = f.readline()[:-1]
+            while len(line) > 0:
+                line = line.decode('utf-8')
                 splitted = line.split('=')
-                ret[splitted[0]] = splitted[1]
+                key_len = len(splitted[0])
+                ret[splitted[0]] = line[key_len + 1 : ]
+                line = f.readline()[:-1]
         
         return ret
 
 
-    def replace_files_private_cpy(argv, input_folder):
+    def replace_files_private_cpy(argv, instance, input_folder):
         bytes_input_path = os.fsencode(input_folder)
+        input_folder_basename = os.path.basename(input_folder)
+        private_cpy_folder = os.path.join(private_cpy_dir, instance, input_folder_basename)
+
+        if not os.path.exists(private_cpy_folder):
+            os.mkdir(private_cpy_folder)
+
         arg_index = 0
         for arg in argv:
             if arg in initial_fixed_input_files:
-                dst_path = os.path.join(bytes_input_path, os.path.basename(arg))
+                arg_basename = os.path.basename(arg)
+                su.copy(arg, os.path.join(private_cpy_folder.encode('utf-8'), arg_basename))
+                dst_path = os.path.join(bytes_input_path, arg_basename)
                 su.copy(arg, dst_path)
                 argv[arg_index] = dst_path
             arg_index += 1
-        print(" AFTER: ", argv)
+
+
+    def restore_private_cpy(instance, input_folder):
+        private_cpy_folder = os.path.join(private_cpy_dir, instance, os.path.basename(input_folder))
+        if os.path.exists(private_cpy_folder):
+            for f in os.scandir(private_cpy_folder):
+                name = f.name
+                src_path = os.path.join(private_cpy_folder, name)
+                dst_path = os.path.join(input_folder, name)
+                su.copy(src_path, dst_path)
 
 
     print("[Tracer Thread] Tracer thread started...")
@@ -495,6 +515,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         raise IOError("Folder {0} already exists. Either remove or move it and try again.".format(tracer_out))
     os.mkdir(tracer_out)
     args_dir = os.path.join(fuzz_dir, "args")
+    private_cpy_dir = os.path.join(fuzz_dir, "private_cpy")
     environ_dir = os.path.join(fuzz_dir, "environ")
     new_inputs_found = True
 
@@ -507,8 +528,12 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             su.rmtree(args_dir)
         if os.path.exists(environ_dir):
             su.rmtree(environ_dir)
+        if os.path.exists(private_cpy_dir):
+            su.rmtree(private_cpy_dir)
+
         os.mkdir(args_dir)
         os.mkdir(environ_dir)
+        os.mkdir(private_cpy_dir)
         inputs_dir_set.add(inputs_dir)
         for i in range(args.slaves):
             slave_name = "Slave_" + str(i)
@@ -547,6 +572,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
         if not args.no_fuzzing:
             os.mkdir(os.path.join(args_dir, directory))
             os.mkdir(os.path.join(environ_dir, directory))
+            os.mkdir(os.path.join(private_cpy_dir, directory))
 
     pat = r"sync"
     # Loop interrupts if and only if there are no new_inputs and the fuzzer has been interrupted
@@ -620,11 +646,13 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                     if not os.path.exists(args_file_path):
                         continue
                     argv = get_argv_from_file(args_file_path)
+                    restore_private_cpy(el[0], input_folder)
                     cut_raw_args_from_input_file(input_cpy_path)
                     su.copy(args_file_path, argv_file_path)
                 else:
                     # Retrieve arguments from input file and cut it to remove last 128 bytes
                     argv = get_argv(input_cpy_path)
+                    replace_files_private_cpy(argv, el[0], input_folder)
                     # Save used arguments in a binary file called "argv" (possibly not human readable)
                     with open(argv_file_path, "wb") as f:
                         for cmd_arg in argv:
@@ -638,13 +666,11 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
                     for cmd_arg in argv:
                         f.write("{0}\n".format(cmd_arg))
 
-                replace_files_private_cpy(argv, input_folder)
-                    
                 # Append arguments to full_cmd
                 full_cmd.extend(argv)
             # Argv is not fuzzed, but we must keep the arguments passed from the command line
             else:
-                replace_files_private_cpy(exec_cmd[1:], input_folder)
+                replace_files_private_cpy(exec_cmd[1:], el[0], input_folder)
                 full_cmd.extend(exec_cmd[1:])
 
             # Set stdin to be either the input file or an empty file, according to the flags used to launch the tool
