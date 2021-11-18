@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from arg_getter import *
+from private_cpy_restorer import *
 
 def parse_args():
 
@@ -96,6 +97,8 @@ def main():
             key_len = len(splitted[0])
             environ[splitted[0]] = line[key_len + 1 : ]
             line = f.readline()[:-1]
+
+    restore_private_cpy_files(test_case_path)
 
     if args.stdin:
         input_file_path = os.path.join(testcase_path, b"input")

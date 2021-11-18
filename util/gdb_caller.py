@@ -6,6 +6,7 @@ import argparse
 from time import sleep
 import sys
 from arg_getter import *
+from private_cpy_restorer import *
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -70,6 +71,8 @@ def main():
             key_len = len(splitted[0])
             environ[splitted[0]] = line[key_len + 1 : ]
             line = f.readline()[:-1]
+
+    restore_private_cpy_files(testcase_path)
 
     p = subp.Popen(argv, env = environ)
     p.wait()
