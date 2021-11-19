@@ -58,13 +58,20 @@ def convert_addr(addr):
 def inferior_is_running():
     return gdb.selected_inferior().pid != 0
 
+def inferior_exit(ev):
+    gdb.execute("disable")
+    gdb.execute("enable 1")
+    gdb.events.stop.connect(on_start)
+    gdb.events.stop.connect(try_get_heap_base)
+    gdb.events.exited.disconnect(inferior_exit)
 
 def on_start(ev):
     # Whenever we hit the breakpoint set to "_start"
     if isinstance(ev, gdb.BreakpointEvent):
         stack_cmd.set_stack_addr()
         gdb.events.stop.disconnect(on_start)
-        gdb.execute("r")
+        gdb.events.exited.connect(inferior_exit)
+        gdb.execute("enable")
 
 
 def try_get_heap_base(ev):
@@ -75,6 +82,7 @@ def try_get_heap_base(ev):
 
 
 class BreakOverlapCommand(gdb.Command):
+    """Tries to set an overlap automatically converting the address from the report address to the correct address"""
     def __init__(self):
         super(BreakOverlapCommand, self).__init__("break-overlap", gdb.COMMAND_USER)
 
@@ -97,6 +105,7 @@ class BreakOverlapCommand(gdb.Command):
 
 
 class OverlapStackCommand(gdb.Command):
+    """Prints the stack base address"""
     def __init__(self):
         super(OverlapStackCommand, self).__init__("overlap-stack-base", gdb.COMMAND_USER)
         self.stack_addr = None
@@ -111,6 +120,7 @@ class OverlapStackCommand(gdb.Command):
 
 
 class OverlapHeapCommand(gdb.Command):
+    """Prints the heap base address"""
     def __init__(self):
         super(OverlapHeapCommand, self).__init__("overlap-heap-base", gdb.COMMAND_USER)
         self.heap_addr = None
@@ -143,6 +153,7 @@ class OverlapHeapCommand(gdb.Command):
 
 
 class OverlapHeapAddrCommand(gdb.Command):
+    """Convert a report heap address to a current execution heap address and prints it"""
     def __init__(self):
         super(OverlapHeapAddrCommand, self).__init__("overlap-heap-addr", gdb.COMMAND_USER)
 
@@ -165,6 +176,7 @@ class OverlapHeapAddrCommand(gdb.Command):
 
 
 class OverlapStackAddrCommand(gdb.Command):
+    """Convert a report stack address to a current execution stack address and prints it"""
     def __init__(self):
         super(OverlapStackAddrCommand, self).__init__("overlap-stack-addr", gdb.COMMAND_USER)
 
@@ -182,6 +194,7 @@ class OverlapStackAddrCommand(gdb.Command):
 
 
 class VmmapCommand(gdb.Command):
+    """Prints allocated virtual pages"""
     def __init__(self):
         super(VmmapCommand, self).__init__("memmap", gdb.COMMAND_USER)
 
@@ -271,6 +284,7 @@ if "rsp" in regs:
 elif "esp" in regs:
     arch = 32
     sp = "esp"
+    
 
 # Setup stack and heap base addresses
 gdb.events.stop.connect(on_start)
