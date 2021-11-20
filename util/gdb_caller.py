@@ -54,11 +54,7 @@ def main():
     if os.path.exists(args_path):
         parsed_args = get_argv_from_file(args_path)
         parsed_args = list(map(lambda x: b"'" + x + b"'", parsed_args))
-        joined = b' '.join(parsed_args)
-    
-    argv.extend([b'-ex', b'set $testcase_path = "' + testcase_path + b'"'])
-    argv.extend([b'-ex', b'set $cwd = "' + os.path.realpath(os.fsencode(sys.path[0])) + b'"'])
-    argv.extend([b'-ex', b'source ' + os.path.join(script_dir, b'verification_gdb_session.py')])
+        joined = b' '.join(parsed_args) 
 
     if args.stdin:
         argv.extend([b'-ex', b'set args ' + joined + b' < ' + input_file_path])  
@@ -66,6 +62,10 @@ def main():
         with open('empty', "w"):
             pass
         argv.extend([b'-ex', b'set args ' + joined + b' < empty'])
+
+    argv.extend([b'-ex', b'set $testcase_path = "' + testcase_path + b'"'])
+    argv.extend([b'-ex', b'set $cwd = "' + os.path.realpath(os.fsencode(sys.path[0])) + b'"'])
+    argv.extend([b'-ex', b'source ' + os.path.join(script_dir, b'verification_gdb_session.py')])
 
     argv.append(executable_path)
 
