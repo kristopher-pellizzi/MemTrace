@@ -49,15 +49,16 @@ def main():
         argv.extend([b'-ex', b"echo r < '" + input_file_path + b"'\n"])
         argv.extend([b'-ex', b'echo end\n'])
         #argv.extend([b'-ex', b"echo Then launch with: 'launch'\n"])
-        argv.extend([b'-ex', b'define hook-run'])
-    argv.extend([b'-ex', b'set $testcase_path = "' + testcase_path + b'"'])
-    argv.extend([b'-ex', b'set $cwd = "' + os.path.realpath(os.fsencode(sys.path[0])) + b'"'])
-    argv.extend([b'-ex', b'source ' + os.path.join(script_dir, b'verification_gdb_session.py')])
+        argv.extend([b'-ex', b'define hook-run']) 
     
     if os.path.exists(args_path):
         parsed_args = get_argv_from_file(args_path)
         parsed_args = list(map(lambda x: b"'" + x + b"'", parsed_args))
         joined = b' '.join(parsed_args)
+    
+    argv.extend([b'-ex', b'set $testcase_path = "' + testcase_path + b'"'])
+    argv.extend([b'-ex', b'set $cwd = "' + os.path.realpath(os.fsencode(sys.path[0])) + b'"'])
+    argv.extend([b'-ex', b'source ' + os.path.join(script_dir, b'verification_gdb_session.py')])
 
     if args.stdin:
         argv.extend([b'-ex', b'set args ' + joined + b' < ' + input_file_path])  
@@ -65,6 +66,8 @@ def main():
         with open('empty', "w"):
             pass
         argv.extend([b'-ex', b'set args ' + joined + b' < empty'])
+
+    argv.append(executable_path)
 
     environ = dict()
     with open(environ_path, "rb") as f:
