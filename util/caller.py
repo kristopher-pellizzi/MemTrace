@@ -98,7 +98,7 @@ def main():
             environ[splitted[0]] = line[key_len + 1 : ]
             line = f.readline()[:-1]
 
-    restore_private_cpy_files(test_case_path)
+    restore_private_cpy_files(testcase_path)
 
     if args.stdin:
         input_file_path = os.path.join(testcase_path, b"input")
@@ -106,8 +106,15 @@ def main():
             p = subp.Popen(argv, env = environ, stdin = f)
             p.wait()
     else:
-        p = subp.Popen(argv, env = environ)
-        p.wait()
+        # Create an empty file named "empty" in the current working directory
+        with open("empty", "w"):
+            pass
+        
+        with open("empty", "rb") as f:  
+            p = subp.Popen(argv, env = environ, stdin = f)
+            p.wait()
+
+        os.remove("empty")
 
 
 if __name__ == "__main__":
