@@ -491,7 +491,7 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
             if arg in initial_fixed_input_files:
                 arg_basename = os.path.basename(arg)
                 su.copy(arg, os.path.join(private_cpy_folder.encode('utf-8'), arg_basename))
-                dst_path = os.path.join(bytes_input_path, arg_basename)
+                dst_path = os.path.realpath(os.path.join(bytes_input_path, arg_basename))
                 su.copy(arg, dst_path)
                 argv[arg_index] = dst_path
             arg_index += 1
