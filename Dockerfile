@@ -1,6 +1,6 @@
 FROM ubuntu:focal
 ARG TZ=Europe/Rome
-ARG DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip git wget gettext locales gdb vim"
+ARG DEPS="ninja-build libglib2.0-dev make gcc g++ pkg-config python3 python3-pip git wget gettext locales gdb vim tmux"
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 WORKDIR /opt/MemTraceThesis
 COPY . .
