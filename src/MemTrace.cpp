@@ -1827,7 +1827,7 @@ VOID Instruction(INS ins, VOID* v){
                 continue;
 
             // If the register is explicitly written, add it to the destination registers set
-            if(INS_RegWContain(ins, reg)){
+            if(INS_OperandWritten(ins, op)){
                 if(dstRegs == NULL){
                     dstRegs = new list<REG>();
                     regsPtrs.push_back(dstRegs);
@@ -1836,7 +1836,7 @@ VOID Instruction(INS ins, VOID* v){
             }
 
             // If the register is explicitly read, add it to the explicit source registers set
-            if(INS_RegRContain(ins, reg)){
+            if(INS_OperandRead(ins, op)){
                 if(explicitSrcRegs == NULL){
                     explicitSrcRegs = new list<REG>();
                     regsPtrs.push_back(explicitSrcRegs);
