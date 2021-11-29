@@ -167,6 +167,18 @@ void addPendingRead(list<REG>* dstRegs, set<tag_t>& tags){
             unsigned shdwReg = registerFile.getShadowRegister(*iter);
             shadowRegs.insert(shdwReg);
         }
+
+        // We must propagate tags even to all sub-registers of the destination registers
+        unsigned byteSize = registerFile.getByteSize(*iter);
+        set<unsigned>& aliasingRegisters = registerFile.getAliasingRegisters(*iter);
+        for(auto aliasIter = aliasingRegisters.begin(); aliasIter != aliasingRegisters.end(); ++aliasIter){
+            SHDW_REG aliasShdwReg = (SHDW_REG) *aliasIter;
+
+            // If the alias register is a sub-register
+            if(registerFile.getByteSize(aliasShdwReg) < byteSize){
+                shadowRegs.insert(aliasShdwReg);
+            }
+        }
     }
 
     addPendingRead(shadowRegs, tags);
