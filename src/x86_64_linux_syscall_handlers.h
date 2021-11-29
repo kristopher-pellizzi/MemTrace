@@ -986,6 +986,13 @@ RETTYPE sys_utimes_handler ARGUMENTS{
     return ret;
 }
 
+RETTYPE sys_futimesat_handler ARGUMENTS{
+    vector<ADDRINT> utimes_args;
+    utimes_args.push_back(args[1]);
+    utimes_args.push_back(args[2]);
+    return sys_utimes_handler(retVal, utimes_args);
+}
+
 RETTYPE sys_waitid_handler ARGUMENTS{
     set<SyscallMemAccess> ret;
     if((long long) retVal == -1)
@@ -1671,6 +1678,7 @@ class HandlerSelector{
             SYSCALL_ENTRY(258, 3, sys_mkdirat_handler);
             SYSCALL_ENTRY(259, 4, sys_mknodat_handler);
             SYSCALL_ENTRY(260, 5, sys_fchownat_handler);
+            SYSCALL_ENTRY(261, 3, sys_futimesat_handler);
             SYSCALL_ENTRY(262, 4, sys_fstatat_handler);
             SYSCALL_ENTRY(263, 3, sys_unlinkat_handler);
             SYSCALL_ENTRY(264, 4, sys_renameat_handler);
