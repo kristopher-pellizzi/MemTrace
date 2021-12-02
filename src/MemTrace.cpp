@@ -1344,96 +1344,6 @@ void addSyscallToAccesses(THREADID tid, CONTEXT* ctxt, set<SyscallMemAccess>& v)
     }
 }
 
-VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){
-    if(std == SYSCALL_STANDARD_INVALID){
-        *out << "Invalid syscall standard. This syscall won't be traced." << endl;
-        *out << "This may create false positives." << endl;
-        return;
-    }
-
-    ADDRINT actualIp = PIN_GetContextReg(ctxt, REG_INST_PTR);
-    syscallIP = actualIp;
-    ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
-
-    // If this is a call to mmap and a malloc has been called, but not returned yet,
-    // this mmap is part of the malloc itself, which is allocating memory pages,
-    // probably because the requested size is very high.
-    // The requested size is overridden by the size passed as an argument to mmap
-    // (which must be a multiple of the page size). This way, we can store the
-    // exact allocated size
-    if(sysNum == MMAP_NUM && mallocCalled){
-        mmapMallocCalled = true;
-        mallocRequestedSize = PIN_GetSyscallArgument(ctxt, std, 1);
-    }
-
-    if(sysNum == BRK_NUM && (mallocCalled || memalignCalled)){
-        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, 0);
-        if(arg != 0){
-            highestHeapAddr = arg;
-            firstMallocCalled = true;
-        }
-    }
-    unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
-    vector<ADDRINT> actualArgs;
-    for(int i = 0; i < argsCount; ++i){
-        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, i);
-        actualArgs.push_back(arg);
-    }
-
-    #ifdef DEBUG
-        bool lastSyscallReturned = !SyscallHandler::getInstance().init();
-        if(!lastSyscallReturned)
-            *out << "Current state: " << SyscallHandler::getInstance().getStateName() << "; Reinitializing handler..." << endl << endl;
-        *out << endl << "Setting arguments for syscall number " << std::dec << sysNum << endl;
-    #else
-        SyscallHandler::getInstance().init();
-    #endif
-
-    SyscallHandler::getInstance().setSysArgs((unsigned short) sysNum, actualArgs);
-}
-
-VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){
-    if(std == SYSCALL_STANDARD_INVALID){
-        *out << "Invalid syscall standard. This syscall won't be traced." << endl;
-        *out << "This may create false positives." << endl;
-        return;
-    }
-
-    ADDRINT sysRet = PIN_GetSyscallReturn(ctxt, std);
-    #ifdef DEBUG
-        *out << "Setting return value of the syscall" << endl;
-    #endif
-    SyscallHandler::getInstance().setSysRet(sysRet);
-    #ifdef DEBUG
-        *out << "Getting system call memory accesses and resetting state" << endl << endl;
-    #endif
-    set<SyscallMemAccess> accesses = SyscallHandler::getInstance().getReadsWrites();
-    addSyscallToAccesses(threadIndex, ctxt, accesses);
-}
-
-/*
-    Analysis function used to detect the overwriting of a register. In practice, every time a register is overwritten we must
-    remove all pending uninitialized reads whose uninitialized bytes are overwritten by writing the destination
-    registers. For instance, let's suppose an uninitialized read loads rax with uninitialized mask 11111000.
-    A subsequent overwrite of register eax with mask 1111 will overwrite the previous load. So, previous uninitialized 
-    read won't be reported, because never used.
-    If instead only ax was written with mask 11, the previous uninitialized bytes are not completely overwritten and, so,
-    the read is not removed. Indeed, if a subsequent instruction would use eax or rax, 1 uninitialized byte loaded by the 
-    first load will be read.
-*/
-VOID checkDestRegistersAnalysis(UINT32 opcode_arg, VOID* dstRegsPtr){
-    OPCODE opcode = (OPCODE) opcode_arg;
-    list<REG>* dstRegs = static_cast<list<REG>*>(dstRegsPtr);
-    auto findIter = checkDestSize.find(opcode);
-    if(findIter != checkDestSize.end()){
-        unsigned bitSize = findIter->second;
-        checkDestRegisters(dstRegs, opcode, bitSize);
-    }
-    else{
-        checkDestRegisters(dstRegs, opcode);
-    }
-}
-
 /*
     Function used to detect register usage and permanently store all the pending uninitialized
     reads that loaded that register.
@@ -1500,6 +1410,102 @@ VOID checkSourceRegisters(VOID* srcRegs){
         }
     }
 }
+
+VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){
+    if(std == SYSCALL_STANDARD_INVALID){
+        *out << "Invalid syscall standard. This syscall won't be traced." << endl;
+        *out << "This may create false positives." << endl;
+        return;
+    }
+
+    ADDRINT actualIp = PIN_GetContextReg(ctxt, REG_INST_PTR);
+    syscallIP = actualIp;
+    ADDRINT sysNum = PIN_GetSyscallNumber(ctxt, std);
+
+    // If this is a call to mmap and a malloc has been called, but not returned yet,
+    // this mmap is part of the malloc itself, which is allocating memory pages,
+    // probably because the requested size is very high.
+    // The requested size is overridden by the size passed as an argument to mmap
+    // (which must be a multiple of the page size). This way, we can store the
+    // exact allocated size
+    if(sysNum == MMAP_NUM && mallocCalled){
+        mmapMallocCalled = true;
+        mallocRequestedSize = PIN_GetSyscallArgument(ctxt, std, 1);
+    }
+
+    if(sysNum == BRK_NUM && (mallocCalled || memalignCalled)){
+        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, 0);
+        if(arg != 0){
+            highestHeapAddr = arg;
+            firstMallocCalled = true;
+        }
+    }
+    unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
+    vector<ADDRINT> actualArgs;
+    list<REG> argRegs;
+    for(int i = 0; i < argsCount; ++i){
+        ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, i);
+        actualArgs.push_back(arg);
+        argRegs.push_back(syscall_args[i]);
+    }
+
+    // Check if any of the syscall argument registers contain a pending uninitialized read
+    checkSourceRegisters(&argRegs);
+
+    #ifdef DEBUG
+        bool lastSyscallReturned = !SyscallHandler::getInstance().init();
+        if(!lastSyscallReturned)
+            *out << "Current state: " << SyscallHandler::getInstance().getStateName() << "; Reinitializing handler..." << endl << endl;
+        *out << endl << "Setting arguments for syscall number " << std::dec << sysNum << endl;
+    #else
+        SyscallHandler::getInstance().init();
+    #endif
+
+    SyscallHandler::getInstance().setSysArgs((unsigned short) sysNum, actualArgs);
+}
+
+VOID onSyscallExit(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){
+    if(std == SYSCALL_STANDARD_INVALID){
+        *out << "Invalid syscall standard. This syscall won't be traced." << endl;
+        *out << "This may create false positives." << endl;
+        return;
+    }
+
+    ADDRINT sysRet = PIN_GetSyscallReturn(ctxt, std);
+    #ifdef DEBUG
+        *out << "Setting return value of the syscall" << endl;
+    #endif
+    SyscallHandler::getInstance().setSysRet(sysRet);
+    #ifdef DEBUG
+        *out << "Getting system call memory accesses and resetting state" << endl << endl;
+    #endif
+    set<SyscallMemAccess> accesses = SyscallHandler::getInstance().getReadsWrites();
+    addSyscallToAccesses(threadIndex, ctxt, accesses);
+}
+
+/*
+    Analysis function used to detect the overwriting of a register. In practice, every time a register is overwritten we must
+    remove all pending uninitialized reads whose uninitialized bytes are overwritten by writing the destination
+    registers. For instance, let's suppose an uninitialized read loads rax with uninitialized mask 11111000.
+    A subsequent overwrite of register eax with mask 1111 will overwrite the previous load. So, previous uninitialized 
+    read won't be reported, because never used.
+    If instead only ax was written with mask 11, the previous uninitialized bytes are not completely overwritten and, so,
+    the read is not removed. Indeed, if a subsequent instruction would use eax or rax, 1 uninitialized byte loaded by the 
+    first load will be read.
+*/
+VOID checkDestRegistersAnalysis(UINT32 opcode_arg, VOID* dstRegsPtr){
+    OPCODE opcode = (OPCODE) opcode_arg;
+    list<REG>* dstRegs = static_cast<list<REG>*>(dstRegsPtr);
+    auto findIter = checkDestSize.find(opcode);
+    if(findIter != checkDestSize.end()){
+        unsigned bitSize = findIter->second;
+        checkDestRegisters(dstRegs, opcode, bitSize);
+    }
+    else{
+        checkDestRegisters(dstRegs, opcode);
+    }
+}
+
 
 VOID propagateRegisterStatus(UINT32 opcodeArg, VOID* srcRegsPtr, VOID* dstRegsPtr){    
     if(!entryPointExecuted || pendingUninitializedReads.size() == 0 || srcRegsPtr == NULL || dstRegsPtr == NULL)
