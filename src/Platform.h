@@ -1,7 +1,11 @@
 #ifndef PLATFORM
 #define PLATFORM
 
+#include <list>
 #include <unistd.h>
+#include "pin.H"
+
+using std::list;
 
 #undef PAGE_SIZE
 #define PAGE_SIZE pagesize
@@ -19,11 +23,13 @@ static const unsigned long pagesize = sysconf(_SC_PAGESIZE);
     #define MMAP_NUM 9
     #define BRK_NUM 12
     #define STACK_SHADOW_INIT 0xff
+    const REG syscall_args[] = {REG_RDI, REG_RSI, REG_RDX, REG_R10, REG_R8, REG_R9};
 #elif defined(__i386__) || defined(_M_IX86)
     #define X86
     #define MMAP_NUM 90
     #define BRK_NUM 45
     #define STACK_SHADOW_INIT 0xf0
+    const REG syscall_args[] = {REG_EBX, REG_ECX, REG_EDX, REG_ESI, REG_EDI, REG_EBP};
 #else
     #error "Not supported architecture"
 #endif
