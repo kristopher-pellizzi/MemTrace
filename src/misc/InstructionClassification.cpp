@@ -447,6 +447,8 @@ bool isCmpInstruction(OPCODE opcode){
         case XED_ICLASS_CMPSQ:
         case XED_ICLASS_CMPSS:
         case XED_ICLASS_CMPSW:
+        case XED_ICLASS_COMISD:
+        case XED_ICLASS_COMISS:
         case XED_ICLASS_PCMPEQB:
         case XED_ICLASS_PCMPEQD:
         case XED_ICLASS_PCMPEQQ:
@@ -492,6 +494,22 @@ bool isCmpInstruction(OPCODE opcode){
         case XED_ICLASS_VPCMPUQ:
         case XED_ICLASS_VPCMPUW:
         case XED_ICLASS_VPCMPW:
+        case XED_ICLASS_FCOM:
+        case XED_ICLASS_FCOMI:
+        case XED_ICLASS_FCOMIP:
+        case XED_ICLASS_FCOMP:
+        case XED_ICLASS_FCOMPP:
+        case XED_ICLASS_FICOM:
+        case XED_ICLASS_FICOMP:
+        case XED_ICLASS_FUCOM:
+        case XED_ICLASS_FUCOMI:
+        case XED_ICLASS_FUCOMIP:
+        case XED_ICLASS_FUCOMP:
+        case XED_ICLASS_FUCOMPP:
+        case XED_ICLASS_PTEST:
+        case XED_ICLASS_TEST:
+        case XED_ICLASS_UCOMISD:
+        case XED_ICLASS_UCOMISS:
             return true;
 
         default:
