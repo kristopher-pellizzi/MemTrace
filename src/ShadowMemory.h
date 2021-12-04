@@ -127,6 +127,7 @@ class HeapShadow : public ShadowBase{
 extern StackShadow stack;
 extern HeapShadow heap;
 extern unordered_map<ADDRINT, HeapShadow> mmapShadows;
+extern unsigned long mmapShadowsCounter;
 
 extern ShadowBase* currentShadow;
 

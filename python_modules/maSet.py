@@ -10,6 +10,7 @@ class MASet(object):
         self.memType: MemType = None
         self.memOffset: int = None
         self.size: int = None
+        self.heap_name = None
 
 
     def addOrigin(self, origin: str):
@@ -36,12 +37,15 @@ class MASet(object):
         self.addMASet(set)
 
 
-    def setMemLocation(self, accessIndex: int, type: MemType, mem_base: int):
+    def setMemLocation(self, accessIndex: int, type: MemType, mem_base: int, heap_name = None):
         addr, size = accessIndex
         addr = int(addr, 16)
         self.memOffset = addr - mem_base
         self.size = size
         self.memType = type
+
+        if heap_name is not None:
+            self.heap_name = heap_name
 
 
     def compareMemLocation(self, other):

@@ -5,6 +5,7 @@
 using std::vector;
 
 unordered_map<ADDRINT, HeapShadow> mmapShadows;
+unsigned long mmapShadowsCounter = 0;
 
 static unsigned long SHADOW_ALLOCATION = sysconf(_SC_PAGESIZE);
 

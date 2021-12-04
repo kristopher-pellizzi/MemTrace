@@ -631,6 +631,9 @@ VOID MallocAfter(ADDRINT ret)
     if(mmapMallocCalled){
         // NOTE: mallocRequestedSize has been overridden by the size passed as an argument to mmap
         ADDRINT page_start = ret & ~(PAGE_SIZE - 1);
+        std::ostringstream name;
+        name << "Heap " << ++mmapShadowsCounter;
+        imgs_base.insert(std::pair<string, ADDRINT>(name.str(), page_start));
         ret = malloc_get_block_beginning(ret);
 
         // This may happen on Linux. Before the entry point is executed, the loader needs to allocate
