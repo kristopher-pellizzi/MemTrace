@@ -42,10 +42,13 @@ static const unsigned long pagesize = sysconf(_SC_PAGESIZE);
 // Note that it must support Intel PIN to use this tool.
 #if defined(__linux__)
     #define LINUX
+    #define STACK_REDZONE_SIZE 128
 #elif defined(_WIN32)
     #define WINDOWS
+    #define STACK_REDZONE_SIZE 0
 #elif defined(__APPLE__) && defined(__MACH__)
     #define MACOS
+    #define STACK_REDZONE_SIZE 224
 #endif
 
 

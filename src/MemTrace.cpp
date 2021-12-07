@@ -255,7 +255,7 @@ bool isStackAddress(THREADID tid, ADDRINT addr, ADDRINT currentSp, OPCODE opcode
             return true;
     }
 
-    return addr >= currentSp && addr <= threadInfos[tid];
+    return addr >= currentSp - STACK_REDZONE_SIZE && addr <= threadInfos[tid];
 }
 
 // Returns true if the set |s| contains at least a full overlap for AccessIndex |targetAI| which is also an
@@ -1040,6 +1040,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
             ma.setUninitializedRead();
             ma.setUninitializedInterval(uninitializedInterval);
+
 
             // Check if the loaded value has bytes coming from stored pending reads
             if(storedPendingUninitializedReads.size() != 0){
