@@ -74,6 +74,16 @@ static char **afl_init_argv(int *argc, int fd) {
     exit(EXIT_FAILURE);
   }
 
+  // If input files begins with '\x00', check next character. If it's not a '\x00', store the empty argument as a first argument
+  // and increase the ptr; otherwise (second character is a '\x00' as well) there are no arguments, so just increase the ptr, so that
+  // everything after the double '\x00' will be considered as input
+  if(!*ptr){
+    if(*(ptr + 1)){
+      ret[rc++] = ptr;
+    }
+    ++ptr;
+  }
+
   while (*ptr && rc < MAX_CMDLINE_PAR) {
 
     ret[rc] = ptr;
@@ -82,14 +92,29 @@ static char **afl_init_argv(int *argc, int fd) {
 
     while (*ptr){
       ptr++;
+
       if(ptr >= in_buf + MAX_CMDLINE_LEN){
         *(ptr - 1) = '\x00';
         *(ptr - 2) = '\x00';
-        ptr -= 2;
+        ptr --;
+        break;
+      }
+
+      if(ptr >= in_buf + readBytes){
+        ptr = in_buf + readBytes;
+        *ptr = '\x00';
+        --ptr;
         break;
       }
     }
     ptr++;
+
+    // If we already read all the bytes read from fd, there can't be more arguments
+    if(ptr >= in_buf + readBytes){
+      ptr = in_buf + readBytes;
+      --ptr; // Required because ptr is increased again outside the loop
+      break;
+    }
 
   }
 
