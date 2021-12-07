@@ -1297,7 +1297,7 @@ VOID XrstorAnalysis( THREADID tid, CONTEXT* ctxt, ADDRINT ip, ADDRINT addr, UINT
 VOID procCallTrace( THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRINT addr, UINT32 size, VOID* disasm_ptr,
                     UINT32 opcode, VOID* srcRegs, VOID* dstRegs)
 {
-    if(!entryPointExecuted){
+    if(!entryPointExecuted && (ip < textStart || ip > textEnd)){
         return;
     }
 
