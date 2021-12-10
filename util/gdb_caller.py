@@ -53,6 +53,7 @@ def main():
     
     if os.path.exists(args_path):
         parsed_args = get_argv_from_file(args_path)
+        parsed_args = map(escape_single_quote, parsed_args)
         parsed_args = list(map(lambda x: b"'" + x + b"'", parsed_args))
         joined = b' '.join(parsed_args) 
 

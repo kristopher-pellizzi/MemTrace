@@ -20,3 +20,15 @@ def get_argv_from_file(path):
                 partial_arg.append(line)
 
     return ret
+
+
+def escape_single_quote(arg: bytes):
+    arr = arg.split(b"'")
+
+    if len(arr) == 1:
+        return arg
+
+    escape = b"'" + b'"' + b"'" + b'"' + b"'"
+    ret = escape.join(arr)
+
+    return ret
