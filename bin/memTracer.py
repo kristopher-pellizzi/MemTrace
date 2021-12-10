@@ -404,12 +404,16 @@ def launchTracer(exec_cmd, args, fuzz_int_event: t.Event, fuzzer_error_event: t.
 
         ret = raw_bytes.split(b'\x00')
         for str_index in input_path_indices:
-            # -1 is required because the list of arguments we are managing does not have the executable name as
-            # the first element
-            index = int(str_index) - 1
+            index = int(str_index)
             if len(ret) > index:
                 ret[index] = os.fsencode(os.path.realpath(input_file_path))
-        return ret
+
+        # This function MUST reflect the operations done while fuzzing argv in argvfuzz.c
+        # There, we convert the first argument read from the input file into the name of the executable, and convert
+        # all the indices inside input_path_indices into the name of the input file.
+        # In ths script, the executable has already been added to the argv list, so we simply need to return the list from the
+        # element at index 1 until the end.
+        return ret[1:]
 
 
     def get_argv_from_file(file_path):
