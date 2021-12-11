@@ -988,7 +988,6 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         if(pendingDirectMemoryCopy.isValid() && ma.getActualIP() == pendingDirectMemoryCopy.getIp()){
             MemoryAccess& pendingAccess = pendingDirectMemoryCopy.getAccess();
             InstructionHandler::getInstance().handle(pendingAccess, ma, srcRegs);
-            //AccessIndex ai(pendingAccess.getAddress(), pendingAccess.getSize());
         }
         // Writes performed by system calls don't have any src register, just store them
         else if(isSyscallInstruction(opcode)){
