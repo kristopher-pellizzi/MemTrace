@@ -463,7 +463,7 @@ void storeMemoryAccess(set<tag_t>& tags){
 
 void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, list<REG>* srcRegs, list<REG>* dstRegs){
     // If it is a mov instruction, it is a simple LOAD, thus leave it pending
-    if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
+    if(isMovInstruction(opcode) || isPushInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
         if(dstRegs != NULL)
             InstructionHandler::getInstance().handle(opcode, ma, srcRegs, dstRegs);
         else{
@@ -482,9 +482,12 @@ void storeOrLeavePending(OPCODE opcode, AccessIndex& ai, MemoryAccess& ma, list<
 }
 
 // Returns true if the uninitialized read is left pending; returns false if the uninitialized read is stored
-bool storeOrLeavePending(OPCODE opcode, list<REG>* dstRegs, set<tag_t>& tags){
-    if(isMovInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
-        addPendingRead(dstRegs, tags);
+bool storeOrLeavePending(OPCODE opcode, MemoryAccess& ma, list<REG>* dstRegs, set<tag_t>& tags){
+    if(isMovInstruction(opcode) || isPushInstruction(opcode) || isPopInstruction(opcode) || shouldLeavePending(opcode)){
+        if(dstRegs != NULL)
+            addPendingRead(dstRegs, tags);
+        else
+            pendingDirectMemoryCopy = PendingDirectMemoryCopy(ma);
         return true;
     }
     else{
@@ -985,7 +988,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
         if(pendingDirectMemoryCopy.isValid() && ma.getActualIP() == pendingDirectMemoryCopy.getIp()){
             MemoryAccess& pendingAccess = pendingDirectMemoryCopy.getAccess();
             InstructionHandler::getInstance().handle(pendingAccess, ma, srcRegs);
-            AccessIndex ai(pendingAccess.getAddress(), pendingAccess.getSize());
+            //AccessIndex ai(pendingAccess.getAddress(), pendingAccess.getSize());
         }
         // Writes performed by system calls don't have any src register, just store them
         else if(isSyscallInstruction(opcode)){
@@ -1068,7 +1071,7 @@ VOID memtrace(  THREADID tid, CONTEXT* ctxt, AccessType type, ADDRINT ip, ADDRIN
 
                 bool isLeftPending = false;
                 if(tags.size() > 0){
-                    isLeftPending = storeOrLeavePending(opcode, dstRegs, tags);                    
+                    isLeftPending = storeOrLeavePending(opcode, ma, dstRegs, tags);                    
                 } 
 
                 /*
