@@ -87,12 +87,7 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
     } while(*ptr != '\x00');
   }
 
-  sub_argv = afl_init_argv(&sub_argc, fd);
-
-  if(sub_argc <= 0){
-    // We must have at least the executable name
-    sub_argc = 1;
-  }
+  sub_argv = afl_init_argv(argv[0], &sub_argc, fd);
 
   for(unsigned i = 0; i < counter; ++i){
     index = indices[i];
@@ -102,8 +97,6 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
   }
 
   free(indices);
-
-  sub_argv[0] = argv[0];
 
   // We copied the part of the input file which must be read by the application inside a new file
   // whose path is defined by new_file_path. In order to make the application read it correctly, we need

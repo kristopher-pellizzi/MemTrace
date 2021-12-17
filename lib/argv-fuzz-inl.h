@@ -60,19 +60,22 @@
 
 char* new_file_path;
 
-static char **afl_init_argv(int *argc, int fd) {
+static char **afl_init_argv(char* executable, int *argc, int fd) {
 
   static char  in_buf[MAX_CMDLINE_LEN];
   static char *ret[MAX_CMDLINE_PAR];
 
   char *ptr = in_buf;
-  int   rc = 0;
+  int   rc = 1;
   ssize_t readBytes;
 
   if ((readBytes = read(fd, in_buf, MAX_CMDLINE_LEN)) == -1) {
     fprintf(stderr, "Cannot read from file descriptor %d\n", fd);
     exit(EXIT_FAILURE);
   }
+
+  // Set executable path as argument in argv[0]
+  ret[0] = executable;
 
   // If input files begins with '\x00', check next character. If it's not a '\x00', store the empty argument as a first argument
   // and increase the ptr; otherwise (second character is a '\x00' as well) there are no arguments, so just increase the ptr, so that
