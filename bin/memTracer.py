@@ -77,12 +77,12 @@ def parse_args(args):
 
 
     def parse_exec_time(s):
-        pat = r"([1-9][0-9]*)([smh])?$"
+        pat = r"([1-9][0-9]*)([smhdwM])?$"
         m = re.search(pat, s)
         if m is None:
             raise ap.ArgumentTypeError(
                 "Malformed execution time string. Accepted format: "
-                "<Integer> [s|m|h]. If neither of the unit modifier is used, time will be measured in seconds."
+                "<Integer> [s|m|h|d|w|M]. If neither of the unit modifier is used, time will be measured in seconds."
             )
 
         val = int(m[1])
@@ -93,6 +93,12 @@ def parse_args(args):
                 val *= 60
             elif modifier == 'h':
                 val *= 3600
+            elif modifier == 'd':
+                val *= 3600 * 24
+            elif modifier == 'w':
+                val *= 3600 * 24 * 7
+            elif modifier == 'M':
+                val *= 3600 * 24 * 30
 
         return val
 
@@ -221,7 +227,7 @@ def parse_args(args):
     parser.add_argument("--time", "-t",
         default = "60",
         help =  "Specify fuzzer's execution time. By default, the value is measured in seconds. The following modifiers can "
-                "be used: 's', 'm', 'h', to specify time respectively in seconds, minutes or hours",
+                "be used: 's', 'm', 'h', 'd', 'w', 'M', to specify time respectively in seconds, minutes, hours, days, weeks, Months (intended as 30 days months)",
         dest = "exec_time",
         type = parse_exec_time
     )
