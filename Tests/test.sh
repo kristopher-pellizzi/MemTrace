@@ -1,3 +1,5 @@
+#! /usr/bin/env bash
+
 EXE_PATH=$(readlink -f "./coreutils_8.32/install/bin")
 PIN_PATH=$(readlink -f "../third_party/PIN/pin")
 TOOL_PATH=$(readlink -f "../tool")
