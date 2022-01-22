@@ -39,7 +39,7 @@ compile_script_path = {
 bin2path = {
     'md2html':os.path.join('md4c', 'md2html', 'md2html'), 
     'cbor2json':os.path.join('oocborrt', 'util', 'cbor2json'), 
-    'cp':os.path.join('coreutils-6.9.90','install', 'cp'), 
+    'cp':os.path.join('coreutils-6.9.90','build', 'src', 'cp'), 
     'tail':os.path.join('coreutils-7.6', 'install', 'tail'), 
     'contacts':os.path.join('CTF', 'picoCTF_2018_contacts', 'contacts_cpy'),
     'full_protection':os.path.join('CTF', 'ASIS_CTF_2020_full_protection', 'full_protection'),
