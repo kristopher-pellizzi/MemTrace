@@ -1,8 +1,9 @@
-EXE_PATH=$(readlink -f "./coreutils/src")
-PIN_PATH=$(readlink -f "./third_party/PIN/pin")
-TOOL_PATH=$(readlink -f "./tool")
+EXE_PATH=$(readlink -f "./coreutils_8.32/install/bin")
+PIN_PATH=$(readlink -f "../third_party/PIN/pin")
+TOOL_PATH=$(readlink -f "../tool")
+RESULT_PATH=$(readlink -f "./execution_times.csv")
 
-echo "Utility;Original execution time;Null instrumented execution time;Instrumented execution time;Instrumentation overhead;Analysis overhead; Instrumentation+Analysis overhead" > ./Tests/execution_times.csv
+echo "Utility;Original execution time;Null instrumented execution time;Instrumented execution time;Instrumentation overhead;Analysis overhead; Instrumentation+Analysis overhead" > $RESULT_PATH
 
 # Call a utility with sudo so that it won't request password again later
 
@@ -48,7 +49,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -89,7 +90,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test base32 utility to compute base32 encoding of a file with 1K of random data
@@ -129,7 +130,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test base64 utility to compute the base64 encoding of a file with 1K of random data
@@ -169,7 +170,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -211,7 +212,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test cat utility to concatenate 2 files containing 1K of random data each and print them to stdout
@@ -251,7 +252,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test chgrp utility to change owner group of a file to root
@@ -300,7 +301,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -351,7 +352,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test chown utility to change the owner of a file to root
@@ -400,7 +401,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test cksum to compute the checksum of a file containing 1K of random data
@@ -440,7 +441,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test sort utility to sort a file containing 1K of random data
@@ -486,7 +487,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -527,7 +528,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test cp utility to copy a file containing 1K of random data
@@ -573,7 +574,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test csplit to split a file containing 1K of random data at 3rd line into 2 distinct files
@@ -619,7 +620,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 # Test cut utility to extract only first 10 bytes of each line of a file containing 1K of random data
 
@@ -658,7 +659,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test date utility to print current date to stdout
@@ -698,7 +699,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test df utility to print to stdout information about file system disk space usage
@@ -738,7 +739,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test dir utility to print the list of current directory content to stdout
@@ -778,7 +779,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test dircolors to print the database of set colors to file extensions
@@ -818,7 +819,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test dirname utility to print the current path except the last directory to stdout
@@ -858,7 +859,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -901,7 +902,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -945,7 +946,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -986,7 +987,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1028,7 +1029,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1072,7 +1073,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1114,7 +1115,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1157,7 +1158,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1198,7 +1199,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1239,7 +1240,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1280,7 +1281,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1323,7 +1324,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1366,7 +1367,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1407,7 +1408,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1449,7 +1450,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1496,7 +1497,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1543,7 +1544,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test ls utility to print a list of the current directory content to stdout
@@ -1583,7 +1584,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1624,7 +1625,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1672,7 +1673,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1719,7 +1720,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1768,7 +1769,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1811,7 +1812,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1862,7 +1863,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1904,7 +1905,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1946,7 +1947,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -1987,7 +1988,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2028,7 +2029,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2070,7 +2071,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2113,7 +2114,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2154,7 +2155,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2196,7 +2197,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2239,7 +2240,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 # Test ptx utility to produce a permuted index of a file containing 1K of random data
@@ -2279,7 +2280,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2322,7 +2323,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2368,7 +2369,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2410,7 +2411,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2460,7 +2461,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2509,7 +2510,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2552,7 +2553,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2594,7 +2595,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2637,7 +2638,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2679,7 +2680,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2721,7 +2722,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2764,7 +2765,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2814,7 +2815,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2856,7 +2857,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2899,7 +2900,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -2959,7 +2960,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3002,7 +3003,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3043,7 +3044,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3084,7 +3085,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3126,7 +3127,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3168,7 +3169,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3215,7 +3216,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3266,7 +3267,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3307,7 +3308,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3349,7 +3350,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3390,7 +3391,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3431,7 +3432,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3480,7 +3481,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3523,7 +3524,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3564,7 +3565,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3607,7 +3608,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3648,7 +3649,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3689,7 +3690,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 
@@ -3731,7 +3732,7 @@ analysis_overhead=$(echo "scale=2; ($instrumented_duration / $null_duration)" | 
 echo "Total overhead: $inst_analysis_overhead X"
 echo
 
-echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> ./Tests/execution_times.csv
+echo "$utility;$orig_duration;$null_duration;$instrumented_duration;$instrumentation_overhead;$analysis_overhead;$inst_analysis_overhead" >> $RESULT_PATH
 
 
 sudo rm ./test2.iso

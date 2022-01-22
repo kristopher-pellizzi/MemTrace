@@ -10,7 +10,9 @@ valgrind_test_path = os.path.join(tests_path, 'valgrindTest.sh')
 exec_times_path = os.path.join(tests_path, 'execution_times.csv')
 memtrace_exec_times_path = os.path.join(tests_path, 'memtrace_execution_times.csv')
 valgrind_exec_times_path = os.path.join(tests_path, 'valgrind_execution_times.csv')
-coreutils_path = os.path.join(tests_path, 'coreutils')
+coreutils_path = os.path.join(tests_path, 'coreutils_8.32')
+required_pkgs = ['sudo', 'valgrind', 'bc', 'autoconf', 'automake', 'autopoint', 'bison', 'gperf', 'makeinfo', 'rsync']
+nulltool_path = os.path.realpath(os.path.join(tests_path, '..', 'tool', 'NullTool.so'))
 
 def extract_coreutils():
     print("Extracting coreutils_8.32...")
@@ -40,8 +42,21 @@ def confirm_removal():
 
 
 def main():
+    if not os.path.exists(nulltool_path):
+        p = subp.Popen(['make', 'nulltool'], cwd=os.path.realpath(os.path.join(tests_path, '..')))
+        p.wait()
+
     if not os.path.exists(coreutils_path):
         extract_coreutils()
+
+    for pkg in required_pkgs:
+        try:
+            p = subp.Popen([pkg, '--version'], stdout = subp.DEVNULL, stderr = subp.STDOUT)
+            p.wait()
+        except FileNotFoundError:
+            print("{0} not found. Be sure to install the following packages:".format(pkg))
+            print(" ".join(list(map(lambda x: 'texinfo' if x == 'makeinfo' else x, required_pkgs))))
+            exit(-1)
 
     if not os.path.exists(os.path.join(coreutils_path, 'install', 'bin', 'tail')):
         compile_script_path = os.path.join(coreutils_path, 'compile.sh')
