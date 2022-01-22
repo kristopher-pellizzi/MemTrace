@@ -14,7 +14,7 @@ coreutils_path = os.path.join(tests_path, 'coreutils')
 
 def extract_coreutils():
     print("Extracting coreutils_8.32...")
-    p = subp.Popen(['tar', '-xvJf', 'coreutils_8.32.tar.xz'])
+    p = subp.Popen(['tar', '-xvJf', 'coreutils_8.32.tar.xz'], cwd = tests_path)
     p.wait()
 
 
@@ -42,6 +42,11 @@ def confirm_removal():
 def main():
     if not os.path.exists(coreutils_path):
         extract_coreutils()
+
+    if not os.path.exists(os.path.join(coreutils_path, 'install', 'bin', 'tail')):
+        compile_script_path = os.path.join(coreutils_path, 'compile.sh')
+        p = subp.Popen([compile_script_path], cwd=coreutils_path)
+        p.wait()
 
     if os.path.exists(memtrace_exec_times_path) or os.path.exists(valgrind_exec_times_path):
         confirm_removal()
