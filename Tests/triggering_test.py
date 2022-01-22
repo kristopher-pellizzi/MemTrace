@@ -19,7 +19,7 @@ input_dir_paths = list(map(lambda x: os.path.join(tests_path, 'trigger_inputs', 
 out_paths = list(map(lambda x: os.path.join(triggering_test_out_path, x), bin_names))
 patch_dir_path = os.path.join(tests_path, 'patches')
 
-required_pkgs = ['zip', 'unzip', 'tar', 'sudo', 'valgrind', 'bc', 'autoconf', 'automake', 'autopoint', 'bison', 'gperf', 'makeinfo', 'rsync']
+required_pkgs = ['patchelf', 'cmake', 'zip', 'unzip', 'tar', 'sudo', 'valgrind', 'bc', 'autoconf', 'automake', 'autopoint', 'bison', 'gperf', 'makeinfo', 'rsync']
 
 compile_script_path = {
     'md2html':'md4c', 
@@ -132,20 +132,21 @@ def main():
     # Compile binaries.
     for bin in bin2path:
         if not os.path.exists(os.path.join(tests_path, bin2path[bin])):
-            path = os.path.join(tests_path, compile_script_path[bin], 'compile.sh')
+            compile_script_dirname = os.path.join(tests_path, compile_script_path[bin])
+            path = os.path.join(compile_script_dirname, 'compile.sh')
             print("Compiling {0}...".format(bin))
-            p = subp.Popen([path])
+            p = subp.Popen([path], cwd = compile_script_dirname)
             p.wait()
             if p.returncode != 0:
                 print("Compilation of {0} failed".format(bin))
-                print("Try to compile manually in folder {0}".format(os.path.join(tests_path, compile_script_path)))
+                print("Try to compile manually in folder {0}".format(os.path.join(tests_path, compile_script_dirname)))
 
             
     # Perform tests
     
     # Test cbor2json
     bin_name = 'cbor2json'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -158,7 +159,7 @@ def main():
 
     # Test md2html. This will not find any overlap
     bin_name = 'md2html'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -171,7 +172,7 @@ def main():
 
     # Test cp
     bin_name = 'cp'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'path', 'to', 'input')
@@ -190,7 +191,7 @@ def main():
 
     # Test tail
     bin_name = 'tail'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -203,7 +204,7 @@ def main():
 
     # Test contacts
     bin_name = 'contacts'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -216,7 +217,7 @@ def main():
 
     # Test full_protection
     bin_name = 'full_protection'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -229,7 +230,7 @@ def main():
 
     # Test watchstop
     bin_name = 'watchstop'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -250,7 +251,7 @@ def main():
 
     # Test accel
     bin_name = 'accel'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -263,7 +264,7 @@ def main():
 
     # Test textsearch
     bin_name = 'textsearch'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -276,7 +277,7 @@ def main():
 
     # Test hackman
     bin_name = 'hackman'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -297,7 +298,7 @@ def main():
 
     # Test tfttp
     bin_name = 'tfttp'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
@@ -310,7 +311,7 @@ def main():
 
     # Test sso (COPY SCRIPT FOR SSO HERE)
     bin_name = 'full_protection'
-    exec_path = bin2path[bin_name]
+    exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
