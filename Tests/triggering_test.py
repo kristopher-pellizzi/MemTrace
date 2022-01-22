@@ -19,6 +19,8 @@ input_dir_paths = list(map(lambda x: os.path.join(tests_path, 'trigger_inputs', 
 out_paths = list(map(lambda x: os.path.join(triggering_test_out_path, x), bin_names))
 patch_dir_path = os.path.join(tests_path, 'patches')
 
+required_pkgs = ['zip', 'unzip', 'tar', 'sudo', 'valgrind', 'bc', 'autoconf', 'automake', 'autopoint', 'bison', 'gperf', 'makeinfo', 'rsync']
+
 compile_script_path = {
     'md2html':'md4c', 
     'cbor2json':'oocborrt', 
@@ -80,11 +82,20 @@ def extract_archive(archive_name: str):
         archive = "{0}.{1}".format(path, ext)
         cmd = ['tar', '-xvJf', archive]
 
-    p = subp.Popen([cmd], stdout = subp.DEVNULL, stderr = subp.STDOUT, cwd = tests_path)
+    p = subp.Popen(cmd, stdout = subp.DEVNULL, stderr = subp.STDOUT, cwd = tests_path)
     p.wait()
 
 
 def main():
+    for pkg in required_pkgs:
+        try:
+            p = subp.Popen([pkg, '--version'], stdout = subp.DEVNULL, stderr = subp.STDOUT)
+            p.wait()
+        except FileNotFoundError:
+            print("{0} not found. Be sure to install the following packages:".format(pkg))
+            print(" ".join(list(map(lambda x: 'texinfo' if x == 'makeinfo' else x, required_pkgs))))
+            exit(-1)
+
     # Create output folders
     if not os.path.exists(triggering_test_out_path):
         os.mkdir(triggering_test_out_path)
@@ -96,6 +107,7 @@ def main():
         if out_path_exists:
             confirm_removal()
 
+        os.mkdir(triggering_test_out_path)
         for path in out_paths:
             os.mkdir(path)
             os.mkdir(os.path.join(path, 'tracer_out'))
