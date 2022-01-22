@@ -75,7 +75,7 @@ def main():
     p = subp.Popen([valgrind_test_path], stdout = subp.DEVNULL, stderr = subp.STDOUT)
     p.wait()
     
-    print("{0} terminated.")
+    print("{0} terminated.".format(valgrind_test_path))
     os.rename(exec_times_path, valgrind_exec_times_path)
 
 
