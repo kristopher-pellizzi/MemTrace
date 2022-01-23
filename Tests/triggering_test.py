@@ -142,7 +142,7 @@ def main():
             print("Compiling {0}...".format(bin))
             p = subp.Popen([path], cwd = compile_script_dirname)
             p.wait()
-            if p.returncode != 0:
+            if p.returncode != 0 and not os.path.exists(os.path.join(tests_path, bin2path[bin])):
                 print("Compilation of {0} failed".format(bin))
                 print("Try to compile manually in folder {0}".format(os.path.join(tests_path, compile_script_dirname)))
 
@@ -340,6 +340,7 @@ def main():
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
 
+        out_path = os.path.join(triggering_test_out_path, bin_name)
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         output_file = open(cmd_output_path, "wb")
         cmd = [memTracer_path, '-x', '--', exec_path]
