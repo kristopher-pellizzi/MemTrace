@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess as subp
 from functools import reduce
+from time import sleep
 import shutil as su
 
 tests_path = os.path.realpath(sys.path[0])
@@ -143,6 +144,8 @@ def main():
 
             
     # Perform tests
+
+    pendingTests = []
     
     # Test cbor2json
     bin_name = 'cbor2json'
@@ -154,8 +157,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path, '-i', input_path]
         with open(cmd_output_path, "w") as f:
-            subp.Popen(cmd, cwd = out_path, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test md2html. This will not find any overlap
     bin_name = 'md2html'
@@ -167,8 +170,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path, input_path]
         with open(cmd_output_path, "w") as f:
-            subp.Popen(cmd, cwd = out_path, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test cp
     bin_name = 'cp'
@@ -177,16 +180,23 @@ def main():
         print("Testing {0}...".format(bin_name))
         input_path = os.path.join(tests_path, 'trigger_inputs', bin_name)
         input_rel_path = os.path.join('path', 'to', 'input')
+        tracer_out_dir = os.path.join(input_path, 'tracer_out')
+        os.mkdir(tracer_out_dir)
         out_path = os.path.join(triggering_test_out_path, bin_name)
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         os.mkdir(os.path.join(out_path, 'path'))
         cmd = [memTracer_path, '-x', '--', exec_path, '--parent', '--preserve', input_rel_path, out_path]
         with open(cmd_output_path, "w") as f:
-            subp.Popen(cmd, cwd = input_path, stdout = f, stderr = subp.STDOUT)
+            p = subp.Popen(cmd, cwd = input_path, stdout = f, stderr = subp.STDOUT)
             p.wait()
+
+        dst_dir = os.path.join(out_path, 'tracer_out')
+        for entry in os.listdir(tracer_out_dir):
+            su.move(os.path.join(tracer_out_dir, entry), dst_dir)
         # Remove test artifacts
+        su.rmtree(tracer_out_dir)
         try:
-            os.remove(os.path.join(out_path, 'path'))
+            su.rmtree(os.path.join(out_path, 'path'))
         except:
             print("Impossible to remove artifacts. Please manually remove {0}".format(os.path.join(out_path, 'path')))
 
@@ -200,8 +210,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path, '-']
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test contacts
     bin_name = 'contacts'
@@ -213,8 +223,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test full_protection
     bin_name = 'full_protection'
@@ -226,8 +236,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test watchstop
     bin_name = 'watchstop'
@@ -239,8 +249,13 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
+
+    for proc in pendingTests:
+        proc.wait()
+    
+    pendingTests.clear()
 
     # Patch and recompile MemTrace
     os.remove(os.path.join(src_path, 'MallocHandler.h'))
@@ -260,8 +275,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test textsearch
     bin_name = 'textsearch'
@@ -273,8 +288,8 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
     # Test hackman
     bin_name = 'hackman'
@@ -286,8 +301,13 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
+
+    for proc in pendingTests:
+        proc.wait()
+
+    pendingTests.clear()
 
     # Patch and recompile MemTrace
     os.remove(os.path.join(src_path, 'MallocHandler.h'))
@@ -307,21 +327,34 @@ def main():
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         cmd = [memTracer_path, '-x', '--', exec_path]
         with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait()
+            p = subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
+            pendingTests.append(p)
 
-    # Test sso (COPY SCRIPT FOR SSO HERE)
-    bin_name = 'full_protection'
+    # Test sso 
+    bin_name = 'sso'
     exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
-        input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'input')
-        out_path = os.path.join(triggering_test_out_path, bin_name)
+
         cmd_output_path = os.path.join(out_path, 'cmd_output')
+        output_file = open(cmd_output_path, "w")
         cmd = [memTracer_path, '-x', '--', exec_path]
-        with open(cmd_output_path, "w") as f, open(input_path, "rb") as input:
-            subp.Popen(cmd, cwd = out_path, stdin = input, stdout = f, stderr = subp.STDOUT)
-            p.wait() 
+        p = subp.Popen(cmd, cwd = out_path, stdin=subp.PIPE, stdout=subp.PIPE, stderr=subp.STDOUT)
+        os.write(p.stdin.fileno(), b"AUTH\xc7\x02\x00\x00\x04\x00\x00\x00\x65\x52\x72\x41\x73\x65\x41\x74\x62\x4b\x07")
+
+        sleep(5)
+        out = os.read(p.stdout.fileno(), 409600)
+        output_file.write(out.decode())
+        #print(out[-5:-1])
+        auth_code = out[-5:-1] + b"\x00\x00\x00\x00"
+        os.write(p.stdin.fileno(), b"AUTH\xc7\x02\x00\x00\x04\x00\x00\x00" + auth_code + b"\x07")
+        out = os.read(p.stdout.fileno(), 4096)
+        output_file.write(out.decode())
+        #print(out)
+        p.wait()
+
+    for proc in pendingTests:
+        proc.wait()
 
     # Patch and recompile MemTrace
     os.remove(os.path.join(src_path, 'MallocHandler.h'))
