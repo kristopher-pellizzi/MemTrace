@@ -175,13 +175,14 @@ def main():
     exec_path = os.path.join(tests_path, bin2path[bin_name])
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
-        input_path = os.path.join(tests_path, 'trigger_inputs', bin_name, 'path', 'to', 'input')
+        input_path = os.path.join(tests_path, 'trigger_inputs', bin_name)
+        input_rel_path = os.path.join('path', 'to', 'input')
         out_path = os.path.join(triggering_test_out_path, bin_name)
         cmd_output_path = os.path.join(out_path, 'cmd_output')
         os.mkdir(os.path.join(out_path, 'path'))
-        cmd = [memTracer_path, '-x', '--', exec_path, '--parent', '--preserve', input_path, out_path]
+        cmd = [memTracer_path, '-x', '--', exec_path, '--parent', '--preserve', input_rel_path, out_path]
         with open(cmd_output_path, "w") as f:
-            subp.Popen(cmd, cwd = out_path, stdout = f, stderr = subp.STDOUT)
+            subp.Popen(cmd, cwd = input_path, stdout = f, stderr = subp.STDOUT)
             p.wait()
         # Remove test artifacts
         try:
