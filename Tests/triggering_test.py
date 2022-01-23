@@ -129,6 +129,10 @@ def main():
         p = subp.Popen(['git', 'clone', cgc_repo], cwd = tests_path)
         p.wait()
         su.copy(os.path.join(patch_dir_path, 'cgc_compile.sh'), os.path.join(tests_path, 'cgc-cbs', 'compile.sh'))
+        # NOTE: this patch actually slightly modifies the source code of the binary. However, this is done because the original binary was thought for 32 bit x86
+        # and some reads are managed assuming it is executed on such an architecture (and therefore assumes pointers have a size of 4 bytes).
+        # The patch is only meant to fix the retrieval of packages, without affecting the actual behavior of the original program.
+        su.copy(os.path.join(patch_dir_path, 'sso', 'src', 'service.c'), os.path.realpath(os.path.join(tests_path, bin2path['sso'], '..', 'src')))
 
     # Compile binaries.
     for bin in bin2path:
@@ -337,21 +341,22 @@ def main():
         print("Testing {0}...".format(bin_name))
 
         cmd_output_path = os.path.join(out_path, 'cmd_output')
-        output_file = open(cmd_output_path, "w")
+        output_file = open(cmd_output_path, "wb")
         cmd = [memTracer_path, '-x', '--', exec_path]
         p = subp.Popen(cmd, cwd = out_path, stdin=subp.PIPE, stdout=subp.PIPE, stderr=subp.STDOUT)
         os.write(p.stdin.fileno(), b"AUTH\xc7\x02\x00\x00\x04\x00\x00\x00\x65\x52\x72\x41\x73\x65\x41\x74\x62\x4b\x07")
 
         sleep(5)
         out = os.read(p.stdout.fileno(), 409600)
-        output_file.write(out.decode())
+        output_file.write(out)
         #print(out[-5:-1])
         auth_code = out[-5:-1] + b"\x00\x00\x00\x00"
         os.write(p.stdin.fileno(), b"AUTH\xc7\x02\x00\x00\x04\x00\x00\x00" + auth_code + b"\x07")
         out = os.read(p.stdout.fileno(), 4096)
-        output_file.write(out.decode())
+        output_file.write(out)
         #print(out)
         p.wait()
+        output_file.close()
 
     for proc in pendingTests:
         proc.wait()
