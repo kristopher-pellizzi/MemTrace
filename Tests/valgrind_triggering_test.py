@@ -350,9 +350,10 @@ def main():
         sleep(5)
         out = os.read(p.stdout.fileno(), 409600)
         output_file.write(out)
-        #print(out[-5:-1])
-        auth_code = out[-5:-1] + b"\x00\x00\x00\x00"
+        #print(out[-6:-1])
+        auth_code = out[-6:-1] + b"\x00\x00\x00\x00"
         os.write(p.stdin.fileno(), b"AUTH\xc7\x02\x00\x00\x04\x00\x00\x00" + auth_code + b"\x07")
+        sleep(5)
         out = os.read(p.stdout.fileno(), 4096)
         output_file.write(out)
         #print(out)
