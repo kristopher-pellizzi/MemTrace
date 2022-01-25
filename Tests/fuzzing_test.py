@@ -59,7 +59,7 @@ bin2path = {
 
 def check_tmux_session_end():
     while True:
-        p = subp.Popen(['tmux', 'has-session', '-t', 'test-session'])
+        p = subp.Popen(['tmux', 'has-session', '-t', 'test-session'], stdout = subp.DEVNULL, stderr = subp.STDOUT)
         retcode = p.wait()
         if retcode != 0:
             return
@@ -68,14 +68,16 @@ def check_tmux_session_end():
 
 
 def wait_tmux_session_end():
+    global window0_is_busy
     t = th.Thread(target = check_tmux_session_end)
     t.start()
     print()
     print("MemTrace needs to be recompiled to continue, so testing will resume as soon as the already started tests will end (in about 8 hours).")
     print("Note that at the end of the fuzzing process, MemTrace may require user input to conclude.")
-    print("Digit 'tmux a -t test-session' to check the status of the tests.")
+    print("Digit 'tmux a -t test-session' in another terminal to check the status of the tests.")
     print("When all the started tests ended, you can close the tmux session, and the test will resume.")
     t.join()
+    print()
     print("Resuming testing script...")
     window0_is_busy = False
 
