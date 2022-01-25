@@ -61,7 +61,7 @@ def check_tmux_session_end():
     while True:
         p = subp.Popen(['tmux', 'has-session', '-t', 'test-session'])
         retcode = p.wait()
-        if retcode != 1:
+        if retcode != 0:
             return
 
         sleep(1)
@@ -70,11 +70,14 @@ def check_tmux_session_end():
 def wait_tmux_session_end():
     t = th.Thread(target = check_tmux_session_end)
     t.start()
+    print()
     print("MemTrace needs to be recompiled to continue, so testing will resume as soon as the already started tests will end (in about 8 hours).")
     print("Note that at the end of the fuzzing process, MemTrace may require user input to conclude.")
     print("Digit 'tmux a -t test-session' to check the status of the tests.")
     print("When all the started tests ended, you can close the tmux session, and the test will resume.")
     t.join()
+    print("Resuming testing script...")
+    window0_is_busy = False
 
 
 def confirm_removal():
@@ -204,9 +207,9 @@ def main():
         subp.run(['dd', 'if=/dev/urandom', 'of=rand', 'count=1K', 'iflag=count_bytes'])
 
     orig_environ = dict(os.environ)
-    os.environ['AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES'] = 1
-    os.environ['AFL_SKIP_CPUFREQ'] = 1
-    os.environ['FORCE_UNSAFE_CONFIGURE'] = 1
+    os.environ['AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES'] = '1'
+    os.environ['AFL_SKIP_CPUFREQ'] = '1'
+    os.environ['FORCE_UNSAFE_CONFIGURE'] = '1'
 
     # Test cbor2json
     bin_name = 'cbor2json'
@@ -264,7 +267,7 @@ def main():
         print("Testing {0}...".format(bin_name))
         out_path = os.path.join(fuzzing_test_out_path, bin_name)
         custom_dict_path = os.path.join(dict_path, 'contacts.dict')
-        test_command = 'memTracer.py -t 8h -s 3 -p 4 --store-tracer-out -d {0} --dict {2} -- {1}'.format(out_path, exec_path, custom_dict_path)
+        test_command = 'memTracer.py -r -t 8h -s 3 -p 4 --store-tracer-out -d {0} --dict {2} -- {1}'.format(out_path, exec_path, custom_dict_path)
         init_testcase_dir = os.path.join(out_path, 'in')
         os.mkdir(init_testcase_dir)
         input_basename = os.path.join(tests_path, 'fuzzing_inputs', bin_name)
@@ -309,7 +312,6 @@ def main():
 
 
     wait_tmux_session_end() 
-    print("Resuming testing script...")
 
     # Patch and recompile MemTrace
     os.remove(os.path.join(src_path, 'MallocHandler.h'))
@@ -326,7 +328,7 @@ def main():
         print("Testing {0}...".format(bin_name))
         out_path = os.path.join(fuzzing_test_out_path, bin_name)
         custom_dict_path = os.path.join(dict_path, 'accel.dict')
-        test_command = 'memTracer.py -t 8h -s 3 -p 4 --store-tracer-out -d {0} --dict {2} -- {1}'.format(out_path, exec_path, custom_dict_path)
+        test_command = 'memTracer.py -r -t 8h -s 3 -p 4 --store-tracer-out -d {0} --dict {2} -- {1}'.format(out_path, exec_path, custom_dict_path)
         init_testcase_dir = os.path.join(out_path, 'in')
         os.mkdir(init_testcase_dir)
         input_basename = os.path.join(tests_path, 'fuzzing_inputs', bin_name)
@@ -343,7 +345,7 @@ def main():
         print("Testing {0}...".format(bin_name))
         out_path = os.path.join(fuzzing_test_out_path, bin_name)
         custom_dict_path = os.path.join(dict_path, 'textsearch.dict')
-        test_command = 'memTracer.py -t 8h -s 3 -p 4 --store-tracer-out -d {0} --dict {2} -- {1}'.format(out_path, exec_path, custom_dict_path)
+        test_command = 'memTracer.py -r -t 8h -s 3 -p 4 --store-tracer-out -d {0} --dict {2} -- {1}'.format(out_path, exec_path, custom_dict_path)
         init_testcase_dir = os.path.join(out_path, 'in')
         os.mkdir(init_testcase_dir)
         input_basename = os.path.join(tests_path, 'fuzzing_inputs', bin_name)
@@ -359,7 +361,7 @@ def main():
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         out_path = os.path.join(fuzzing_test_out_path, bin_name)
-        test_command = 'memTracer.py -t 8h -s 3 -p 4 --store-tracer-out -d {0} -- {1}'.format(out_path, exec_path)
+        test_command = 'memTracer.py -r -t 8h -s 3 -p 4 --store-tracer-out -d {0} -- {1}'.format(out_path, exec_path)
         init_testcase_dir = os.path.join(out_path, 'in')
         os.mkdir(init_testcase_dir)
         input_basename = os.path.join(tests_path, 'fuzzing_inputs', bin_name)
@@ -385,7 +387,7 @@ def main():
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         out_path = os.path.join(fuzzing_test_out_path, bin_name)
-        test_command = 'memTracer.py -t 8h -s 3 -p 4 --store-tracer-out -d {0} -- {1}'.format(out_path, exec_path)
+        test_command = 'memTracer.py -r -t 8h -s 3 -p 4 --store-tracer-out -d {0} -- {1}'.format(out_path, exec_path)
         init_testcase_dir = os.path.join(out_path, 'in')
         os.mkdir(init_testcase_dir)
         input_basename = os.path.join(tests_path, 'fuzzing_inputs', bin_name)
@@ -401,7 +403,7 @@ def main():
     if os.path.exists(exec_path):
         print("Testing {0}...".format(bin_name))
         out_path = os.path.join(fuzzing_test_out_path, bin_name)
-        test_command = 'memTracer.py -t 8h -s 3 -p 4 --store-tracer-out -d {0} -- {1}'.format(out_path, exec_path)
+        test_command = 'memTracer.py -r -t 8h -s 3 -p 4 --store-tracer-out -d {0} -- {1}'.format(out_path, exec_path)
         init_testcase_dir = os.path.join(out_path, 'in')
         os.mkdir(init_testcase_dir)
         input_basename = os.path.join(tests_path, 'fuzzing_inputs', bin_name)
