@@ -114,10 +114,10 @@ void StackShadow::set_as_initialized(ADDRINT addr, UINT32 size, uint8_t* data){
     for(unsigned i = 0; i < shadowSize; ++i){
         // Reset bits related to our access
         uint8_t mask = 0;
-        if(leftSize % 8 != 0 && i == 0){
+        if(i == 0){
             mask |= (uint8_t) 0xff >> (8 - offset);
         }
-        if(i == shadowSize - 1){
+        if(leftSize % 8 != 0 && i == shadowSize - 1){
             mask |= (uint8_t) 0xff << (leftSize % 8);
         }
         *shadowAddr &= mask;
