@@ -1,0 +1,39 @@
+# BASIC SYNTAX
+"A1"
+"="
+"=="
+"14"
+"2.13"
+"This is just a string"
+
+# COMMANDS
+"CLEAR "
+"REPR "
+"SHOW "
+"SHOW TABLE "
+"EXIT"
+
+# SUPPORTED OPERATORS
+"("
+")"
+","
+"+"
+"*"
+"/"
+"-"
+
+# SUPPORTED FUNCTIONS
+"AVG"
+"COUNT"
+"MAX"
+"MEDIAN"
+"MIN"
+"STDDEV"
+"ABS"
+"COS"
+"LN"
+"LOG10"
+"POWER"
+"SIN"
+"SQRT"
+"SUM"
