@@ -597,6 +597,7 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
     bool isUninitialized = false;
+    bool requiresNewPages = false;
     unsigned offset = addr % 8;
     UINT32 leftSize = size + offset;
     uint8_t val;
@@ -614,10 +615,31 @@ uint8_t* HeapShadow::getUninitializedInterval(ADDRINT addr, UINT32 size){
         }
         else{
             shadowAddr = shadow[++shadowIdx];
+            if(shadowIdx >= shadow.size()){
+                isUninitialized = true;
+                requiresNewPages = true;
+            }
         }
 
         leftSize -= 8;
     }
+
+    // This may happen if the chunk size is very big and it has no corresponding mmapped page
+    // considered as a single chunk (which is unlikely, on Ubuntu at least).
+    // This should not happen frequently.
+    if(requiresNewPages){
+        while(leftSize > 0){
+            uint8_t* newMap = (uint8_t*) mmap(NULL, SHADOW_ALLOCATION, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            if(newMap == (void*) - 1){
+                printf("mmap failed: %s\n", strerror(errno));
+                exit(1);
+            }
+            shadow.push_back(newMap);
+            dirtyPages.push_back(false);
+            leftSize -= (PAGE_SIZE * 8);
+        }
+    }
+
     if(!isUninitialized && leftSize > 0){
         val = *shadowAddr;
         // Change val to put 1 to every bit not considered by this access
@@ -664,6 +686,10 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
     size_t reset_size = 0;
 
     while(reset_size < freed_size){
+        // If there's no shadow page corresponding to the memory location being freed, it has never been written.
+        // So, there's nothing else to do
+        if(shadowIdx >= shadow.size())
+            return;
         unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1));
         unsigned long long freedBytes = bottom - (unsigned long long) shadowAddr + 1;
         memset(shadowAddr, 0, freedBytes);

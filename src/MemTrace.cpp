@@ -612,6 +612,7 @@ VOID ReallocBefore(ADDRINT ptr, ADDRINT size){
     mallocRequestedSize = size;
     mallocCalled = true;
     oldReallocPtr = ptr;
+    freeBlockSize = malloc_get_block_size(malloc_get_block_beginning(oldReallocPtr));
 }
 
 // Called right after malloc or calloc or realloc is executed
@@ -623,7 +624,6 @@ VOID MallocAfter(ADDRINT ret)
     // If this is a malloc performed by a call to realloc and the returned ptr
     // is different from the previous ptr, the previous ptr has been freed.
     if(oldReallocPtr != 0 && oldReallocPtr != ret){
-        freeBlockSize = malloc_get_block_size(malloc_get_block_beginning(oldReallocPtr));
         FreeAfter(oldReallocPtr);
     }
 
@@ -1417,6 +1417,24 @@ VOID checkSourceRegisters(VOID* srcRegs){
     }
 }
 
+/*
+** Returns true if the syscall corresponding to sysNum is either MMAP or MREMAP, which may be used
+** in case of calls to Malloc
+*/
+bool isMmapOrMremap(ADDRINT sysNum){
+    return sysNum == MMAP_NUM || sysNum == MREMAP_NUM;
+}
+
+/*
+** Returns the size of the heap block allocated through MMAP or MREMAP
+*/
+ADDRINT getMmapSize(CONTEXT* ctxt, SYSCALL_STANDARD std, ADDRINT sysNum){
+    if(sysNum == MMAP_NUM)
+        return PIN_GetSyscallArgument(ctxt, std, 1);
+    else
+        return PIN_GetSyscallArgument(ctxt, std, 2);
+}
+
 VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){
     if(std == SYSCALL_STANDARD_INVALID){
         *out << "Invalid syscall standard. This syscall won't be traced." << endl;
@@ -1434,9 +1452,9 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
     // The requested size is overridden by the size passed as an argument to mmap
     // (which must be a multiple of the page size). This way, we can store the
     // exact allocated size
-    if(sysNum == MMAP_NUM && mallocCalled){
+    if(isMmapOrMremap(sysNum) && mallocCalled){
         mmapMallocCalled = true;
-        mallocRequestedSize = PIN_GetSyscallArgument(ctxt, std, 1);
+        mallocRequestedSize = getMmapSize(ctxt, std, sysNum);
     }
 
     if(sysNum == BRK_NUM && (mallocCalled || memalignCalled)){

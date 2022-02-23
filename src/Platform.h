@@ -21,12 +21,14 @@ static const unsigned long pagesize = sysconf(_SC_PAGESIZE);
 #if defined(__amd64__) || defined(_M_AMD64) || defined(_M_X64)
     #define X86_64
     #define MMAP_NUM 9
+    #define MREMAP_NUM 25
     #define BRK_NUM 12
     #define STACK_SHADOW_INIT 0xff
     const REG syscall_args[] = {REG_RDI, REG_RSI, REG_RDX, REG_R10, REG_R8, REG_R9};
 #elif defined(__i386__) || defined(_M_IX86)
     #define X86
     #define MMAP_NUM 90
+    #define MREMAP_NUM 163
     #define BRK_NUM 45
     #define STACK_SHADOW_INIT 0xf0
     const REG syscall_args[] = {REG_EBX, REG_ECX, REG_EDX, REG_ESI, REG_EDI, REG_EBP};
