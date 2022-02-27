@@ -373,6 +373,9 @@ class ShadowRegisterFile{ // Singleton
             public:
                 bool operator()(const unsigned x, const unsigned y);
         };
+
+    private:
+        unsigned getHighByteAliasReg(set<unsigned, ShadowRegisterFile::DecresingSizeRegisterSorter>::iterator aliasIter);
 };
 
 

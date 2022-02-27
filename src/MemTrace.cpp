@@ -602,7 +602,9 @@ VOID FreeAfter(ADDRINT ptr){
 
         insHandler.handle(ai);
     }
-    mallocTemporaryWriteStorage.clear();    
+    if(nestedCalls == 0){
+        mallocTemporaryWriteStorage.clear(); 
+    }   
 }
 
 VOID ReallocBefore(ADDRINT ptr, ADDRINT size){
@@ -624,7 +626,12 @@ VOID MallocAfter(ADDRINT ret)
     // If this is a malloc performed by a call to realloc and the returned ptr
     // is different from the previous ptr, the previous ptr has been freed.
     if(oldReallocPtr != 0 && oldReallocPtr != ret){
+        // Increasing nestedCalls allows to avoid clearing |mallocTemporaryWriteStorage| during the 
+        // call to |FreeAfter|, so that we won't remove from the map writes to be stored 
+        // performed during the call to Malloc/Realloc
+        ++nestedCalls;
         FreeAfter(oldReallocPtr);
+        --nestedCalls;
     }
 
     size_t blockSize;
@@ -719,6 +726,12 @@ VOID MallocAfter(ADDRINT ret)
     // If this malloc happened before the entry point is executed, simply consider it as completely initialized.
     if(!entryPointExecuted){
         currentShadow = heapShadow;
+
+        // Note that when a malloc happens before the entry point, the size of the top_chunk is not set as initialized.
+        // This would be easy to fix on glibc implementations, as it would be enough to consider as initialized the 16 bytes
+        // immediately following the just allocated chunk (i.e. use blockSize + 16 instead of blockSize).
+        // However, this is an implementation specific problem, and may require to be handled differently on different
+        // implementations of malloc     
         AccessIndex ai(ret, blockSize);
         InstructionHandler::getInstance().handle(ai);
         return;

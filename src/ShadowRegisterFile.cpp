@@ -485,6 +485,23 @@ bool ShadowRegisterFile::IncreasingSizeRegisterSorter::operator()(const unsigned
 }
 
 /*
+** Given an iterator of aliasing registers, this function returns the high byte aliasing register (e.g. ah for the aliasing
+** register set of rax).
+** NOTE: this function will be stuck in an infinite loop if the provided iterator does not contain a high byte register.
+** Before using this, be sure the itereator contains a high byte register.
+*/
+unsigned ShadowRegisterFile::getHighByteAliasReg(set<unsigned, ShadowRegisterFile::DecresingSizeRegisterSorter>::iterator aliasIter){
+    set<unsigned, DecresingSizeRegisterSorter>::iterator iter = aliasIter;
+
+    ++iter;
+    while(!isHighByteReg((SHDW_REG) *iter)){
+        ++iter;
+    }
+
+    return *iter;
+}
+
+/*
     Given a SHDW_REG |reg|, and a set of registers, get a set of registers with these properties:
     [*] Each returned register is the alias register of 1 of the given registers
     [*] Each returned register corresponds to |reg| (same size or different size but missing destination equivalent. 
@@ -549,6 +566,18 @@ set<unsigned> ShadowRegisterFile::getCorrespondingRegisters(SHDW_REG reg, list<R
 
                 corrRegs.insert(*aliasReg);
                 targetFound = true;
+
+                // If |reg| is a 2 bytes register and it does not have a high byte register (e.g. di), but any of the registers
+                // in |regSet| does have a high byte register, we need to add the high byte register as corresponding to |reg|
+                // so that we can fill its tag set as well.
+                // Otherwise, the tag set for the high byte is not updated, and the high byte will be seen as a
+                // "purely" uninitialized byte even if it is actually an uninitialized byte coming from previous
+                // uninitialized reads.
+                // This may cause MemTrace to erroneously report an instruction.
+                if(targetByteSize == 2 && haveHighByte.find(reg) == haveHighByte.end() && hasHighByte(*iter)){
+                    corrRegs.insert(getHighByteAliasReg(aliasReg));
+                }
+
                 break;
             }
             
