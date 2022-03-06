@@ -1149,13 +1149,23 @@ def main():
         PROGRESS_UNIT = PROGRESS_LEN
 
     print("[Main Thread] Launching Main fuzzer instance...")
+    fuzzer_logs_dir = os.path.join(FUZZ_DIR, 'fuzzer_logs')
+    if not os.path.exists(fuzzer_logs_dir):
+        os.mkdir(fuzzer_logs_dir)
+
+    main_log_path = os.path.join(fuzzer_logs_dir, 'Main')
+    main_log = open(main_log_path, "w+")
     ENV_VARS_COPY['FUZZ_INSTANCE_NAME'] = 'Main'
-    p = subp.Popen(fuzz_cmd, env = ENV_VARS_COPY, stdout = subp.DEVNULL, stderr = subp.DEVNULL)
+    p = subp.Popen(fuzz_cmd, env = ENV_VARS_COPY, stdout = main_log, stderr = subp.DEVNULL)
     slaves = list()
+    slaves_logs = list()
     for i in range(args.slaves):
         cmd, instance_name = build_slave_cmd(i, FUZZ_IN, FUZZ_OUT, args.experimental, dictionary, executable)
         ENV_VARS_COPY['FUZZ_INSTANCE_NAME'] = instance_name
-        slaves.append(subp.Popen(cmd, env = ENV_VARS_COPY, stdout = subp.DEVNULL, stderr = subp.DEVNULL))
+        instance_log_path = os.path.join(fuzzer_logs_dir, instance_name)
+        instance_log = open(instance_log_path, "w+")
+        slaves_logs.append(instance_log)
+        slaves.append(subp.Popen(cmd, env = ENV_VARS_COPY, stdout = instance_log, stderr = subp.DEVNULL))
 
     print()
     print("[Main Thread] Fuzzer will be interrupted in {0} seconds...".format(stop_after_seconds))
@@ -1174,19 +1184,37 @@ def main():
         slave.wait()
     p.wait()
 
+    main_log.seek(0)
+    for log in slaves_logs:
+        log.seek(0)
+
     num_instances = len(slaves) + 1
     num_failed_instances = functools.reduce(lambda acc, el: acc + (1 if el.returncode != 0 else 0), slaves, 0)
     if p.returncode != 0:
         num_failed_instances += 1
 
     if num_failed_instances > num_instances // 2:
-        print("[Main Thread] Fuzzer interrupted due to an error")
+        if p.returncode != 0:
+            fuzzer_error = main_log.read()
+        else:
+            for i in range(args.slaves):
+                if slaves[i].returncode != 0:
+                    fuzzer_error = slaves_logs[i].read()
+                    break
+
+        print("[Main Thread] Fuzzer interrupted due to an error:")
+        print(fuzzer_error)
+        fuzzer_error = None
         fuzzer_error_event.set()
         int_timer.cancel()
         LOCK.acquire()
         if LAST_PROGRESS_TASK is not None:
             LAST_PROGRESS_TASK.cancel()
         LOCK.release()
+        main_log.close()
+        for log in slaves_logs:
+            log.close()
+        su.rmtree(fuzzer_logs_dir)
         clean()
 
     fuzzer_interrupted_event.set()
@@ -1194,6 +1222,10 @@ def main():
     # If the fuzzer terminates before the requested time (e.g. if there are no initial testcases)
     # it is not necessary to wait the whole time to send a SIGINT
     int_timer.cancel()
+    main_log.close()
+    for log in slaves_logs:
+        log.close()
+    su.rmtree(fuzzer_logs_dir)
     print("[Main Thread] Fuzzer interrupted")
     print()
 
