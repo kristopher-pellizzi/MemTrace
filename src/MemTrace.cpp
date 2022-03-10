@@ -143,6 +143,7 @@ bool argIsStackAddr;
 // Global variables required to keep track of malloc/calloc/realloc returned pointers
 bool mallocCalled = false;
 bool freeCalled = false;
+bool removedThroughBrk = false;
 bool memalignCalled = false;
 void** memalignPtr = NULL;
 ADDRINT mallocRequestedSize = 0;
@@ -548,27 +549,36 @@ VOID FreeAfter(ADDRINT ptr){
     // (in case it is a mmap malloc)
 
     ptr = malloc_get_block_beginning(ptr);
-    HeapType type = isHeapAddress(ptr);
     bool isInvalidForFree = mallocatedPtrs.find(ptr) == mallocatedPtrs.end();
 
-    // If the program is correct, this should never be the case
-    if(!type.isValid() || isInvalidForFree){
-        *out << "The program called free on an invalid heap address: 0x" << std::hex << ptr << endl;
-        exit(1);
-    }
+    /*
+        If memory has been released through brk system call during the call to free,
+        the freed memory location will not exist anymore.
+        It would be detected as invalid, so simply remove the allocated chunk from the
+        set of allocated memory.
+    */
+    if(!removedThroughBrk){
+        HeapType type = isHeapAddress(ptr);
 
-    if(type.isNormal()){
-        currentShadow = heap.getPtr();
-    }
-    else{
-        currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
-    }
+        // If the program is correct, this should never be the case
+        if(!type.isValid() || isInvalidForFree){
+            *out << "The program called free on an invalid heap address: 0x" << std::hex << ptr << endl;
+            exit(1);
+        }
 
-    set<std::pair<ADDRINT, size_t>> to_reinit = malloc_mem_to_reinit(ptr, freeBlockSize);
-    for(const std::pair<ADDRINT, size_t>& segment : to_reinit){
-        // NOTE: at this point, we are sure currentShadow is an instance of HeapShadow, so we can
-        // perform the cast.
-        static_cast<HeapShadow*>(currentShadow)->reset(segment.first, segment.second);
+        if(type.isNormal()){
+            currentShadow = heap.getPtr();
+        }
+        else{
+            currentShadow = getMmapShadowMemory(type.getShadowMemoryIndex());
+        }
+
+        set<std::pair<ADDRINT, size_t>> to_reinit = malloc_mem_to_reinit(ptr, freeBlockSize);
+        for(const std::pair<ADDRINT, size_t>& segment : to_reinit){
+            // NOTE: at this point, we are sure currentShadow is an instance of HeapShadow, so we can
+            // perform the cast.
+            static_cast<HeapShadow*>(currentShadow)->reset(segment.first, segment.second);
+        }
     }
 
     mallocatedPtrs[ptr] = 0;
@@ -582,26 +592,32 @@ VOID FreeAfter(ADDRINT ptr){
         mmapShadows.erase(page_start);
     }
 
-    InstructionHandler& insHandler = InstructionHandler::getInstance();
-    for(auto iter = mallocTemporaryWriteStorage.begin(); iter != mallocTemporaryWriteStorage.end(); ++iter){
-        const AccessIndex& ai = iter->first;
+    if(!removedThroughBrk){
+        InstructionHandler& insHandler = InstructionHandler::getInstance();
+        for(auto iter = mallocTemporaryWriteStorage.begin(); iter != mallocTemporaryWriteStorage.end(); ++iter){
+            const AccessIndex& ai = iter->first;
 
-        ADDRINT accessAddr = ai.getFirst();
-        UINT32 accessSize = ai.getSecond();
-        
-        // If the write access does not overlap (at least partially) with the freed heap chunk,
-        // it is not required to set the corresponding shadow memory as initialized.
-        // NOTE: this loop should iterate on a map containing very few elements, so it should
-        // not degrade performances too much.
-        if(
-            (accessAddr < ptr && accessAddr + accessSize - 1 < ptr) ||
-            (accessAddr > ptr + freeBlockSize - 1)
-        ){
-            continue;
+            ADDRINT accessAddr = ai.getFirst();
+            UINT32 accessSize = ai.getSecond();
+            
+            // If the write access does not overlap (at least partially) with the freed heap chunk,
+            // it is not required to set the corresponding shadow memory as initialized.
+            // NOTE: this loop should iterate on a map containing very few elements, so it should
+            // not degrade performances too much.
+            if(
+                (accessAddr < ptr && accessAddr + accessSize - 1 < ptr) ||
+                (accessAddr > ptr + freeBlockSize - 1)
+            ){
+                continue;
+            }
+
+            insHandler.handle(ai);
         }
-
-        insHandler.handle(ai);
     }
+    else{
+        removedThroughBrk = false;
+    }
+
     if(nestedCalls == 0){
         mallocTemporaryWriteStorage.clear(); 
     }   
@@ -1448,6 +1464,118 @@ ADDRINT getMmapSize(CONTEXT* ctxt, SYSCALL_STANDARD std, ADDRINT sysNum){
         return PIN_GetSyscallArgument(ctxt, std, 2);
 }
 
+/* Removes all the writes performed on heap locations that have been removed (by reducing program's 
+** break through brk system call).
+** Note that this should happen very rarely, because when the program requires to allocated and deallocate
+** big chunks on the heap, usually it makes use of mmap syscall.
+** Also, this can only happen on the main heap, secondary heaps are usually managed through calls to
+** mmap system call.
+*/
+
+void removeDeletedMemoryWrites(ADDRINT addr, ADDRINT oldAddr){
+    auto iter = lastWriteInstruction.lower_bound(AccessIndex(addr, 0));
+    auto firstIter = iter;
+    auto lastIter = iter;
+    map<AccessIndex, MemoryAccess> toAdd;
+    bool isReinitialized = false;
+
+    while(iter != lastWriteInstruction.end()){
+        MemoryAccess& ma = iter->second;
+        ADDRINT accessStart = ma.getAddress();
+        ADDRINT accessEnd = accessStart + ma.getSize() - 1;
+
+        /*
+            This write access begins before the deleted portion of the heap, but it has a size such that it
+            also wrote some bytes in the deleted part.
+            Check if there's another write starting at the same address with a size equal to |ma.size()| - |deletedBytesSize|.
+            If there is not, simply add such an access to the map;
+            if there is, check the relative order of execution and replace the existing ones only if ma is more recent than the
+            existing write access.
+        */
+        if(accessStart < addr){
+            UINT32 deletedSize = accessEnd - addr + 1;
+            UINT32 newSize = ma.getSize() - deletedSize;
+            AccessIndex newAi(accessStart, newSize);
+            auto existingIter = lastWriteInstruction.find(newAi);
+
+            if(existingIter != lastWriteInstruction.end()){
+                MemoryAccess& existingMa = existingIter->second;
+                /*
+                    If ma is more recent than existingMa, replace it; otherwise do nothing
+                */
+                if(ma.getOrder() > existingMa.getOrder()){
+                    MemoryAccess newMa(ma, newSize);
+                    toAdd.insert(std::pair<AccessIndex, MemoryAccess>(newAi, newMa));
+                }
+            }
+            else{
+                MemoryAccess newMa(ma, newSize);
+                toAdd.insert(std::pair<AccessIndex, MemoryAccess>(newAi, newMa));
+            }
+
+            heap.reset(addr, deletedSize);
+            isReinitialized = true;
+        }
+
+        if(accessEnd >= oldAddr){
+            
+            if(accessStart >= oldAddr){
+                ++iter;
+                continue;
+            }
+
+            /*
+                Note that the following code should be executed extremely rarely, as it requires to have reduced
+                the main heap through brk (already a rare situation), to have allocated non-heap memory pages right 
+                after the main heap memory pages and to have performed a write access partially overlapping both the deleted
+                heap portion and the following memory pages.
+                This condition is very unlikely to be verified during a program's execution, though it can still happen.
+            */
+            UINT32 deletedSize = oldAddr - accessStart;
+            UINT32 newSize = ma.getSize() - deletedSize;
+            AccessIndex newAi(oldAddr, newSize);
+            auto existingIter = lastWriteInstruction.find(newAi);
+
+            if(existingIter != lastWriteInstruction.end()){
+                MemoryAccess& existingMa = existingIter->second;
+
+                if(ma.getOrder() > existingMa.getOrder()){
+                    MemoryAccess newMa(ma, newSize, oldAddr);
+                    toAdd.insert(std::pair<AccessIndex, MemoryAccess>(newAi, newMa));
+                }
+            }
+            else{
+                    MemoryAccess newMa(ma, newSize, oldAddr);
+                    toAdd.insert(std::pair<AccessIndex, MemoryAccess>(newAi, newMa));
+            }
+
+            heap.reset(accessStart, deletedSize);
+            isReinitialized = true;
+        }
+
+        /*
+            If the write being removed wrote a portion of memory that has been completely deleted,
+            just reinitialize the whole accessed memory.
+        */
+        if(!isReinitialized){
+            heap.reset(accessStart, ma.getSize());
+        }
+
+        ++iter;
+        lastIter = iter;
+    }
+
+    // Method |erase| will remove the interval [firstIter, lastIter), but lastIter is still overlapping
+    // the released memory
+    ++lastIter;
+    lastWriteInstruction.erase(firstIter, lastIter);
+
+    for(auto iter = toAdd.begin(); iter != toAdd.end(); ++iter){
+        lastWriteInstruction.insert(*iter);
+    }
+
+}
+
 VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, VOID* v){
     if(std == SYSCALL_STANDARD_INVALID){
         *out << "Invalid syscall standard. This syscall won't be traced." << endl;
@@ -1470,13 +1598,38 @@ VOID onSyscallEntry(THREADID threadIndex, CONTEXT* ctxt, SYSCALL_STANDARD std, V
         mallocRequestedSize = getMmapSize(ctxt, std, sysNum);
     }
 
-    if(sysNum == BRK_NUM && (mallocCalled || memalignCalled)){
+    if(sysNum == BRK_NUM){
         ADDRINT arg = PIN_GetSyscallArgument(ctxt, std, 0);
+
         if(arg != 0){
+
+            /*
+                If main heap size is reduced through a negative sbrk, remove the writes
+                accessing the deleted memory.
+            */
+            if(arg < highestHeapAddr){
+                removeDeletedMemoryWrites(arg, highestHeapAddr);
+
+                /*
+                    If brk is used to remove heap memory during a call to free, brk will be
+                    called before free actually terminates.
+                    So, when |FreeAfter| will be called, the freed memory location won't be 
+                    available as a heap memory location anymore, thus resulting in an invalid free which
+                    terminates the analysis.
+                    To avoid this, we set |removedThroughBrk|, so that we can return |FreeAfter| immediately.
+                */
+                if(freeCalled)
+                    removedThroughBrk = true;
+            }
+
+            if(mallocCalled || memalignCalled){
+                firstMallocCalled = true;
+            }
+
             highestHeapAddr = arg;
-            firstMallocCalled = true;
         }
     }
+
     unsigned short argsCount = SyscallHandler::getInstance().getSyscallArgsCount(sysNum);
     vector<ADDRINT> actualArgs;
     list<REG> argRegs;

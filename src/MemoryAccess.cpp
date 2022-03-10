@@ -1,5 +1,30 @@
 #include "MemoryAccess.h"
 
+MemoryAccess::MemoryAccess(const MemoryAccess& other){
+    this->executionOrder = other.executionOrder;
+    this->opcode = other.opcode;
+    this->instructionPointer = other.instructionPointer;
+    this->actualInstructionPointer = other.actualInstructionPointer;
+    this->accessAddress = other.accessAddress;
+    this->spOffset = other.spOffset;
+    this->bpOffset = other.bpOffset;
+    this->accessSize = other.accessSize;
+    this->type = other.type;
+    this->instructionDisasm = other.instructionDisasm;
+    this->isUninitializedRead = other.isUninitializedRead;
+    this->uninitializedInterval = other.uninitializedInterval;
+    this->shadowMemory = other.shadowMemory;
+}
+
+MemoryAccess::MemoryAccess(const MemoryAccess& other, UINT32 size) : MemoryAccess(other){
+    this->accessSize = size;
+}
+
+MemoryAccess::MemoryAccess(const MemoryAccess& other, UINT32 size, ADDRINT accessAddress) : MemoryAccess(other){
+    this->accessSize = size;
+    this->accessAddress = accessAddress;
+}
+
 OPCODE MemoryAccess::getOpcode(){
     return opcode;
 }

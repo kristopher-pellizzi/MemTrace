@@ -71,6 +71,12 @@ class MemoryAccess{
             shadowMemory(shadowMemory)
             {};
 
+        MemoryAccess(const MemoryAccess& other);
+
+        MemoryAccess(const MemoryAccess& other, UINT32 size);
+
+        MemoryAccess(const MemoryAccess& other, UINT32 size, ADDRINT accessAddress);
+
         OPCODE getOpcode();
         
         ADDRINT getIP() const;
