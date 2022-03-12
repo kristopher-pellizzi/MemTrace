@@ -250,6 +250,14 @@ uint8_t* StackShadow::getUninitializedInterval(ADDRINT addr, UINT32 size) {
         return NULL;
 }
 
+/*
+** Note that since StackShadow::reset resets to 0 all the addresses below |addr| (and therefore all the shadow addresses above the shadow address
+** corresponding to |addr|), it is not required to consider possible offsets and remaining bytes.
+** Indeed, even if there is any offset, the whole corresponding shadow byte is guaranteed to be reset (notice that |addr| is aligned either to 8 or to 4 bytes boundaries
+** according to the used architecture).
+** E.g. on x86, if |addr| = 0x7fffffff0004, the corresponding shadow byte will contain, besides that 4 bytes word associated to |addr|, also the 4 bytes word associated to
+** 0x7fffffff0000, which is lower than |addr|, and therefore must be reset anyway.
+*/
 void StackShadow::reset(ADDRINT addr) {
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
@@ -673,7 +681,7 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
     std::pair<unsigned, unsigned> idxOffset = this->getShadowAddrIdxOffset(addr);
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
-    uint8_t* initialShadowAddr = shadowAddr;
+
     if(heapType == HeapEnum::MMAP && isSingleChunk){
         // If it is a heap allocated through mmap, it is due to a big allocation request.
         // These kind of requests are very rare, and when they happen it is likely to have a long life.
@@ -681,6 +689,8 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
         freeMemory();
         return;
     }
+
+    unsigned offset = addr % 8;
     // Remember the ShadowMemory model keeps 1 byte for each 8 bytes of application memory
     size_t freed_size = size / 8;
     size_t reset_size = 0;
@@ -690,17 +700,37 @@ void HeapShadow::reset(ADDRINT addr, size_t size){
         // So, there's nothing else to do
         if(shadowIdx >= shadow.size())
             return;
-        unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1));
+        unsigned long long shadowPageLimit = (unsigned long long) shadow[shadowIdx] + SHADOW_ALLOCATION - 1;
+        unsigned long long bottom = min((unsigned long long) shadowAddr + freed_size - reset_size - 1, shadowPageLimit);
         unsigned long long freedBytes = bottom - (unsigned long long) shadowAddr + 1;
+
+        if(offset > 0){
+            *shadowAddr &= ~((uint8_t) 0xff >> offset);
+            ++shadowAddr;
+            // Required to reduce freedBytes (and therefore increase reset_size) to avoid writing too many bytes
+            // with the subsequent call to memset
+            --freedBytes;
+            ++reset_size;
+        }
+
         memset(shadowAddr, 0, freedBytes);
         reset_size += freedBytes;
-        shadowAddr = shadow[++shadowIdx];
+        if(bottom == shadowPageLimit){
+            shadowAddr = shadow[++shadowIdx];
+        }
+        else{
+            shadowAddr = (uint8_t*) ++bottom;
+        }
+
+        offset = 0;
     }
 
     // If the size of the block is not a multiple of 8, we need to reset |blockSize % 8| bits of the shadow memory
-    freed_size = size % 8;
-    shadowAddr = initialShadowAddr + reset_size;
-    *shadowAddr &= (0xff >> freed_size);
+    // If the initial offset is not 0, we need to reset also the bytes not yet reset due to the offset
+    freed_size = size % 8 + addr % 8;
+    uint8_t mask = ~((uint8_t) 0xff >> offset);
+    mask |= (uint8_t) 0xff >> freed_size;
+    *shadowAddr &= mask;
 }
 
 
