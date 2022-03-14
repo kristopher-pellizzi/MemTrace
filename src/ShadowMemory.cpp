@@ -263,8 +263,31 @@ void StackShadow::reset(ADDRINT addr) {
     unsigned shadowIdx = idxOffset.first;
     uint8_t* shadowAddr = this->getShadowAddrFromIdx(&shadowIdx, idxOffset.second);
 
-    unsigned long long bottom = min((unsigned long long) highestShadowAddr, (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1));
+    unsigned long long shadowPageLimit = (unsigned long long) (shadow[shadowIdx] + SHADOW_ALLOCATION - 1);
+    unsigned long long bottom = min((unsigned long long) highestShadowAddr, shadowPageLimit);
+
+#ifdef X86
+    /*
+    ** SP size is 4 bytes and all stack addresses on return will be aligned to 4 bytes boundaries.
+    ** If the address is also aligned to 8 bytes boundary (e.g. 0x7fff00) we must reset only the 4 LSB of the current
+    ** shadow address and all the shadow addresses above it (corresponding to lower stack addresses), thus leaving the status of the 4 MSB of
+    ** current shadow address (corresponding to 0x7fff04 ~ 0x7fff07, in the example) untouched.
+    */
+    if(addr % 8 == 0){
+        uint8_t mask = (uint8_t) (0xff << 4);
+        *shadowAddr &= mask;
+
+        if(shadowAddr != shadowPageLimit){
+            ++shadowAddr;
+            memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
+        }
+    }
+    else{
+        memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
+    }
+#else
     memset(shadowAddr, 0, bottom - (unsigned long long) shadowAddr + 1);
+#endif
 
     for(unsigned i = shadowIdx + 1; i < shadow.size(); ++i){
         if(dirtyPages[i]){
